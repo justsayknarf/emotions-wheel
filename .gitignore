@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
+.agents/skills/pixijs/references/index.md
+.agents/skills/pixijs/SKILL.md
+.claude/settings.local.json
+.claude/skills/pixijs
+.obsidian/app.json
+.obsidian/appearance.json
+.obsidian/core-plugins.json
+.obsidian/graph.json
+.obsidian/workspace.json
