@@ -8,7 +8,7 @@ export const APPROACH_RADIUS = SELECTION_RADIUS + 0.05;
 export interface ProximityResult {
   opacity: number;
   scale: number;
-  isApproaching: boolean;
+  isCandidate: boolean;
 }
 
 function euclidean(x1: number, y1: number, x2: number, y2: number): number {
@@ -17,34 +17,57 @@ function euclidean(x1: number, y1: number, x2: number, y2: number): number {
 
 export function useProximity(
   emotions: Emotion[],
-  pinX: number,
-  pinY: number,
+  revealCenter: { x: number; y: number } | null,
+  isPressed: boolean,
   selectedIds: Set<string>,
 ): Map<string, ProximityResult> {
   return useMemo(() => {
-    const results = new Map<string, ProximityResult>();
-
-    for (const emotion of emotions) {
-      const dist = euclidean(emotion.x, emotion.y, pinX, pinY);
-      const isSelected = selectedIds.has(emotion.id);
-      const isApproaching = !isSelected && dist <= APPROACH_RADIUS;
-
-      if (isSelected) {
-        // Selected words always visible regardless of pin position
-        results.set(emotion.id, { opacity: 1, scale: 1, isApproaching: false });
-      } else if (dist > VISIBILITY_RADIUS) {
-        results.set(emotion.id, { opacity: 0, scale: 0.8, isApproaching: false });
-      } else {
-        // Interpolate: dist=VISIBILITY_RADIUS → opacity=0, scale=0.8; dist=0 → opacity=1, scale=1.1
-        const t = 1 - dist / VISIBILITY_RADIUS; // 0 at edge, 1 at center
-        const opacity = t;
-        const scale = 0.8 + t * 0.3; // 0.8 → 1.1
-        results.set(emotion.id, { opacity, scale, isApproaching });
+    // Pre-pass: find candidateId (closest emotion within VISIBILITY_RADIUS when pressed)
+    let candidateId: string | null = null;
+    if (isPressed && revealCenter !== null) {
+      let minDist = Infinity;
+      for (const emotion of emotions) {
+        const dist = euclidean(emotion.x, emotion.y, revealCenter.x, revealCenter.y);
+        if (dist <= VISIBILITY_RADIUS && dist < minDist) {
+          minDist = dist;
+          candidateId = emotion.id;
+        }
       }
     }
 
+    // Per-emotion pass
+    const results = new Map<string, ProximityResult>();
+
+    for (const emotion of emotions) {
+      // Branch 1: selected — always fully visible, never a candidate
+      if (selectedIds.has(emotion.id)) {
+        results.set(emotion.id, { opacity: 1, scale: 1, isCandidate: false });
+        continue;
+      }
+
+      // Branch 2: not pressed or no reveal center — ambient floor
+      if (!isPressed || revealCenter === null) {
+        results.set(emotion.id, { opacity: 0.15, scale: 1.0, isCandidate: false });
+        continue;
+      }
+
+      const dist = euclidean(emotion.x, emotion.y, revealCenter.x, revealCenter.y);
+
+      // Branch 3: outside visibility radius — ambient floor
+      if (dist > VISIBILITY_RADIUS) {
+        results.set(emotion.id, { opacity: 0.15, scale: 1.0, isCandidate: false });
+        continue;
+      }
+
+      // Branch 4: within visibility radius — interpolate
+      const t = 1 - dist / VISIBILITY_RADIUS; // 0 at edge, 1 at center
+      const opacity = 0.15 + t * 0.85;        // 0.15 → 1.0
+      const scale = 1.0 + t * 0.1;            // 1.0 → 1.1
+      results.set(emotion.id, { opacity, scale, isCandidate: emotion.id === candidateId });
+    }
+
     return results;
-  }, [emotions, pinX, pinY, selectedIds]);
+  }, [emotions, revealCenter, isPressed, selectedIds]);
 }
 
 export function euclideanDist(
