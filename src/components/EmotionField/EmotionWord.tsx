@@ -19,7 +19,7 @@ export function EmotionWord({ emotion, proximity, isSelected, containerWidth, co
   const left = (toPercent(emotion.x) / 100) * containerWidth;
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +arousal = up
 
-  const { opacity, scale, isApproaching } = proximity;
+  const { opacity, scale, isCandidate } = proximity;
 
   return (
     <motion.span
@@ -34,7 +34,7 @@ export function EmotionWord({ emotion, proximity, isSelected, containerWidth, co
       }}
       animate={{
         opacity: isSelected ? 1 : opacity,
-        scale: isApproaching ? 1.08 : (isSelected ? 1 : scale),
+        scale: isCandidate ? 1.3 : (isSelected ? 1 : scale),
       }}
       transition={{ type: 'spring', stiffness: 120, damping: 20 }}
     >
