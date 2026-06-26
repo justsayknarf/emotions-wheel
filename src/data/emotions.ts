@@ -33,7 +33,7 @@ export const emotions: Emotion[] = [
   { id: 'free',         label: 'Free',         x:  0.65, y:  0.50, depth: 'deep',    cluster: 'joyful' },
 
   // Energized
-  { id: 'energized',    label: 'Energized',    x:  0.50, y:  0.85, depth: 'surface', cluster: 'energized' },
+  { id: 'energized',    label: 'Energized',    x:  0.25, y:  0.85, depth: 'surface', cluster: 'energized' },
   { id: 'invigorated',  label: 'Invigorated',  x:  0.50, y:  0.80, depth: 'deep',    cluster: 'energized' },
   { id: 'refreshed',    label: 'Refreshed',    x:  0.55, y:  0.45, depth: 'deep',    cluster: 'energized' },
   { id: 'rejuvenated',  label: 'Rejuvenated',  x:  0.50, y:  0.50, depth: 'deep',    cluster: 'energized' },
@@ -48,7 +48,7 @@ export const emotions: Emotion[] = [
   { id: 'adventurous',  label: 'Adventurous',  x:  0.50, y:  0.75, depth: 'deep',    cluster: 'courageous' },
   { id: 'daring',       label: 'Daring',       x:  0.55, y:  0.70, depth: 'deep',    cluster: 'courageous' },
   { id: 'capable',      label: 'Capable',      x:  0.50, y:  0.45, depth: 'deep',    cluster: 'courageous' },
-  { id: 'grounded',     label: 'Grounded',     x:  0.45, y:  0.30, depth: 'deep',    cluster: 'courageous' },
+  { id: 'grounded',     label: 'Grounded',     x:  0.25, y:  0.30, depth: 'deep',    cluster: 'courageous' },
   { id: 'worthy',       label: 'Worthy',       x:  0.50, y:  0.35, depth: 'deep',    cluster: 'courageous' },
   { id: 'valiant',      label: 'Valiant',      x:  0.45, y:  0.60, depth: 'deep',    cluster: 'courageous' },
 
@@ -56,7 +56,7 @@ export const emotions: Emotion[] = [
   { id: 'curious',      label: 'Curious',      x:  0.40, y:  0.55, depth: 'surface', cluster: 'curious' },
   { id: 'fascinated',   label: 'Fascinated',   x:  0.45, y:  0.50, depth: 'deep',    cluster: 'curious' },
   { id: 'intrigued',    label: 'Intrigued',    x:  0.40, y:  0.45, depth: 'deep',    cluster: 'curious' },
-  { id: 'interested',   label: 'Interested',   x:  0.35, y:  0.40, depth: 'deep',    cluster: 'curious' },
+  { id: 'interested',   label: 'Interested',   x:  0.20, y:  0.25, depth: 'deep',    cluster: 'curious' },
   { id: 'engaged',      label: 'Engaged',      x:  0.45, y:  0.55, depth: 'deep',    cluster: 'curious' },
   { id: 'exploring',    label: 'Exploring',    x:  0.40, y:  0.60, depth: 'deep',    cluster: 'curious' },
   { id: 'stimulated',   label: 'Stimulated',   x:  0.45, y:  0.65, depth: 'deep',    cluster: 'curious' },
@@ -69,7 +69,7 @@ export const emotions: Emotion[] = [
   { id: 'calm',         label: 'Calm',         x:  0.60, y: -0.50, depth: 'surface', cluster: 'peaceful' },
   { id: 'content',      label: 'Content',      x:  0.70, y: -0.40, depth: 'surface', cluster: 'peaceful' },
   { id: 'relaxed',      label: 'Relaxed',      x:  0.55, y: -0.50, depth: 'surface', cluster: 'peaceful' },
-  { id: 'serene',       label: 'Serene',       x:  0.70, y: -0.70, depth: 'deep',    cluster: 'peaceful' },
+  { id: 'serene',       label: 'Serene',       x:  0.20, y: -0.78, depth: 'deep',    cluster: 'peaceful' },
   { id: 'centered',     label: 'Centered',     x:  0.50, y: -0.45, depth: 'deep',    cluster: 'peaceful' },
   { id: 'present',      label: 'Present',      x:  0.55, y: -0.35, depth: 'deep',    cluster: 'peaceful' },
   { id: 'patient',      label: 'Patient',      x:  0.50, y: -0.55, depth: 'deep',    cluster: 'peaceful' },
@@ -87,7 +87,7 @@ export const emotions: Emotion[] = [
   { id: 'accepting',    label: 'Accepting',    x:  0.55, y: -0.30, depth: 'deep',    cluster: 'loving' },
   { id: 'self-loving',  label: 'Self-loving',  x:  0.65, y: -0.25, depth: 'deep',    cluster: 'loving' },
   { id: 'vulnerable',   label: 'Vulnerable',   x:  0.45, y: -0.30, depth: 'deep',    cluster: 'loving' },
-  { id: 'reflective',   label: 'Reflective',   x:  0.40, y: -0.40, depth: 'deep',    cluster: 'loving' },
+  { id: 'reflective',   label: 'Reflective',   x:  0.20, y: -0.35, depth: 'deep',    cluster: 'loving' },
 
   // Grateful
   { id: 'grateful',     label: 'Grateful',     x:  0.70, y: -0.30, depth: 'surface', cluster: 'grateful' },
@@ -104,7 +104,7 @@ export const emotions: Emotion[] = [
   { id: 'hopeful',      label: 'Hopeful',      x:  0.55, y: -0.20, depth: 'surface', cluster: 'hopeful' },
   { id: 'optimistic',   label: 'Optimistic',   x:  0.60, y: -0.15, depth: 'deep',    cluster: 'hopeful' },
   { id: 'encouraged',   label: 'Encouraged',   x:  0.55, y: -0.25, depth: 'deep',    cluster: 'hopeful' },
-  { id: 'expectant',    label: 'Expectant',    x:  0.50, y: -0.15, depth: 'deep',    cluster: 'hopeful' },
+  { id: 'expectant',    label: 'Expectant',    x:  0.25, y: -0.15, depth: 'deep',    cluster: 'hopeful' },
 
   // ── Q3: Low valence, High arousal (activated negative) ───────────────────
 
@@ -124,7 +124,7 @@ export const emotions: Emotion[] = [
   { id: 'resentful',    label: 'Resentful',    x: -0.70, y:  0.55, depth: 'deep',    cluster: 'angry' },
   { id: 'bitter',       label: 'Bitter',       x: -0.65, y:  0.50, depth: 'deep',    cluster: 'angry' },
   { id: 'contempt',     label: 'Contempt',     x: -0.70, y:  0.45, depth: 'deep',    cluster: 'angry' },
-  { id: 'disdain',      label: 'Disdain',      x: -0.65, y:  0.40, depth: 'deep',    cluster: 'angry' },
+  { id: 'disdain',      label: 'Disdain',      x: -0.75, y:  0.20, depth: 'deep',    cluster: 'angry' },
   { id: 'cynical',      label: 'Cynical',      x: -0.60, y:  0.40, depth: 'deep',    cluster: 'angry' },
   { id: 'vindictive',   label: 'Vindictive',   x: -0.75, y:  0.60, depth: 'deep',    cluster: 'angry' },
   { id: 'disgruntled',  label: 'Disgruntled',  x: -0.55, y:  0.55, depth: 'deep',    cluster: 'angry' },
@@ -142,7 +142,7 @@ export const emotions: Emotion[] = [
   { id: 'depleted',     label: 'Depleted',     x: -0.55, y:  0.65, depth: 'deep',    cluster: 'stressed' },
   { id: 'weary',        label: 'Weary',        x: -0.50, y:  0.60, depth: 'deep',    cluster: 'stressed' },
   { id: 'worn-out',     label: 'Worn out',     x: -0.55, y:  0.55, depth: 'deep',    cluster: 'stressed' },
-  { id: 'restless',     label: 'Restless',     x: -0.45, y:  0.65, depth: 'deep',    cluster: 'stressed' },
+  { id: 'restless',     label: 'Restless',     x: -0.20, y:  0.65, depth: 'deep',    cluster: 'stressed' },
   { id: 'rattled',      label: 'Rattled',      x: -0.55, y:  0.75, depth: 'deep',    cluster: 'stressed' },
   { id: 'shaken',       label: 'Shaken',       x: -0.60, y:  0.65, depth: 'deep',    cluster: 'stressed' },
   { id: 'tight',        label: 'Tight',        x: -0.50, y:  0.70, depth: 'deep',    cluster: 'stressed' },
@@ -170,7 +170,7 @@ export const emotions: Emotion[] = [
   { id: 'concerned',    label: 'Concerned',    x: -0.45, y:  0.45, depth: 'deep',    cluster: 'unsettled' },
   { id: 'dissatisfied', label: 'Dissatisfied', x: -0.50, y:  0.35, depth: 'deep',    cluster: 'unsettled' },
   { id: 'perplexed',    label: 'Perplexed',    x: -0.40, y:  0.50, depth: 'deep',    cluster: 'unsettled' },
-  { id: 'questioning',  label: 'Questioning',  x: -0.35, y:  0.40, depth: 'deep',    cluster: 'unsettled' },
+  { id: 'questioning',  label: 'Questioning',  x: -0.20, y:  0.35, depth: 'deep',    cluster: 'unsettled' },
   { id: 'reluctant',    label: 'Reluctant',    x: -0.40, y:  0.35, depth: 'deep',    cluster: 'unsettled' },
   { id: 'shocked',      label: 'Shocked',      x: -0.55, y:  0.75, depth: 'deep',    cluster: 'unsettled' },
   { id: 'ungrounded',   label: 'Ungrounded',   x: -0.45, y:  0.50, depth: 'deep',    cluster: 'unsettled' },
@@ -224,12 +224,12 @@ export const emotions: Emotion[] = [
   { id: 'self-conscious', label: 'Self-conscious', x: -0.55, y: -0.35, depth: 'deep', cluster: 'shame' },
   { id: 'useless',      label: 'Useless',      x: -0.65, y: -0.50, depth: 'deep',    cluster: 'shame' },
   { id: 'weak',         label: 'Weak',         x: -0.60, y: -0.45, depth: 'deep',    cluster: 'shame' },
-  { id: 'inhibited',    label: 'Inhibited',    x: -0.45, y: -0.35, depth: 'deep',    cluster: 'shame' },
+  { id: 'inhibited',    label: 'Inhibited',    x: -0.25, y: -0.35, depth: 'deep',    cluster: 'shame' },
 
   // Guilt
   { id: 'regret',       label: 'Regret',       x: -0.55, y: -0.35, depth: 'deep',    cluster: 'guilt' },
   { id: 'remorseful',   label: 'Remorseful',   x: -0.60, y: -0.40, depth: 'deep',    cluster: 'guilt' },
-  { id: 'sorry',        label: 'Sorry',        x: -0.50, y: -0.30, depth: 'deep',    cluster: 'guilt' },
+  { id: 'sorry',        label: 'Sorry',        x: -0.25, y: -0.25, depth: 'deep',    cluster: 'guilt' },
 
   // Powerless / Fragile
   { id: 'helpless',     label: 'Helpless',     x: -0.65, y: -0.60, depth: 'deep',    cluster: 'powerless' },
@@ -238,5 +238,5 @@ export const emotions: Emotion[] = [
   { id: 'incapable',    label: 'Incapable',    x: -0.60, y: -0.55, depth: 'deep',    cluster: 'powerless' },
   { id: 'impotent',     label: 'Impotent',     x: -0.65, y: -0.50, depth: 'deep',    cluster: 'powerless' },
   { id: 'victim',       label: 'Victim',       x: -0.60, y: -0.50, depth: 'deep',    cluster: 'powerless' },
-  { id: 'sensitive',    label: 'Sensitive',    x: -0.35, y: -0.30, depth: 'deep',    cluster: 'powerless' },
+  { id: 'sensitive',    label: 'Sensitive',    x: -0.20, y: -0.20, depth: 'deep',    cluster: 'powerless' },
 ];
