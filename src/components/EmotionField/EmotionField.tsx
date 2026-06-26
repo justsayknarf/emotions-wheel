@@ -3,13 +3,11 @@ import { emotions } from '../../data/emotions';
 import { useProximity, SELECTION_RADIUS } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
-import { SelectionControls } from './SelectionControls';
 import type { SelectedEmotion } from '../../types';
 
 interface Props {
   selectedEmotions: SelectedEmotion[];
   onSelectionChange: (emotions: SelectedEmotion[]) => void;
-  onDone: () => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
 }
@@ -17,7 +15,6 @@ interface Props {
 export function EmotionField({
   selectedEmotions,
   onSelectionChange,
-  onDone,
   onFirstInteraction,
   hasInteracted,
 }: Props) {
@@ -96,11 +93,6 @@ export function EmotionField({
           />
         ))}
 
-      <SelectionControls
-        selectedEmotions={selectedEmotions}
-        onClear={() => onSelectionChange([])}
-        onDone={onDone}
-      />
     </div>
   );
 }

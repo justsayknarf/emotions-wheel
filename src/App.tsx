@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EmotionField } from './components/EmotionField/EmotionField';
+import { EmotionDrawer } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
@@ -73,7 +74,6 @@ export default function App() {
             <EmotionField
               selectedEmotions={selectedEmotions}
               onSelectionChange={setSelectedEmotions}
-              onDone={handleDone}
               onFirstInteraction={handleFirstInteraction}
               hasInteracted={hasInteracted}
             />
@@ -136,6 +136,17 @@ export default function App() {
                 history
               </button>
             )}
+
+            <AnimatePresence>
+              {selectedEmotions.length > 0 && (
+                <EmotionDrawer
+                  selectedEmotions={selectedEmotions}
+                  onDeselect={(id) => setSelectedEmotions(prev => prev.filter(e => e.id !== id))}
+                  onDone={handleDone}
+                  onClear={() => setSelectedEmotions([])}
+                />
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 
@@ -151,7 +162,6 @@ export default function App() {
             <EmotionField
               selectedEmotions={selectedEmotions}
               onSelectionChange={setSelectedEmotions}
-              onDone={handleDone}
               onFirstInteraction={handleFirstInteraction}
               hasInteracted={hasInteracted}
             />
