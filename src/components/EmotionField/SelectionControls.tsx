@@ -31,6 +31,7 @@ export function SelectionControls({ selectedEmotions, onClear, onDone }: Props) 
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
+            onPointerDown={(e) => e.stopPropagation()}
             style={{ display: 'flex', gap: 12, pointerEvents: 'auto' }}
           >
             <button

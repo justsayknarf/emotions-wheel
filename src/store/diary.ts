@@ -17,7 +17,7 @@ export function readDiary(): DiaryEntry[] {
 export function appendEntry(entry: DiaryEntry): void {
   const entries = readDiary();
   const next = [...entries, entry];
-  const pruned = next.length >= MAX_ENTRIES
+  const pruned = entries.length >= MAX_ENTRIES
     ? next.slice(PRUNE_COUNT)    // remove oldest PRUNE_COUNT, then append
     : next;
   localStorage.setItem(DIARY_KEY, JSON.stringify(pruned));

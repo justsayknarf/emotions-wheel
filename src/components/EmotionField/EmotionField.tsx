@@ -61,7 +61,7 @@ export function EmotionField({
     }
   }, [selectedEmotions, onSelectionChange]);
 
-  const { isPressed, revealCenter, handlers } = useFieldGesture({
+  const { isRevealed, revealCenter, handlers } = useFieldGesture({
     containerRef,
     size,
     onRelease: handleRelease,
@@ -70,11 +70,13 @@ export function EmotionField({
   });
 
   const selectedIds = new Set(selectedEmotions.map((e) => e.id));
-  const proximity = useProximity(emotions, revealCenter, isPressed, selectedIds);
+  const proximity = useProximity(emotions, revealCenter, isRevealed, selectedIds);
 
   return (
     <div
       ref={containerRef}
+      onPointerEnter={handlers.onPointerEnter}
+      onPointerLeave={handlers.onPointerLeave}
       onPointerDown={handlers.onPointerDown}
       onPointerMove={handlers.onPointerMove}
       onPointerUp={handlers.onPointerUp}
