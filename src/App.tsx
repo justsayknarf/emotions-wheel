@@ -32,6 +32,7 @@ function useOnboarding() {
 export default function App() {
   const [view, setView] = useState<AppView>('field');
   const [selectedEmotions, setSelectedEmotions] = useState<SelectedEmotion[]>([]);
+  const [markerCoords, setMarkerCoords] = useState<Array<{ x: number; y: number }>>([]);
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
 
@@ -48,8 +49,13 @@ export default function App() {
     if (selectedEmotions.length > 0) handleRecord();
   }, [selectedEmotions, handleRecord]);
 
+  const handleMarkerAdd = useCallback((coord: { x: number; y: number }) => {
+    setMarkerCoords(prev => [...prev, coord]);
+  }, []);
+
   const handleNewSession = useCallback(() => {
     setSelectedEmotions([]);
+    setMarkerCoords([]);
     setLastEntry(null);
     sessionStartRef.current = Date.now();
     setView('field');
@@ -68,6 +74,8 @@ export default function App() {
         onSelectionChange={setSelectedEmotions}
         onFirstInteraction={handleFirstInteraction}
         hasInteracted={hasInteracted}
+        markerCoords={markerCoords}
+        onMarkerAdd={handleMarkerAdd}
       />
 
       {/* Field-only chrome: hint + drawer + history button */}
