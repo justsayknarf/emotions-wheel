@@ -1,0 +1,218 @@
+import { motion, AnimatePresence } from 'framer-motion';
+import { emotions } from '../../data/emotions';
+import type { PinEntry } from '../../types';
+
+interface Props {
+  pin: PinEntry;
+  highlightedIds: string[];
+  onRecognize: (id: string) => void;
+  onDerecognize: (id: string) => void;
+  onRemove: () => void;
+}
+
+function labelForId(id: string): string {
+  return emotions.find((e) => e.id === id)?.label ?? id;
+}
+
+function RelationalText({ text }: { text: string }) {
+  const parts = text.split(/(\*[^*]+\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('*') && part.endsWith('*') ? (
+          <em key={i} style={{ fontStyle: 'normal', color: 'var(--oura-text-1)', fontWeight: 400 }}>
+            {part.slice(1, -1)}
+          </em>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+const pillVariants = {
+  hidden: { opacity: 0, y: 5, scale: 0.95 },
+  visible: (i: number) => ({
+    opacity: 1, y: 0, scale: 1,
+    transition: { delay: i * 0.06, type: 'spring' as const, stiffness: 300, damping: 26 },
+  }),
+};
+
+const chipVariants = {
+  hidden: { opacity: 0, scale: 0.85 },
+  visible: { opacity: 1, scale: 1, transition: { type: 'spring' as const, stiffness: 380, damping: 26 } },
+  exit: { opacity: 0, scale: 0.85, transition: { duration: 0.1 } },
+};
+
+export function CoordinateCard({ pin, highlightedIds, onRecognize, onDerecognize, onRemove }: Props) {
+  const recognizedSet = new Set(pin.recognizedWords);
+  const pillIds = highlightedIds.filter((id) => !recognizedSet.has(id));
+
+  return (
+    <div
+      style={{
+        background: 'var(--oura-surface)',
+        border: '1px solid var(--oura-border)',
+        borderRadius: 12,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header band */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '10px 14px 0',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 500,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: 'var(--oura-gold-dim)',
+          }}
+        >
+          Emotional State
+        </span>
+        <button
+          onClick={onRemove}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--oura-text-3)',
+            fontSize: 16,
+            cursor: 'pointer',
+            padding: '0 0 0 8px',
+            lineHeight: 1,
+            display: 'flex',
+            alignItems: 'center',
+            minWidth: 32,
+            minHeight: 32,
+            justifyContent: 'center',
+          }}
+          aria-label="Remove"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Main metric block */}
+      <div style={{ padding: '8px 14px 14px' }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 20,
+            fontWeight: 300,
+            color: 'var(--oura-text-2)',
+            lineHeight: 1.3,
+            letterSpacing: '-0.01em',
+          }}
+        >
+          <RelationalText text={pin.regionDescription.relational} />
+        </p>
+
+        <p
+          style={{
+            margin: '6px 0 0',
+            fontSize: 11,
+            color: 'var(--oura-text-3)',
+            letterSpacing: '0.02em',
+          }}
+        >
+          {pin.regionDescription.narrative}
+        </p>
+      </div>
+
+      {/* Recognized words + pills — in a slightly recessed band */}
+      {(pin.recognizedWords.length > 0 || pillIds.length > 0) && (
+        <div
+          style={{
+            borderTop: '1px solid var(--oura-border)',
+            padding: '10px 14px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          {pin.recognizedWords.length > 0 && (
+            <div>
+              <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginBottom: 7 }}>
+                Recognized
+              </div>
+              <AnimatePresence mode="popLayout">
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {pin.recognizedWords.map((id) => (
+                    <motion.button
+                      key={id}
+                      variants={chipVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      onClick={() => onDerecognize(id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '4px 10px',
+                        borderRadius: 5,
+                        border: '1px solid rgba(201, 168, 124, 0.35)',
+                        background: 'rgba(201, 168, 124, 0.07)',
+                        color: 'var(--oura-gold)',
+                        fontSize: 12,
+                        fontWeight: 400,
+                        cursor: 'pointer',
+                        letterSpacing: '0.01em',
+                      }}
+                    >
+                      {labelForId(id)}
+                      <span style={{ fontSize: 14, lineHeight: 1, opacity: 0.45 }}>×</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </AnimatePresence>
+            </div>
+          )}
+
+          {pillIds.length > 0 && (
+            <div>
+              {pin.recognizedWords.length === 0 && (
+                <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginBottom: 7 }}>
+                  Nearby
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {pillIds.map((id, i) => (
+                  <motion.button
+                    key={id}
+                    custom={i}
+                    variants={pillVariants}
+                    initial="hidden"
+                    animate="visible"
+                    onClick={() => onRecognize(id)}
+                    style={{
+                      padding: '4px 11px',
+                      borderRadius: 5,
+                      border: '1px solid rgba(237, 232, 223, 0.12)',
+                      background: 'rgba(237, 232, 223, 0.04)',
+                      color: 'var(--oura-text-2)',
+                      fontSize: 12,
+                      fontWeight: 400,
+                      cursor: 'pointer',
+                      letterSpacing: '0.01em',
+                    }}
+                  >
+                    {labelForId(id)}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -8,7 +8,13 @@ export function readDiary(): DiaryEntry[] {
   try {
     const raw = localStorage.getItem(DIARY_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as DiaryEntry[];
+    const entries = JSON.parse(raw) as Array<Record<string, unknown>>;
+    // Migrate: old entries have `emotions` field, not `pins` — clear and start fresh.
+    if (entries.length > 0 && 'emotions' in entries[0] && !('pins' in entries[0])) {
+      localStorage.removeItem(DIARY_KEY);
+      return [];
+    }
+    return entries as unknown as DiaryEntry[];
   } catch {
     return [];
   }

@@ -1,44 +1,43 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { motion } from 'framer-motion';
 import { emotions } from '../../data/emotions';
-import { useProximity, SELECTION_RADIUS } from '../../hooks/useProximity';
+import { getRegionDescription } from '../../data/regions';
+import { useProximity, VISIBILITY_RADIUS } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
-import type { SelectedEmotion } from '../../types';
+import type { PinEntry } from '../../types';
 
 function toPercent(v: number): number {
   return 5 + ((v + 1) / 2) * 90;
 }
 
-const AXIS_PILL: React.CSSProperties = {
+const AXIS_LABEL: React.CSSProperties = {
   position: 'absolute',
   pointerEvents: 'none',
   zIndex: 5,
-  background: 'rgba(30, 26, 22, 0.75)',
-  border: '1px solid rgba(232, 224, 216, 0.15)',
-  borderRadius: 20,
-  padding: '4px 12px',
-  fontSize: 11,
-  color: 'rgba(232, 224, 216, 0.4)',
-  letterSpacing: '0.06em',
+  fontSize: 9,
+  fontWeight: 500,
+  color: 'rgba(237, 232, 223, 0.30)',
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
   whiteSpace: 'nowrap',
 };
 
 interface Props {
-  selectedEmotions: SelectedEmotion[];
-  onSelectionChange: (emotions: SelectedEmotion[]) => void;
+  pins: PinEntry[];
+  highlightedIds: Set<string>;
+  onPinRelease: (entry: PinEntry, highlightedIds: string[]) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
-  markerCoords: Array<{ x: number; y: number }>;
-  onMarkerAdd: (coord: { x: number; y: number }) => void;
 }
 
 export function EmotionField({
-  selectedEmotions,
-  onSelectionChange,
+  pins,
+  highlightedIds,
+  onPinRelease,
   onFirstInteraction,
   hasInteracted,
-  markerCoords,
-  onMarkerAdd,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -54,34 +53,28 @@ export function EmotionField({
   }, []);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
-    onMarkerAdd(center);
+    const regionDescription = getRegionDescription(center.x, center.y, emotions);
 
-    let nearest: (typeof emotions)[0] | null = null;
-    let nearestDist = Infinity;
-
+    const nearby: Array<{ id: string; dist: number }> = [];
     for (const em of emotions) {
       const d = Math.sqrt((em.x - center.x) ** 2 + (em.y - center.y) ** 2);
-      if (d < SELECTION_RADIUS && d < nearestDist) {
-        nearest = em;
-        nearestDist = d;
+      if (d <= VISIBILITY_RADIUS) {
+        nearby.push({ id: em.id, dist: d });
       }
     }
+    nearby.sort((a, b) => a.dist - b.dist);
+    const newHighlightedIds = nearby.slice(0, 3).map((n) => n.id);
 
-    if (nearest) {
-      const alreadySelected = selectedEmotions.some((e) => e.id === nearest!.id);
-      if (alreadySelected) {
-        onSelectionChange(selectedEmotions.filter((e) => e.id !== nearest!.id));
-      } else {
-        onSelectionChange([
-          ...selectedEmotions,
-          { id: nearest.id, label: nearest.label, x: nearest.x, y: nearest.y, cluster: nearest.cluster },
-        ]);
-      }
-    } else {
-      // NOTE: the coordinate-first flag plan extends this branch to plant a coordinate flag.
-      // Do NOT implement as an early return before this point.
-    }
-  }, [selectedEmotions, onSelectionChange, onMarkerAdd]);
+    const entry: PinEntry = {
+      id: uuidv4(),
+      x: center.x,
+      y: center.y,
+      recognizedWords: [],
+      regionDescription,
+    };
+
+    onPinRelease(entry, newHighlightedIds);
+  }, [onPinRelease]);
 
   const { isRevealed, revealCenter, handlers } = useFieldGesture({
     containerRef,
@@ -91,7 +84,7 @@ export function EmotionField({
     hasInteracted,
   });
 
-  const selectedIds = new Set(selectedEmotions.map((e) => e.id));
+  const selectedIds = new Set(pins.flatMap((p) => p.recognizedWords));
   const proximity = useProximity(emotions, revealCenter, isRevealed, selectedIds);
 
   return (
@@ -105,18 +98,22 @@ export function EmotionField({
       className="relative w-full h-full overflow-hidden"
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >
+      {/* Crosshairs */}
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
+
       {/* Axis labels */}
-      <div style={{ ...AXIS_PILL, top: 12, left: '50%', transform: 'translateX(-50%)' }}>
-        activated
+      <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+        Positive
       </div>
-      <div style={{ ...AXIS_PILL, bottom: 12, left: '50%', transform: 'translateX(-50%)' }}>
-        calm
+      <div style={{ ...AXIS_LABEL, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+        Negative
       </div>
-      <div style={{ ...AXIS_PILL, left: 12, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
-        negative
+      <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+        Calm
       </div>
-      <div style={{ ...AXIS_PILL, right: 12, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
-        positive
+      <div style={{ ...AXIS_LABEL, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+        Activated
       </div>
 
       {size.width > 0 && (
@@ -127,45 +124,58 @@ export function EmotionField({
               emotion={emotion}
               proximity={proximity.get(emotion.id)!}
               isSelected={selectedIds.has(emotion.id)}
+              isHighlighted={highlightedIds.has(emotion.id)}
               containerWidth={size.width}
               containerHeight={size.height}
             />
           ))}
 
-          {markerCoords.map((coord, i) => {
-            const px = (toPercent(coord.x) / 100) * size.width;
-            const py = (toPercent(-coord.y) / 100) * size.height;
+          {pins.map((pin) => {
+            const px = (toPercent(pin.x) / 100) * size.width;
+            const py = (toPercent(-pin.y) / 100) * size.height;
             return (
               <div
-                key={i}
+                key={pin.id}
                 style={{
                   position: 'absolute',
                   left: px,
                   top: py,
-                  transform: 'translate(-50%, -50%)',
                   pointerEvents: 'none',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 4,
                   zIndex: 10,
+                  width: 0,
+                  height: 0,
                 }}
               >
-                <div style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'rgba(232, 224, 216, 0.5)',
-                  flexShrink: 0,
-                }} />
-                <span style={{
-                  fontSize: 10,
-                  color: 'rgba(232, 224, 216, 0.4)',
-                  fontVariantNumeric: 'tabular-nums',
-                  letterSpacing: '0.02em',
-                }}>
-                  {coord.x.toFixed(1)}, {coord.y.toFixed(1)}
-                </span>
+                {/* Pulse ring — one-shot on mount */}
+                <motion.div
+                  initial={{ scale: 1, opacity: 0.5 }}
+                  animate={{ scale: 4, opacity: 0 }}
+                  transition={{ duration: 0.9, ease: 'easeOut' }}
+                  style={{
+                    position: 'absolute',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    border: '1px solid rgba(201, 168, 124, 0.6)',
+                    top: -4,
+                    left: -4,
+                  }}
+                />
+                {/* Dot */}
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  style={{
+                    position: 'absolute',
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    background: 'rgba(201, 168, 124, 0.7)',
+                    top: -2,
+                    left: -2,
+                  }}
+                />
               </div>
             );
           })}

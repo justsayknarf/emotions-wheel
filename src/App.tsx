@@ -6,7 +6,7 @@ import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCa
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
 import { useDiary } from './hooks/useDiary';
-import type { AppView, SelectedEmotion, DiaryEntry } from './types';
+import type { AppView, DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
 
@@ -31,31 +31,55 @@ function useOnboarding() {
 
 export default function App() {
   const [view, setView] = useState<AppView>('field');
-  const [selectedEmotions, setSelectedEmotions] = useState<SelectedEmotion[]>([]);
-  const [markerCoords, setMarkerCoords] = useState<Array<{ x: number; y: number }>>([]);
+  const [pins, setPins] = useState<PinEntry[]>([]);
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
 
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
 
-  const handleRecord = useCallback(() => {
-    const entry = record(selectedEmotions, sessionStartRef.current);
-    setLastEntry(entry);
-    setView('complete');
-  }, [selectedEmotions, record]);
-
-  const handleDone = useCallback(() => {
-    if (selectedEmotions.length > 0) handleRecord();
-  }, [selectedEmotions, handleRecord]);
-
-  const handleMarkerAdd = useCallback((coord: { x: number; y: number }) => {
-    setMarkerCoords(prev => [...prev, coord]);
+  const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
+    setPins((prev) => [...prev, entry]);
+    setHighlightedIds(new Set(ids));
   }, []);
 
+  const handleRecognize = useCallback((emotionId: string) => {
+    setPins((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      if (last.recognizedWords.includes(emotionId)) return prev;
+      const updated = { ...last, recognizedWords: [...last.recognizedWords, emotionId] };
+      return [...prev.slice(0, -1), updated];
+    });
+  }, []);
+
+  const handleDerecognize = useCallback((emotionId: string) => {
+    setPins((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      const updated = { ...last, recognizedWords: last.recognizedWords.filter((id) => id !== emotionId) };
+      return [...prev.slice(0, -1), updated];
+    });
+  }, []);
+
+  const handlePinRemove = useCallback((pinId: string) => {
+    setPins((prev) => prev.filter((p) => p.id !== pinId));
+  }, []);
+
+  const handleRecord = useCallback(() => {
+    const entry = record(pins, sessionStartRef.current);
+    setLastEntry(entry);
+    setView('complete');
+  }, [pins, record]);
+
+  const handleDone = useCallback(() => {
+    if (pins.length > 0) handleRecord();
+  }, [pins, handleRecord]);
+
   const handleNewSession = useCallback(() => {
-    setSelectedEmotions([]);
-    setMarkerCoords([]);
+    setPins([]);
+    setHighlightedIds(new Set());
     setLastEntry(null);
     sessionStartRef.current = Date.now();
     setView('field');
@@ -67,15 +91,14 @@ export default function App() {
   }, [markInteracted]);
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: '#111111' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--oura-bg)' }}>
       {/* EmotionField always mounted — single instance, no gesture state issues */}
       <EmotionField
-        selectedEmotions={selectedEmotions}
-        onSelectionChange={setSelectedEmotions}
+        pins={pins}
+        highlightedIds={highlightedIds}
+        onPinRelease={handlePinRelease}
         onFirstInteraction={handleFirstInteraction}
         hasInteracted={hasInteracted}
-        markerCoords={markerCoords}
-        onMarkerAdd={handleMarkerAdd}
       />
 
       {/* Field-only chrome: hint + drawer + history button */}
@@ -95,37 +118,41 @@ export default function App() {
                   zIndex: 30,
                 }}
               >
-                <motion.p
-                  initial={{ opacity: 0, y: 8 }}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  transition={{ delay: 0.5 }}
+                  transition={{ delay: 0.4, duration: 0.7, ease: 'easeOut' }}
                   style={{
-                    fontSize: 14,
-                    color: 'rgba(232, 224, 216, 0.85)',
-                    background: 'rgba(30, 26, 22, 0.85)',
-                    padding: '10px 20px',
-                    borderRadius: 20,
-                    backdropFilter: 'blur(8px)',
-                    margin: 0,
-                    letterSpacing: '0.02em',
-                    border: '1px solid rgba(232, 224, 216, 0.12)',
+                    background: 'rgba(13, 15, 20, 0.82)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid var(--oura-border)',
+                    borderRadius: 10,
+                    padding: '16px 28px',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  press near a word to reveal and select it
-                </motion.p>
+                  <p style={{ margin: '0 0 5px', fontSize: 18, fontWeight: 300, color: 'var(--oura-text-1)', letterSpacing: '-0.01em' }}>
+                    How are you feeling?
+                  </p>
+                  <p style={{ margin: 0, fontSize: 10, fontWeight: 500, color: 'var(--oura-text-3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    Touch anywhere to explore
+                  </p>
+                </motion.div>
               </div>
             )}
           </AnimatePresence>
 
           <AnimatePresence>
-            {selectedEmotions.length > 0 && (
+            {pins.length > 0 && (
               <EmotionDrawer
-                selectedEmotions={selectedEmotions}
-                onDeselect={(id) => setSelectedEmotions(prev => prev.filter(e => e.id !== id))}
+                pins={pins}
+                highlightedIds={highlightedIds}
+                onRecognize={handleRecognize}
+                onDerecognize={handleDerecognize}
+                onPinRemove={handlePinRemove}
                 onDone={handleDone}
-                onClear={() => setSelectedEmotions([])}
+                onClear={() => { setPins([]); setHighlightedIds(new Set()); }}
               />
             )}
           </AnimatePresence>
@@ -137,16 +164,18 @@ export default function App() {
                 position: 'absolute',
                 top: 20,
                 right: 20,
-                background: 'rgba(30, 26, 22, 0.7)',
-                border: '1px solid rgba(232, 224, 216, 0.15)',
-                borderRadius: 12,
-                padding: '8px 12px',
-                color: 'rgba(232, 224, 216, 0.5)',
-                fontSize: 12,
+                background: 'rgba(22, 24, 32, 0.8)',
+                border: '1px solid var(--oura-border)',
+                borderRadius: 8,
+                padding: '7px 13px',
+                color: 'var(--oura-text-2)',
+                fontSize: 11,
+                fontWeight: 500,
                 cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
+                backdropFilter: 'blur(12px)',
                 zIndex: 20,
-                letterSpacing: '0.02em',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
               }}
             >
               history
@@ -163,10 +192,10 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ position: 'absolute', inset: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
           >
             <DefinitionCardSequence
-              selectedEmotions={selectedEmotions}
+              selectedEmotions={[]}
               onRecord={handleRecord}
             />
           </motion.div>
@@ -178,7 +207,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{ position: 'absolute', inset: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
           >
             <SessionComplete
               entry={lastEntry}
@@ -194,7 +223,7 @@ export default function App() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            style={{ position: 'absolute', inset: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
           >
             <DiaryHistory
               entries={entries}

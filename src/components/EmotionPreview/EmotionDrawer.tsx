@@ -1,15 +1,20 @@
 import { motion } from 'framer-motion';
-import { EmotionPreviewCard } from './EmotionPreviewCard';
-import type { SelectedEmotion } from '../../types';
+import { CoordinateCard } from './CoordinateCard';
+import type { PinEntry } from '../../types';
 
 interface Props {
-  selectedEmotions: SelectedEmotion[];
-  onDeselect: (id: string) => void;
+  pins: PinEntry[];
+  highlightedIds: Set<string>;
+  onRecognize: (emotionId: string) => void;
+  onDerecognize: (emotionId: string) => void;
+  onPinRemove: (pinId: string) => void;
   onDone: () => void;
   onClear: () => void;
 }
 
-export function EmotionDrawer({ selectedEmotions, onDeselect, onDone, onClear }: Props) {
+export function EmotionDrawer({ pins, highlightedIds, onRecognize, onDerecognize, onPinRemove, onDone, onClear }: Props) {
+  const reversedPins = [...pins].reverse();
+
   return (
     <motion.div
       initial={{ y: '100%' }}
@@ -21,10 +26,10 @@ export function EmotionDrawer({ selectedEmotions, onDeselect, onDone, onClear }:
         bottom: 0,
         left: 0,
         right: 0,
-        maxHeight: '42vh',
-        background: 'rgba(18, 14, 10, 0.95)',
-        backdropFilter: 'blur(16px)',
-        borderTop: '1px solid rgba(232, 224, 216, 0.10)',
+        maxHeight: '46vh',
+        background: 'rgba(12, 14, 18, 0.97)',
+        backdropFilter: 'blur(20px)',
+        borderTop: '1px solid var(--oura-border)',
         touchAction: 'pan-y',
         display: 'flex',
         flexDirection: 'column',
@@ -35,8 +40,8 @@ export function EmotionDrawer({ selectedEmotions, onDeselect, onDone, onClear }:
       {/* Action bar — non-scrollable */}
       <div
         style={{
-          padding: '12px 16px',
-          borderBottom: '1px solid rgba(232, 224, 216, 0.08)',
+          padding: '11px 16px',
+          borderBottom: '1px solid var(--oura-border)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -46,31 +51,35 @@ export function EmotionDrawer({ selectedEmotions, onDeselect, onDone, onClear }:
           onClick={onClear}
           style={{
             background: 'none',
-            border: '1px solid rgba(232, 224, 216, 0.2)',
-            borderRadius: 20,
-            padding: '8px 16px',
-            color: 'rgba(232, 224, 216, 0.5)',
-            fontSize: 13,
+            border: '1px solid var(--oura-border)',
+            borderRadius: 6,
+            padding: '7px 14px',
+            color: 'var(--oura-text-2)',
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
             cursor: 'pointer',
           }}
         >
           Clear
         </button>
-
         <button
           onClick={onDone}
           style={{
-            background: 'rgba(251, 191, 36, 0.9)',
+            background: 'var(--oura-gold)',
             border: 'none',
-            borderRadius: 20,
-            padding: '8px 20px',
-            color: '#111111',
-            fontSize: 14,
+            borderRadius: 6,
+            padding: '7px 18px',
+            color: '#0D0F14',
+            fontSize: 11,
             fontWeight: 600,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
             cursor: 'pointer',
           }}
         >
-          {`Done ✓ (${selectedEmotions.length})`}
+          {`Save  ·  ${pins.length}`}
         </button>
       </div>
 
@@ -87,11 +96,14 @@ export function EmotionDrawer({ selectedEmotions, onDeselect, onDone, onClear }:
           gap: 8,
         }}
       >
-        {[...selectedEmotions].reverse().map((emotion) => (
-          <EmotionPreviewCard
-            key={emotion.id}
-            emotion={emotion}
-            onDeselect={() => onDeselect(emotion.id)}
+        {reversedPins.map((pin, i) => (
+          <CoordinateCard
+            key={pin.id}
+            pin={pin}
+            highlightedIds={i === 0 ? Array.from(highlightedIds) : []}
+            onRecognize={onRecognize}
+            onDerecognize={onDerecognize}
+            onRemove={() => onPinRemove(pin.id)}
           />
         ))}
       </div>
