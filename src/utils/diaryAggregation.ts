@@ -1,4 +1,4 @@
-import { DiaryEntry } from '../types';
+import type { DiaryEntry } from '../types';
 
 export interface Aggregate {
   valence: number;
