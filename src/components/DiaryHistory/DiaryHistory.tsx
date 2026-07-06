@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { TabBar } from './TabBar';
 import { DayTabHeader } from './DayTabHeader';
 import { DiaryEntryRow } from './DiaryEntryRow';
+import { DayChart } from './DayChart';
+import { WeekChart } from './WeekChart';
+import { SessionDetailCard } from './SessionDetailCard';
 import { sessionsForDay } from '../../utils/diaryAggregation';
 import type { DiaryEntry } from '../../types';
 
@@ -18,6 +21,8 @@ export function DiaryHistory({ entries, onBack }: Props) {
     d.setHours(0, 0, 0, 0);
     return d;
   });
+  const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
+  const swipeCloseRef = useRef<{ x: number; y: number } | null>(null);
 
   function onDaySelect(date: Date) {
     setSelectedDate(date);
@@ -45,6 +50,23 @@ export function DiaryHistory({ entries, onBack }: Props) {
         display: 'flex',
         flexDirection: 'column',
       }}
+      onPointerDownCapture={(e) => {
+        // Edge swipe to close — only from left 40px to avoid WeekChart conflict
+        if (openEntry === null && e.clientX <= 40) {
+          swipeCloseRef.current = { x: e.clientX, y: e.clientY };
+        }
+      }}
+      onPointerMoveCapture={(e) => {
+        if (!swipeCloseRef.current) return;
+        const dx = e.clientX - swipeCloseRef.current.x;
+        const dy = e.clientY - swipeCloseRef.current.y;
+        if (dx > 80 && Math.abs(dx) / Math.abs(dy || 1) > 2) {
+          swipeCloseRef.current = null;
+          onBack();
+        }
+      }}
+      onPointerUpCapture={() => { swipeCloseRef.current = null; }}
+      onPointerCancelCapture={() => { swipeCloseRef.current = null; }}
     >
       {/* Header */}
       <div style={{
@@ -92,6 +114,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
             onPrev={() => shiftDate(-1)}
             onNext={() => shiftDate(1)}
             onBack={onBack}
+            onOpenEntry={setOpenEntry}
           />
         ) : (
           <WeekTabContent
@@ -100,6 +123,9 @@ export function DiaryHistory({ entries, onBack }: Props) {
           />
         )}
       </div>
+
+      {/* Session detail overlay */}
+      <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
     </div>
   );
 }
@@ -112,27 +138,15 @@ interface DayTabProps {
   onPrev: () => void;
   onNext: () => void;
   onBack: () => void;
+  onOpenEntry: (entry: DiaryEntry) => void;
 }
 
-function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack }: DayTabProps) {
+function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenEntry }: DayTabProps) {
   return (
     <div>
       <DayTabHeader date={selectedDate} onPrev={onPrev} onNext={onNext} />
 
-      {/* Chart placeholder — replaced by DayChart in U4 */}
-      <div style={{
-        margin: '0 16px 4px',
-        height: 96,
-        background: 'var(--oura-surface)',
-        borderRadius: 12,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: 10, color: 'var(--oura-text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          chart
-        </span>
-      </div>
+      <DayChart sessions={sessions} onDotTap={onOpenEntry} />
 
       {/* Session list */}
       <div style={{ padding: '0 20px' }}>
@@ -173,7 +187,7 @@ function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack }: DayTa
           </motion.div>
         ) : (
           sessions.map((entry) => (
-            <DiaryEntryRow key={entry.id} entry={entry} />
+            <DiaryEntryRow key={entry.id} entry={entry} onClick={() => onOpenEntry(entry)} />
           ))
         )}
       </div>
@@ -188,18 +202,10 @@ interface WeekTabProps {
   onDaySelect: (date: Date) => void;
 }
 
-function WeekTabContent({ entries: _entries, onDaySelect: _onDaySelect }: WeekTabProps) {
+function WeekTabContent({ entries, onDaySelect }: WeekTabProps) {
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: 200,
-    }}>
-      {/* Replaced by WeekChart in U5 */}
-      <span style={{ fontSize: 10, color: 'var(--oura-text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-        week chart
-      </span>
+    <div style={{ padding: '12px 0' }}>
+      <WeekChart entries={entries} onDayTap={onDaySelect} />
     </div>
   );
 }
