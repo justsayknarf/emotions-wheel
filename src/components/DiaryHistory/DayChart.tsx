@@ -54,9 +54,10 @@ export function DayChart({ sessions, onDotTap }: Props) {
       overflow: 'hidden',
     }}>
       <svg
-        width={SVG_W}
+        width="100%"
         height={SVG_H}
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        preserveAspectRatio="none"
         style={{ display: 'block' }}
       >
         {/* X-axis tick labels */}

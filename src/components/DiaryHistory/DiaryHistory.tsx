@@ -68,6 +68,9 @@ export function DiaryHistory({ entries, onBack }: Props) {
       onPointerUpCapture={() => { swipeCloseRef.current = null; }}
       onPointerCancelCapture={() => { swipeCloseRef.current = null; }}
     >
+      {/* Centered column — constrains content to phone width on desktop */}
+      <div style={{ maxWidth: 430, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -124,7 +127,9 @@ export function DiaryHistory({ entries, onBack }: Props) {
         )}
       </div>
 
-      {/* Session detail overlay */}
+      </div>{/* end centered column */}
+
+      {/* Session detail overlay — outside the centered column so it spans full screen */}
       <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
     </div>
   );
