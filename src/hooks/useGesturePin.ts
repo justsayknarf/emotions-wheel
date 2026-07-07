@@ -98,7 +98,7 @@ export function useGesturePin({
 
       accumulatedRef.current = {
         x: clamp(accumulatedRef.current.x + coordDx),
-        y: clamp(accumulatedRef.current.y - coordDy), // invert Y: drag down → lower arousal
+        y: clamp(accumulatedRef.current.y - coordDy), // invert Y: drag down → lower valence
       };
 
       setPinX(accumulatedRef.current.x);

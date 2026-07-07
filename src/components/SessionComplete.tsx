@@ -18,8 +18,8 @@ function formatTimestamp(iso: string): string {
 }
 
 export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
-  const count = entry.emotions.length;
-  const label = count === 1 ? 'emotion' : 'emotions';
+  const count = entry.pins.length;
+  const label = count === 1 ? 'moment' : 'moments';
 
   return (
     <div
@@ -31,7 +31,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        background: '#111111',
+        background: 'var(--oura-bg)',
       }}
     >
       <motion.div
@@ -40,55 +40,74 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
         transition={{ type: 'spring', stiffness: 200, damping: 24, delay: 0.05 }}
         style={{ textAlign: 'center', maxWidth: 320 }}
       >
-        {/* Checkmark */}
+        {/* Ring checkmark */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 22 }}
           style={{
-            width: 56,
-            height: 56,
+            width: 52,
+            height: 52,
             borderRadius: '50%',
-            background: 'rgba(251, 191, 36, 0.15)',
+            border: '1.5px solid rgba(201, 168, 124, 0.5)',
+            background: 'rgba(201, 168, 124, 0.07)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 24px',
-            fontSize: 24,
+            margin: '0 auto 28px',
+            color: 'var(--oura-gold)',
+            fontSize: 20,
+            fontWeight: 300,
           }}
         >
           ✓
         </motion.div>
 
+        {/* Eyebrow */}
+        <div style={{
+          fontSize: 9,
+          fontWeight: 500,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: 'var(--oura-gold-dim)',
+          marginBottom: 10,
+        }}>
+          Saved
+        </div>
+
         {/* Summary */}
         <p style={{
-          fontSize: 17,
-          color: 'rgba(232, 224, 216, 0.9)',
-          margin: '0 0 6px',
-          fontWeight: 400,
+          fontSize: 22,
+          fontWeight: 300,
+          color: 'var(--oura-text-1)',
+          margin: '0 0 8px',
+          letterSpacing: '-0.01em',
         }}>
           {count} {label} recorded
         </p>
         <p style={{
-          fontSize: 13,
-          color: 'rgba(232, 224, 216, 0.4)',
-          margin: '0 0 40px',
+          fontSize: 12,
+          color: 'var(--oura-text-3)',
+          margin: '0 0 44px',
+          letterSpacing: '0.03em',
         }}>
           {formatTimestamp(entry.timestamp)}
         </p>
 
         {/* Actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             onClick={onNewSession}
             style={{
-              padding: '13px 32px',
-              borderRadius: 24,
+              padding: '12px 32px',
+              borderRadius: 6,
               border: 'none',
-              background: '#fbbf24',
-              color: '#111111',
-              fontSize: 15,
+              background: 'var(--oura-gold)',
+              color: '#0D0F14',
+              fontSize: 11,
               fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
               cursor: 'pointer',
             }}
           >
@@ -98,12 +117,15 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
           <button
             onClick={onViewHistory}
             style={{
-              padding: '13px 32px',
-              borderRadius: 24,
-              border: '1px solid rgba(232, 224, 216, 0.2)',
+              padding: '12px 32px',
+              borderRadius: 6,
+              border: '1px solid var(--oura-border)',
               background: 'transparent',
-              color: 'rgba(232, 224, 216, 0.7)',
-              fontSize: 15,
+              color: 'var(--oura-text-2)',
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
               cursor: 'pointer',
             }}
           >

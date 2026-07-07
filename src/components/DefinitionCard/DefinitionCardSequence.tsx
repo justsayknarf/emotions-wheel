@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function DefinitionCardSequence({ selectedEmotions, onRecord }: Props) {
-  const [index, setIndex] = useState(0);
+const [index, setIndex] = useState(0);
 
   const handleNext = () => {
     if (index >= selectedEmotions.length - 1) {

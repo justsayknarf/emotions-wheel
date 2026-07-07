@@ -1,36 +1,46 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { motion } from 'framer-motion';
 import { emotions } from '../../data/emotions';
-import { useProximity } from '../../hooks/useProximity';
-import { useGesturePin } from '../../hooks/useGesturePin';
+import { getRegionDescription } from '../../data/regions';
+import { useProximity, VISIBILITY_RADIUS } from '../../hooks/useProximity';
+import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
-import { Pin } from './Pin';
-import { SelectionControls } from './SelectionControls';
-import type { SelectedEmotion } from '../../types';
+import type { PinEntry } from '../../types';
+
+function toPercent(v: number): number {
+  return 5 + ((v + 1) / 2) * 90;
+}
+
+const AXIS_LABEL: React.CSSProperties = {
+  position: 'absolute',
+  pointerEvents: 'none',
+  zIndex: 5,
+  fontSize: 9,
+  fontWeight: 500,
+  color: 'rgba(237, 232, 223, 0.30)',
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  whiteSpace: 'nowrap',
+};
 
 interface Props {
-  selectedEmotions: SelectedEmotion[];
-  onSelectionChange: (emotions: SelectedEmotion[]) => void;
-  onDone: () => void;
+  pins: PinEntry[];
+  highlightedIds: Set<string>;
+  onPinRelease: (entry: PinEntry, highlightedIds: string[]) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
 }
 
-// Map coordinate [-1, 1] to pixel position using [5%, 95%] of container
-function coordToPixel(v: number, containerPx: number): number {
-  return (5 + ((v + 1) / 2) * 90) / 100 * containerPx;
-}
-
 export function EmotionField({
-  selectedEmotions,
-  onSelectionChange,
-  onDone,
+  pins,
+  highlightedIds,
+  onPinRelease,
   onFirstInteraction,
   hasInteracted,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [pinX, setPinX] = useState(0);
-  const [pinY, setPinY] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -42,50 +52,135 @@ export function EmotionField({
     return () => obs.disconnect();
   }, []);
 
-  const selectedIds = new Set(selectedEmotions.map((e) => e.id));
-  const proximity = useProximity(emotions, pinX, pinY, selectedIds);
+  const handleRelease = useCallback((center: { x: number; y: number }) => {
+    const regionDescription = getRegionDescription(center.x, center.y, emotions);
 
-  const bind = useGesturePin({
-    pinX,
-    pinY,
-    setPinX,
-    setPinY,
-    selectedEmotions,
-    onSelectionChange,
+    const nearby: Array<{ id: string; dist: number }> = [];
+    for (const em of emotions) {
+      const d = Math.sqrt((em.x - center.x) ** 2 + (em.y - center.y) ** 2);
+      if (d <= VISIBILITY_RADIUS) {
+        nearby.push({ id: em.id, dist: d });
+      }
+    }
+    nearby.sort((a, b) => a.dist - b.dist);
+    const newHighlightedIds = nearby.slice(0, 3).map((n) => n.id);
+
+    const entry: PinEntry = {
+      id: uuidv4(),
+      x: center.x,
+      y: center.y,
+      recognizedWords: [],
+      regionDescription,
+    };
+
+    onPinRelease(entry, newHighlightedIds);
+  }, [onPinRelease]);
+
+  const { isRevealed, revealCenter, handlers } = useFieldGesture({
     containerRef,
+    size,
+    onRelease: handleRelease,
     onFirstInteraction,
     hasInteracted,
   });
 
-  const pinPixelX = size.width > 0 ? coordToPixel(pinX, size.width) : 0;
-  const pinPixelY = size.height > 0 ? coordToPixel(-pinY, size.height) : 0; // invert Y
+  const selectedIds = new Set(pins.flatMap((p) => p.recognizedWords));
+  const proximity = useProximity(emotions, revealCenter, isRevealed, selectedIds);
 
   return (
     <div
       ref={containerRef}
-      {...bind()}
+      onPointerEnter={handlers.onPointerEnter}
+      onPointerLeave={handlers.onPointerLeave}
+      onPointerDown={handlers.onPointerDown}
+      onPointerMove={handlers.onPointerMove}
+      onPointerUp={handlers.onPointerUp}
       className="relative w-full h-full overflow-hidden"
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >
-      {size.width > 0 &&
-        emotions.map((emotion) => (
-          <EmotionWord
-            key={emotion.id}
-            emotion={emotion}
-            proximity={proximity.get(emotion.id)!}
-            isSelected={selectedIds.has(emotion.id)}
-            containerWidth={size.width}
-            containerHeight={size.height}
-          />
-        ))}
+      {/* Crosshairs */}
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
 
-      {size.width > 0 && <Pin x={pinPixelX} y={pinPixelY} />}
+      {/* Axis labels */}
+      <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+        Positive
+      </div>
+      <div style={{ ...AXIS_LABEL, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+        Negative
+      </div>
+      <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+        Calm
+      </div>
+      <div style={{ ...AXIS_LABEL, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+        Activated
+      </div>
 
-      <SelectionControls
-        selectedEmotions={selectedEmotions}
-        onClear={() => onSelectionChange([])}
-        onDone={onDone}
-      />
+      {size.width > 0 && (
+        <>
+          {emotions.map((emotion) => (
+            <EmotionWord
+              key={emotion.id}
+              emotion={emotion}
+              proximity={proximity.get(emotion.id)!}
+              isSelected={selectedIds.has(emotion.id)}
+              isHighlighted={highlightedIds.has(emotion.id)}
+              containerWidth={size.width}
+              containerHeight={size.height}
+            />
+          ))}
+
+          {pins.map((pin) => {
+            const px = (toPercent(pin.x) / 100) * size.width;
+            const py = (toPercent(-pin.y) / 100) * size.height;
+            return (
+              <div
+                key={pin.id}
+                style={{
+                  position: 'absolute',
+                  left: px,
+                  top: py,
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                  width: 0,
+                  height: 0,
+                }}
+              >
+                {/* Pulse ring — one-shot on mount */}
+                <motion.div
+                  initial={{ scale: 1, opacity: 0.5 }}
+                  animate={{ scale: 4, opacity: 0 }}
+                  transition={{ duration: 0.9, ease: 'easeOut' }}
+                  style={{
+                    position: 'absolute',
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    border: '1px solid rgba(201, 168, 124, 0.6)',
+                    top: -4,
+                    left: -4,
+                  }}
+                />
+                {/* Dot */}
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  style={{
+                    position: 'absolute',
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    background: 'rgba(201, 168, 124, 0.7)',
+                    top: -2,
+                    left: -2,
+                  }}
+                />
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

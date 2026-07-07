@@ -1,7 +1,12 @@
+import { emotions } from '../../data/emotions';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
   entry: DiaryEntry;
+}
+
+function labelForId(id: string): string {
+  return emotions.find((e) => e.id === id)?.label ?? id;
 }
 
 function formatDate(iso: string): string {
@@ -16,32 +21,48 @@ function formatDate(iso: string): string {
 }
 
 export function DiaryEntryRow({ entry }: Props) {
-  const labels = entry.emotions.map((e) => e.label);
-  const displayLabels = labels.length > 7
-    ? labels.slice(0, 7).join(', ') + ` +${labels.length - 7} more`
-    : labels.join(', ');
+  const recognizedLabels = entry.pins
+    .flatMap((p) => p.recognizedWords)
+    .map(labelForId);
+
+  let displayText: string;
+  if (recognizedLabels.length > 0) {
+    const truncated = recognizedLabels.length > 7
+      ? recognizedLabels.slice(0, 7).join(', ') + ` +${recognizedLabels.length - 7} more`
+      : recognizedLabels.join(', ');
+    displayText = truncated;
+  } else if (entry.pins.length > 0) {
+    // Fall back to the first pin's relational description (strips markdown asterisks)
+    displayText = entry.pins[0].regionDescription.relational.replace(/\*/g, '');
+  } else {
+    displayText = '—';
+  }
 
   return (
     <div
       style={{
         padding: '16px 0',
-        borderBottom: '1px solid rgba(232, 224, 216, 0.08)',
+        borderBottom: '1px solid var(--oura-border)',
       }}
     >
       <div style={{
-        fontSize: 12,
-        color: 'rgba(232, 224, 216, 0.35)',
+        fontSize: 10,
+        color: 'var(--oura-text-3)',
         marginBottom: 6,
-        letterSpacing: '0.02em',
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        fontWeight: 500,
       }}>
         {formatDate(entry.timestamp)}
       </div>
       <div style={{
         fontSize: 15,
-        color: 'rgba(232, 224, 216, 0.85)',
+        color: 'var(--oura-text-1)',
         lineHeight: 1.5,
+        fontWeight: 300,
+        letterSpacing: '0.01em',
       }}>
-        {displayLabels}
+        {displayText}
       </div>
     </div>
   );

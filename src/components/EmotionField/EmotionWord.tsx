@@ -6,6 +6,7 @@ interface Props {
   emotion: Emotion;
   proximity: ProximityResult;
   isSelected: boolean;
+  isHighlighted: boolean;
   containerWidth: number;
   containerHeight: number;
 }
@@ -15,11 +16,14 @@ function toPercent(v: number): number {
   return 5 + ((v + 1) / 2) * 90;
 }
 
-export function EmotionWord({ emotion, proximity, isSelected, containerWidth, containerHeight }: Props) {
+export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight }: Props) {
   const left = (toPercent(emotion.x) / 100) * containerWidth;
-  const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +arousal = up
+  const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
-  const { opacity, scale, isApproaching } = proximity;
+  const { opacity, scale, isCandidate } = proximity;
+
+  const resolvedOpacity = isSelected || isHighlighted ? 1 : opacity;
+  const resolvedScale = isCandidate ? 1.3 : (isSelected ? 1 : (isHighlighted ? 1.05 : scale));
 
   return (
     <motion.span
@@ -32,24 +36,27 @@ export function EmotionWord({ emotion, proximity, isSelected, containerWidth, co
         willChange: 'opacity, transform',
         whiteSpace: 'nowrap',
       }}
-      animate={{
-        opacity: isSelected ? 1 : opacity,
-        scale: isApproaching ? 1.08 : (isSelected ? 1 : scale),
-      }}
+      animate={{ opacity: resolvedOpacity, scale: resolvedScale }}
       transition={{ type: 'spring', stiffness: 120, damping: 20 }}
     >
       <span
         className={[
           emotion.depth === 'surface' ? 'text-sm' : 'text-xs',
-          isSelected
-            ? 'text-amber-300 font-semibold'
-            : 'text-stone-300',
           'tracking-wide',
         ].join(' ')}
         style={{
+          color: isSelected
+            ? '#C9A87C'
+            : isHighlighted
+              ? 'rgba(201, 168, 124, 0.7)'
+              : 'rgba(237, 232, 223, 1)',
+          fontWeight: isSelected ? 500 : isHighlighted ? 400 : 300,
+          letterSpacing: isSelected ? '0.01em' : '0.02em',
           textShadow: isSelected
-            ? '0 0 12px rgba(251, 191, 36, 0.6)'
-            : undefined,
+            ? '0 0 16px rgba(201, 168, 124, 0.4)'
+            : isHighlighted
+              ? '0 0 10px rgba(201, 168, 124, 0.2)'
+              : undefined,
         }}
       >
         {emotion.label}
