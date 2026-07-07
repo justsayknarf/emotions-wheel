@@ -9,6 +9,8 @@ interface Props {
   isHighlighted: boolean;
   containerWidth: number;
   containerHeight: number;
+  enterDelay?: number;
+  animateIn?: boolean;
 }
 
 // Map coordinate [-1, 1] to [5%, 95%] of container dimension
@@ -16,7 +18,7 @@ function toPercent(v: number): number {
   return 5 + ((v + 1) / 2) * 90;
 }
 
-export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight }: Props) {
+export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false }: Props) {
   const left = (toPercent(emotion.x) / 100) * containerWidth;
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
@@ -36,8 +38,10 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
         willChange: 'opacity, transform',
         whiteSpace: 'nowrap',
       }}
+      initial={animateIn ? { opacity: 0, scale: 1 } : false}
       animate={{ opacity: resolvedOpacity, scale: resolvedScale }}
-      transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+      exit={{ opacity: 0, transition: { duration: 0.25, ease: 'easeOut' } }}
+      transition={{ type: 'spring', stiffness: 120, damping: 20, delay: enterDelay }}
     >
       <span
         className={[
