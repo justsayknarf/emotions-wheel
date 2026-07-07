@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion } from 'framer-motion';
 import { emotions } from '../../data/emotions';
@@ -23,6 +23,10 @@ const AXIS_LABEL: React.CSSProperties = {
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
 };
+
+// Partition once at module load — emotions array is a static import constant
+const surfaceEmotions = emotions.filter(e => e.depth === 'surface');
+const deepEmotions = emotions.filter(e => e.depth === 'deep');
 
 interface Props {
   pins: PinEntry[];
@@ -85,7 +89,25 @@ export function EmotionField({
   });
 
   const selectedIds = new Set(pins.flatMap((p) => p.recognizedWords));
-  const proximity = useProximity(emotions, revealCenter, isRevealed, selectedIds);
+  const proximity = useProximity(surfaceEmotions, revealCenter, isRevealed, selectedIds);
+
+  // Pin-based proximity for deep emotions — computed from placed pin positions
+  const deepOpacityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (pins.length === 0) return map;
+    for (const e of deepEmotions) {
+      let maxT = 0;
+      for (const pin of pins) {
+        const dist = Math.sqrt((e.x - pin.x) ** 2 + (e.y - pin.y) ** 2);
+        if (dist <= VISIBILITY_RADIUS) {
+          const t = 1 - dist / VISIBILITY_RADIUS;
+          if (t > maxT) maxT = t;
+        }
+      }
+      if (maxT > 0) map.set(e.id, maxT);
+    }
+    return map;
+  }, [pins]);
 
   return (
     <div
@@ -116,9 +138,42 @@ export function EmotionField({
         Activated
       </div>
 
+      {/* Axis position indicators — visible only while dragging */}
+      {isRevealed && revealCenter && (
+        <>
+          {/* Arousal: slides left–right along the bottom edge */}
+          <div style={{
+            position: 'absolute',
+            left: `${toPercent(revealCenter.x)}%`,
+            bottom: 6,
+            transform: 'translateX(-50%)',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'rgba(201,168,124,0.55)',
+            pointerEvents: 'none',
+            zIndex: 6,
+          }} />
+          {/* Valence: slides up–down along the right edge */}
+          <div style={{
+            position: 'absolute',
+            top: `${toPercent(-revealCenter.y)}%`,
+            right: 6,
+            transform: 'translateY(-50%)',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'rgba(201,168,124,0.55)',
+            pointerEvents: 'none',
+            zIndex: 6,
+          }} />
+        </>
+      )}
+
       {size.width > 0 && (
         <>
-          {emotions.map((emotion) => (
+          {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
+          {surfaceEmotions.map((emotion) => (
             <EmotionWord
               key={emotion.id}
               emotion={emotion}
@@ -129,6 +184,26 @@ export function EmotionField({
               containerHeight={size.height}
             />
           ))}
+
+          {/* Deep emotions — revealed near placed pins; always shown if selected or highlighted */}
+          {deepEmotions
+            .filter(e => deepOpacityMap.has(e.id) || selectedIds.has(e.id) || highlightedIds.has(e.id))
+            .map(e => {
+              const opacity = selectedIds.has(e.id) || highlightedIds.has(e.id)
+                ? 1
+                : (deepOpacityMap.get(e.id) ?? 0);
+              return (
+                <EmotionWord
+                  key={e.id}
+                  emotion={e}
+                  proximity={{ opacity, scale: 1.0, isCandidate: false }}
+                  isSelected={selectedIds.has(e.id)}
+                  isHighlighted={highlightedIds.has(e.id)}
+                  containerWidth={size.width}
+                  containerHeight={size.height}
+                />
+              );
+            })}
 
           {pins.map((pin) => {
             const px = (toPercent(pin.x) / 100) * size.width;
