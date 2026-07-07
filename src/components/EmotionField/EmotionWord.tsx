@@ -40,8 +40,11 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
       }}
       initial={animateIn ? { opacity: 0, scale: 1 } : false}
       animate={{ opacity: resolvedOpacity, scale: resolvedScale }}
-      exit={{ opacity: 0, transition: { duration: 0.25, ease: 'easeOut' } }}
-      transition={{ type: 'spring', stiffness: 120, damping: 20, delay: enterDelay }}
+      exit={{ opacity: 0, transition: { duration: 1.5, ease: 'easeOut' } }}
+      transition={animateIn
+        ? { opacity: { duration: 2, ease: 'easeOut', delay: enterDelay }, scale: { type: 'spring', stiffness: 120, damping: 20 } }
+        : { type: 'spring', stiffness: 120, damping: 20 }
+      }
     >
       <span
         className={[

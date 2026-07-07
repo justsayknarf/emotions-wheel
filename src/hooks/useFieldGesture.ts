@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { VISIBILITY_RADIUS } from './useProximity';
 
 const DWELL_DELAY_MS = 1200;
 const DWELL_RESET_THRESHOLD = 0.04;
@@ -45,6 +46,7 @@ export function useFieldGesture({
 
   const dwellTimerRef = useRef<number | null>(null);
   const lastStablePosRef = useRef<{ x: number; y: number } | null>(null);
+  const dwellCenterRef = useRef<{ x: number; y: number } | null>(null);
 
   function clearDwellTimer() {
     if (dwellTimerRef.current !== null) {
@@ -57,13 +59,16 @@ export function useFieldGesture({
     clearDwellTimer();
     lastStablePosRef.current = pos;
     dwellTimerRef.current = window.setTimeout(() => {
-      setDwellCenter({ ...lastStablePosRef.current! });
+      const center = { ...lastStablePosRef.current! };
+      dwellCenterRef.current = center;
+      setDwellCenter(center);
       dwellTimerRef.current = null;
     }, DWELL_DELAY_MS);
   }
 
   function clearDwell() {
     clearDwellTimer();
+    dwellCenterRef.current = null;
     setDwellCenter(null);
     lastStablePosRef.current = null;
   }
@@ -132,15 +137,25 @@ export function useFieldGesture({
 
       // Dwell tracking — only during hover, not during drag
       if (!isPressedRef.current) {
-        const lastPos = lastStablePosRef.current;
-        if (lastPos) {
-          const dist = Math.sqrt((coord.x - lastPos.x) ** 2 + (coord.y - lastPos.y) ** 2);
-          if (dist > DWELL_RESET_THRESHOLD) {
-            setDwellCenter(null);
+        const activeDwell = dwellCenterRef.current;
+        if (activeDwell) {
+          // Dwell is active — keep it until cursor leaves the reveal radius
+          const dist = Math.sqrt((coord.x - activeDwell.x) ** 2 + (coord.y - activeDwell.y) ** 2);
+          if (dist > VISIBILITY_RADIUS) {
+            clearDwell();
             startDwellTimer(coord);
           }
         } else {
-          startDwellTimer(coord);
+          // No active dwell — track stable position to start the timer
+          const lastPos = lastStablePosRef.current;
+          if (lastPos) {
+            const dist = Math.sqrt((coord.x - lastPos.x) ** 2 + (coord.y - lastPos.y) ** 2);
+            if (dist > DWELL_RESET_THRESHOLD) {
+              startDwellTimer(coord);
+            }
+          } else {
+            startDwellTimer(coord);
+          }
         }
       }
     },
