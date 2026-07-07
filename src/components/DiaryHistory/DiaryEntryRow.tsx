@@ -3,6 +3,7 @@ import type { DiaryEntry } from '../../types';
 
 interface Props {
   entry: DiaryEntry;
+  onClick?: () => void;
 }
 
 function labelForId(id: string): string {
@@ -20,7 +21,7 @@ function formatDate(iso: string): string {
   });
 }
 
-export function DiaryEntryRow({ entry }: Props) {
+export function DiaryEntryRow({ entry, onClick }: Props) {
   const recognizedLabels = entry.pins
     .flatMap((p) => p.recognizedWords)
     .map(labelForId);
@@ -40,9 +41,11 @@ export function DiaryEntryRow({ entry }: Props) {
 
   return (
     <div
+      onClick={onClick}
       style={{
         padding: '16px 0',
         borderBottom: '1px solid var(--oura-border)',
+        cursor: onClick ? 'pointer' : undefined,
       }}
     >
       <div style={{

@@ -35,6 +35,7 @@ export default function App() {
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
@@ -91,7 +92,25 @@ export default function App() {
   }, [markInteracted]);
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--oura-bg)' }}>
+    <div
+      style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--oura-bg)' }}
+      onPointerDownCapture={(e) => {
+        if (view === 'field' && entries.length > 0) {
+          swipeStartRef.current = { x: e.clientX, y: e.clientY };
+        }
+      }}
+      onPointerMoveCapture={(e) => {
+        if (!swipeStartRef.current) return;
+        const dx = e.clientX - swipeStartRef.current.x;
+        const dy = e.clientY - swipeStartRef.current.y;
+        if (dx < -60 && Math.abs(dx) / Math.abs(dy || 1) > 2) {
+          swipeStartRef.current = null;
+          setView('history');
+        }
+      }}
+      onPointerUpCapture={() => { swipeStartRef.current = null; }}
+      onPointerCancelCapture={() => { swipeStartRef.current = null; }}
+    >
       {/* EmotionField always mounted — single instance, no gesture state issues */}
       <EmotionField
         pins={pins}

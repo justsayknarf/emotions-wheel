@@ -1,5 +1,12 @@
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { TabBar } from './TabBar';
+import { DayTabHeader } from './DayTabHeader';
 import { DiaryEntryRow } from './DiaryEntryRow';
+import { DayChart } from './DayChart';
+import { WeekChart } from './WeekChart';
+import { SessionDetailCard } from './SessionDetailCard';
+import { sessionsForDay } from '../../utils/diaryAggregation';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -8,7 +15,31 @@ interface Props {
 }
 
 export function DiaryHistory({ entries, onBack }: Props) {
-  const sorted = [...entries].reverse(); // newest first
+  const [activeTab, setActiveTab] = useState<'day' | 'week'>('day');
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
+  const swipeCloseRef = useRef<{ x: number; y: number } | null>(null);
+
+  function onDaySelect(date: Date) {
+    setSelectedDate(date);
+    setActiveTab('day');
+  }
+
+  function shiftDate(delta: number) {
+    setSelectedDate(prev => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + delta);
+      return next;
+    });
+  }
+
+  const daySessions = sessionsForDay(entries, selectedDate).sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
   return (
     <div
@@ -19,7 +50,27 @@ export function DiaryHistory({ entries, onBack }: Props) {
         display: 'flex',
         flexDirection: 'column',
       }}
+      onPointerDownCapture={(e) => {
+        // Edge swipe to close — only from left 40px to avoid WeekChart conflict
+        if (openEntry === null && e.clientX <= 40) {
+          swipeCloseRef.current = { x: e.clientX, y: e.clientY };
+        }
+      }}
+      onPointerMoveCapture={(e) => {
+        if (!swipeCloseRef.current) return;
+        const dx = e.clientX - swipeCloseRef.current.x;
+        const dy = e.clientY - swipeCloseRef.current.y;
+        if (dx > 80 && Math.abs(dx) / Math.abs(dy || 1) > 2) {
+          swipeCloseRef.current = null;
+          onBack();
+        }
+      }}
+      onPointerUpCapture={() => { swipeCloseRef.current = null; }}
+      onPointerCancelCapture={() => { swipeCloseRef.current = null; }}
     >
+      {/* Centered column — constrains content to phone width on desktop */}
+      <div style={{ maxWidth: 430, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -54,9 +105,57 @@ export function DiaryHistory({ entries, onBack }: Props) {
         </h1>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', touchAction: 'pan-y' }}>
-        {sorted.length === 0 ? (
+      {/* Tab bar */}
+      <TabBar active={activeTab} onChange={setActiveTab} />
+
+      {/* Tab content */}
+      <div style={{ flex: 1, overflowY: 'auto', touchAction: 'pan-y' }}>
+        {activeTab === 'day' ? (
+          <DayTabContent
+            sessions={daySessions}
+            selectedDate={selectedDate}
+            onPrev={() => shiftDate(-1)}
+            onNext={() => shiftDate(1)}
+            onBack={onBack}
+            onOpenEntry={setOpenEntry}
+          />
+        ) : (
+          <WeekTabContent
+            entries={entries}
+            onDaySelect={onDaySelect}
+          />
+        )}
+      </div>
+
+      </div>{/* end centered column */}
+
+      {/* Session detail overlay — outside the centered column so it spans full screen */}
+      <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
+    </div>
+  );
+}
+
+// ─── Day tab ─────────────────────────────────────────────────────────────────
+
+interface DayTabProps {
+  sessions: DiaryEntry[];
+  selectedDate: Date;
+  onPrev: () => void;
+  onNext: () => void;
+  onBack: () => void;
+  onOpenEntry: (entry: DiaryEntry) => void;
+}
+
+function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenEntry }: DayTabProps) {
+  return (
+    <div>
+      <DayTabHeader date={selectedDate} onPrev={onPrev} onNext={onNext} />
+
+      <DayChart sessions={sessions} onDotTap={onOpenEntry} />
+
+      {/* Session list */}
+      <div style={{ padding: '0 20px' }}>
+        {sessions.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -65,13 +164,13 @@ export function DiaryHistory({ entries, onBack }: Props) {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '60%',
-              textAlign: 'center',
+              paddingTop: 48,
               gap: 16,
+              textAlign: 'center',
             }}
           >
             <p style={{ fontSize: 15, color: 'var(--oura-text-3)', margin: 0, fontWeight: 300 }}>
-              No check-ins yet.
+              No check-ins on this day.
             </p>
             <button
               onClick={onBack}
@@ -88,15 +187,30 @@ export function DiaryHistory({ entries, onBack }: Props) {
                 cursor: 'pointer',
               }}
             >
-              Start your first check-in
+              Start a check-in
             </button>
           </motion.div>
         ) : (
-          sorted.map((entry) => (
-            <DiaryEntryRow key={entry.id} entry={entry} />
+          sessions.map((entry) => (
+            <DiaryEntryRow key={entry.id} entry={entry} onClick={() => onOpenEntry(entry)} />
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Week tab ────────────────────────────────────────────────────────────────
+
+interface WeekTabProps {
+  entries: DiaryEntry[];
+  onDaySelect: (date: Date) => void;
+}
+
+function WeekTabContent({ entries, onDaySelect }: WeekTabProps) {
+  return (
+    <div style={{ padding: '12px 0' }}>
+      <WeekChart entries={entries} onDayTap={onDaySelect} />
     </div>
   );
 }
