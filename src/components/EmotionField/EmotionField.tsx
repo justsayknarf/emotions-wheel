@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
-import { useProximity, VISIBILITY_RADIUS } from '../../hooks/useProximity';
+import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
 import type { PinEntry } from '../../types';
@@ -91,20 +91,22 @@ export function EmotionField({
   const selectedIds = new Set(pins.flatMap((p) => p.recognizedWords));
   const proximity = useProximity(surfaceEmotions, revealCenter, isRevealed, selectedIds);
 
-  // Pin-based proximity for deep emotions — computed from placed pin positions
+  // Pin-based proximity for deep emotions — each pin reveals its nearest
+  // DEEP_REVEAL_CAP words; overlapping pins merge by max opacity
   const deepOpacityMap = useMemo(() => {
     const map = new Map<string, number>();
-    if (pins.length === 0) return map;
-    for (const e of deepEmotions) {
-      let maxT = 0;
-      for (const pin of pins) {
+    for (const pin of pins) {
+      const eligible: Array<{ id: string; t: number; dist: number }> = [];
+      for (const e of deepEmotions) {
         const dist = Math.sqrt((e.x - pin.x) ** 2 + (e.y - pin.y) ** 2);
         if (dist <= VISIBILITY_RADIUS) {
-          const t = 1 - dist / VISIBILITY_RADIUS;
-          if (t > maxT) maxT = t;
+          eligible.push({ id: e.id, t: 1 - dist / VISIBILITY_RADIUS, dist });
         }
       }
-      if (maxT > 0) map.set(e.id, maxT);
+      eligible.sort((a, b) => a.dist - b.dist);
+      for (const { id, t } of eligible.slice(0, DEEP_REVEAL_CAP)) {
+        if (t > (map.get(id) ?? 0)) map.set(id, t);
+      }
     }
     return map;
   }, [pins]);
@@ -120,8 +122,10 @@ export function EmotionField({
         eligible.push({ id: e.id, opacity: 1 - dist / VISIBILITY_RADIUS, dist });
       }
     }
+    // Sort key is dwellCenter (the frozen anchor), not the live cursor —
+    // the capped set must not churn as the cursor drifts after dwell fires
     eligible.sort((a, b) => a.dist - b.dist);
-    eligible.forEach(({ id, opacity }, rank) => {
+    eligible.slice(0, DEEP_REVEAL_CAP).forEach(({ id, opacity }, rank) => {
       map.set(id, { opacity, rank });
     });
     return map;

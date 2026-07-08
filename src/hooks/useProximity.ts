@@ -4,6 +4,8 @@ import type { Emotion } from '../data/emotions';
 export const VISIBILITY_RADIUS = 0.35;
 export const SELECTION_RADIUS = 0.15;
 export const APPROACH_RADIUS = SELECTION_RADIUS + 0.05;
+// Max deep words revealed per source (dwell center or pin) — nearest first
+export const DEEP_REVEAL_CAP = 6;
 
 export interface ProximityResult {
   opacity: number;
