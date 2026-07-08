@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/lint-emotion-spacing.mjs",
+    "lint:spacing": "node scripts/lint-emotion-spacing.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
