@@ -10,6 +10,11 @@ interface Props {
   onRemove: () => void;
 }
 
+// Maps coordinate [-1, 1] to [5%, 95%] for position bar markers
+function coordToPercent(v: number): number {
+  return 5 + ((v + 1) / 2) * 90;
+}
+
 function labelForId(id: string): string {
   return emotions.find((e) => e.id === id)?.label ?? id;
 }
@@ -125,6 +130,48 @@ export function CoordinateCard({ pin, highlightedIds, onRecognize, onDerecognize
         >
           {pin.regionDescription.narrative}
         </p>
+
+        {/* Axis position bars */}
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Arousal bar */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Calm</span>
+              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Activated</span>
+            </div>
+            <div style={{ position: 'relative', height: 2, background: 'rgba(237,232,223,0.08)', borderRadius: 1 }}>
+              <div style={{
+                position: 'absolute',
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'rgba(201,168,124,0.7)',
+                top: -2,
+                left: `${coordToPercent(pin.x)}%`,
+                transform: 'translateX(-50%)',
+              }} />
+            </div>
+          </div>
+          {/* Valence bar */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Negative</span>
+              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Positive</span>
+            </div>
+            <div style={{ position: 'relative', height: 2, background: 'rgba(237,232,223,0.08)', borderRadius: 1 }}>
+              <div style={{
+                position: 'absolute',
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'rgba(201,168,124,0.7)',
+                top: -2,
+                left: `${coordToPercent(pin.y)}%`,
+                transform: 'translateX(-50%)',
+              }} />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Recognized words + pills — in a slightly recessed band */}

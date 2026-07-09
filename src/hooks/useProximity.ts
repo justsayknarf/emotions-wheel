@@ -4,6 +4,8 @@ import type { Emotion } from '../data/emotions';
 export const VISIBILITY_RADIUS = 0.35;
 export const SELECTION_RADIUS = 0.15;
 export const APPROACH_RADIUS = SELECTION_RADIUS + 0.05;
+// Max deep words revealed per source (dwell center or pin) — nearest first
+export const DEEP_REVEAL_CAP = 6;
 
 export interface ProximityResult {
   opacity: number;
@@ -47,7 +49,7 @@ export function useProximity(
 
       // Branch 2: not pressed or no reveal center — ambient floor
       if (!isPressed || revealCenter === null) {
-        results.set(emotion.id, { opacity: 0.15, scale: 1.0, isCandidate: false });
+        results.set(emotion.id, { opacity: 0.05, scale: 1.0, isCandidate: false });
         continue;
       }
 
@@ -55,13 +57,13 @@ export function useProximity(
 
       // Branch 3: outside visibility radius — ambient floor
       if (dist > VISIBILITY_RADIUS) {
-        results.set(emotion.id, { opacity: 0.15, scale: 1.0, isCandidate: false });
+        results.set(emotion.id, { opacity: 0.05, scale: 1.0, isCandidate: false });
         continue;
       }
 
       // Branch 4: within visibility radius — interpolate
       const t = 1 - dist / VISIBILITY_RADIUS; // 0 at edge, 1 at center
-      const opacity = 0.15 + t * 0.85;        // 0.15 → 1.0
+      const opacity = 0.05 + t * 0.95;        // 0.05 → 1.0
       const scale = 1.0 + t * 0.1;            // 1.0 → 1.1
       results.set(emotion.id, { opacity, scale, isCandidate: emotion.id === candidateId });
     }

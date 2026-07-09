@@ -1,9 +1,9 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
-import { useProximity, VISIBILITY_RADIUS } from '../../hooks/useProximity';
+import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
 import type { PinEntry } from '../../types';
@@ -23,6 +23,10 @@ const AXIS_LABEL: React.CSSProperties = {
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
 };
+
+// Partition once at module load — emotions array is a static import constant
+const surfaceEmotions = emotions.filter(e => e.depth === 'surface');
+const deepEmotions = emotions.filter(e => e.depth === 'deep');
 
 interface Props {
   pins: PinEntry[];
@@ -76,7 +80,7 @@ export function EmotionField({
     onPinRelease(entry, newHighlightedIds);
   }, [onPinRelease]);
 
-  const { isRevealed, revealCenter, handlers } = useFieldGesture({
+  const { isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
     size,
     onRelease: handleRelease,
@@ -85,7 +89,47 @@ export function EmotionField({
   });
 
   const selectedIds = new Set(pins.flatMap((p) => p.recognizedWords));
-  const proximity = useProximity(emotions, revealCenter, isRevealed, selectedIds);
+  const proximity = useProximity(surfaceEmotions, revealCenter, isRevealed, selectedIds);
+
+  // Pin-based proximity for deep emotions — each pin reveals its nearest
+  // DEEP_REVEAL_CAP words; overlapping pins merge by max opacity
+  const deepOpacityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const pin of pins) {
+      const eligible: Array<{ id: string; t: number; dist: number }> = [];
+      for (const e of deepEmotions) {
+        const dist = Math.sqrt((e.x - pin.x) ** 2 + (e.y - pin.y) ** 2);
+        if (dist <= VISIBILITY_RADIUS) {
+          eligible.push({ id: e.id, t: 1 - dist / VISIBILITY_RADIUS, dist });
+        }
+      }
+      eligible.sort((a, b) => a.dist - b.dist);
+      for (const { id, t } of eligible.slice(0, DEEP_REVEAL_CAP)) {
+        if (t > (map.get(id) ?? 0)) map.set(id, t);
+      }
+    }
+    return map;
+  }, [pins]);
+
+  // Dwell-based proximity for deep emotions — follows cursor, transient
+  const dwellOpacityMap = useMemo(() => {
+    const map = new Map<string, { opacity: number; rank: number }>();
+    if (!dwellCenter) return map;
+    const eligible: Array<{ id: string; opacity: number; dist: number }> = [];
+    for (const e of deepEmotions) {
+      const dist = Math.sqrt((e.x - dwellCenter.x) ** 2 + (e.y - dwellCenter.y) ** 2);
+      if (dist <= VISIBILITY_RADIUS) {
+        eligible.push({ id: e.id, opacity: 1 - dist / VISIBILITY_RADIUS, dist });
+      }
+    }
+    // Sort key is dwellCenter (the frozen anchor), not the live cursor —
+    // the capped set must not churn as the cursor drifts after dwell fires
+    eligible.sort((a, b) => a.dist - b.dist);
+    eligible.slice(0, DEEP_REVEAL_CAP).forEach(({ id, opacity }, rank) => {
+      map.set(id, { opacity, rank });
+    });
+    return map;
+  }, [dwellCenter]);
 
   return (
     <div
@@ -116,9 +160,42 @@ export function EmotionField({
         Activated
       </div>
 
+      {/* Axis position indicators — visible only while dragging */}
+      {isRevealed && revealCenter && (
+        <>
+          {/* Arousal: slides left–right along the bottom edge */}
+          <div style={{
+            position: 'absolute',
+            left: `${toPercent(revealCenter.x)}%`,
+            bottom: 6,
+            transform: 'translateX(-50%)',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'rgba(201,168,124,0.55)',
+            pointerEvents: 'none',
+            zIndex: 6,
+          }} />
+          {/* Valence: slides up–down along the right edge */}
+          <div style={{
+            position: 'absolute',
+            top: `${toPercent(-revealCenter.y)}%`,
+            right: 6,
+            transform: 'translateY(-50%)',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: 'rgba(201,168,124,0.55)',
+            pointerEvents: 'none',
+            zIndex: 6,
+          }} />
+        </>
+      )}
+
       {size.width > 0 && (
         <>
-          {emotions.map((emotion) => (
+          {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
+          {surfaceEmotions.map((emotion) => (
             <EmotionWord
               key={emotion.id}
               emotion={emotion}
@@ -129,6 +206,38 @@ export function EmotionField({
               containerHeight={size.height}
             />
           ))}
+
+          {/* Deep emotions — revealed near dwell/pins; fade in on mount, out on unmount */}
+          <AnimatePresence>
+            {deepEmotions
+              .filter(e =>
+                dwellOpacityMap.has(e.id) ||
+                deepOpacityMap.has(e.id) ||
+                selectedIds.has(e.id) ||
+                highlightedIds.has(e.id)
+              )
+              .map(e => {
+                const isFixed = selectedIds.has(e.id) || highlightedIds.has(e.id);
+                const pinOpacity = deepOpacityMap.get(e.id) ?? 0;
+                const dwell = dwellOpacityMap.get(e.id);
+                const dwellOpacity = dwell?.opacity ?? 0;
+                const opacity = isFixed ? 1 : Math.max(dwellOpacity, pinOpacity);
+                const enterDelay = !isFixed && dwell ? dwell.rank * 0.08 : 0;
+                return (
+                  <EmotionWord
+                    key={e.id}
+                    emotion={e}
+                    proximity={{ opacity, scale: 1.0, isCandidate: false }}
+                    isSelected={selectedIds.has(e.id)}
+                    isHighlighted={highlightedIds.has(e.id)}
+                    containerWidth={size.width}
+                    containerHeight={size.height}
+                    enterDelay={enterDelay}
+                    animateIn
+                  />
+                );
+              })}
+          </AnimatePresence>
 
           {pins.map((pin) => {
             const px = (toPercent(pin.x) / 100) * size.width;
