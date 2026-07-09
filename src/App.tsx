@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EmotionField } from './components/EmotionField/EmotionField';
-import { EmotionDrawer } from './components/EmotionPreview/EmotionDrawer';
+import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
+import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
+import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import type { AppView, DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
@@ -36,9 +38,17 @@ export default function App() {
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const fieldPlaneRef = useRef<HTMLDivElement>(null);
+  const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
 
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
+  const sideBySide = useSidePanelLayout();
+
+  // On desktop the field occupies a left plane and the tray a right rail;
+  // keep the two flush by sizing the field to the remaining width.
+  const fieldWidth = sideBySide ? `calc(100% - ${RAIL_WIDTH})` : '100%';
+  const fieldCenterLeft = sideBySide ? `calc((100% - ${RAIL_WIDTH}) / 2)` : '50%';
 
   const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
     setPins((prev) => [...prev, entry]);
@@ -111,14 +121,35 @@ export default function App() {
       onPointerUpCapture={() => { swipeStartRef.current = null; }}
       onPointerCancelCapture={() => { swipeStartRef.current = null; }}
     >
-      {/* EmotionField always mounted — single instance, no gesture state issues */}
-      <EmotionField
-        pins={pins}
-        highlightedIds={highlightedIds}
-        onPinRelease={handlePinRelease}
-        onFirstInteraction={handleFirstInteraction}
-        hasInteracted={hasInteracted}
-      />
+      {/* Quiet rail backdrop — present on desktop so the right region reads as
+          an intentional plane even before a pin is placed */}
+      {sideBySide && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: RAIL_WIDTH,
+            borderLeft: '1px solid var(--oura-border)',
+            background: 'linear-gradient(180deg, #0A0B0F, #0C0D12)',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
+      )}
+
+      {/* EmotionField always mounted — single instance, no gesture state issues.
+          Sized to the left plane on desktop; full-bleed on mobile. */}
+      <div ref={fieldPlaneRef} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: fieldWidth, zIndex: 2 }}>
+        <EmotionField
+          pins={pins}
+          highlightedIds={highlightedIds}
+          onPinRelease={handlePinRelease}
+          onFirstInteraction={handleFirstInteraction}
+          hasInteracted={hasInteracted}
+        />
+      </div>
 
       {/* Field-only chrome: hint + drawer + history button */}
       {view === 'field' && (
@@ -130,7 +161,7 @@ export default function App() {
                 style={{
                   position: 'absolute',
                   top: '50%',
-                  left: '50%',
+                  left: fieldCenterLeft,
                   transform: 'translate(-50%, -50%)',
                   textAlign: 'center',
                   pointerEvents: 'none',
@@ -167,14 +198,21 @@ export default function App() {
               <EmotionDrawer
                 pins={pins}
                 highlightedIds={highlightedIds}
+                variant={sideBySide ? 'rail' : 'sheet'}
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
                 onDone={handleDone}
                 onClear={() => { setPins([]); setHighlightedIds(new Set()); }}
+                activeCardRef={sideBySide ? setActiveCardEl : undefined}
               />
             )}
           </AnimatePresence>
+
+          {/* Pin-to-card thread — desktop only */}
+          {sideBySide && pins.length > 0 && (
+            <Tether pin={pins[pins.length - 1]} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
+          )}
 
           {entries.length > 0 && (
             <button
@@ -182,7 +220,7 @@ export default function App() {
               style={{
                 position: 'absolute',
                 top: 20,
-                right: 20,
+                right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20,
                 background: 'rgba(22, 24, 32, 0.8)',
                 border: '1px solid var(--oura-border)',
                 borderRadius: 8,
