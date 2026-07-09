@@ -16,8 +16,12 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_PATH = join(ROOT, 'src/data/emotions.ts');
 
-// Reference render metrics
-const W = 1280;
+// Reference render metrics. W is the desktop field *plane* width, not the
+// viewport: the companion-rail layout gives the field `viewport - rail`, which
+// is ~870px at a 1280 desktop (rail = clamp(340, 32%, 420)). Words are spaced
+// for that plane; wider desktops have more room, narrower laptop windows stay
+// tighter (as does mobile). H is unchanged — the field is full-height.
+const W = 870;
 const H = 800;
 const PAD = 8; // px breathing room added to each pair's horizontal threshold
 const LINE = 18; // px vertical overlap threshold (between text-xs 16 and text-sm 20)

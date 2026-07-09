@@ -16,8 +16,10 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_PATH = join(ROOT, 'src/data/emotions.ts');
 
-// Reference render metrics — must match lint-emotion-spacing.mjs
-const W = 1280;
+// Reference render metrics — must match lint-emotion-spacing.mjs.
+// W is the desktop field plane width (viewport minus companion rail, ~870 at a
+// 1280 desktop), not the viewport.
+const W = 870;
 const H = 800;
 const PAD = 8;
 const LINE = 18;
@@ -26,7 +28,9 @@ const CHAR_W_DEEP = 6.6;
 const PX_PER_UNIT_X = (90 / 100) * W / 2; // 576 px per coord unit
 const PX_PER_UNIT_Y = (90 / 100) * H / 2; // 360 px per coord unit
 
-const MAX_DISPLACEMENT = 0.1; // coord units from original position
+const MAX_DISPLACEMENT = 0.12; // coord units from original position. Raised
+// from 0.10 for the narrower desktop plane, where horizontal clearance between
+// wide labels costs more coordinate distance; keeps the dense clusters legible.
 const EPS = 0.01; // extra push past the clearing threshold — also clears the
 // float-fragile exactly-one-line vertical gap after rounding to 2 decimals
 const MAX_ITER = 400;
