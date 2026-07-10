@@ -5,6 +5,8 @@ import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDr
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
+import { MirrorCard } from './components/EmotionMirror/MirrorCard';
+import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
@@ -49,6 +51,15 @@ export default function App() {
   // keep the two flush by sizing the field to the remaining width.
   const fieldWidth = sideBySide ? `calc(100% - ${RAIL_WIDTH})` : '100%';
   const fieldCenterLeft = sideBySide ? `calc((100% - ${RAIL_WIDTH}) / 2)` : '50%';
+
+  // Empty-state surface selection (all within the 'field' view):
+  //   history + no pins  → returning mirror (rail card + ghost pin)
+  //   no history + fresh → first-run gesture demo
+  //   pins present       → active drawer (existing path)
+  const hasHistory = entries.length > 0;
+  const lastCoord = hasHistory ? entries[entries.length - 1].pins.at(-1) ?? null : null;
+  const showMirror = view === 'field' && pins.length === 0 && hasHistory;
+  const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
 
   const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
     setPins((prev) => [...prev, entry]);
@@ -148,6 +159,8 @@ export default function App() {
           onPinRelease={handlePinRelease}
           onFirstInteraction={handleFirstInteraction}
           hasInteracted={hasInteracted}
+          axisEmphasis={showDemo}
+          ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
         />
       </div>
 
@@ -190,6 +203,22 @@ export default function App() {
                   </p>
                 </motion.div>
               </div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {showMirror && (
+              <MirrorCard
+                entry={entries[entries.length - 1]}
+                entries={entries}
+                variant={sideBySide ? 'rail' : 'sheet'}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {showDemo && (
+              <FirstRunDemo fieldWidth={fieldWidth} variant={sideBySide ? 'rail' : 'sheet'} />
             )}
           </AnimatePresence>
 
