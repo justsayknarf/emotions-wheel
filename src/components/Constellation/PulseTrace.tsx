@@ -185,24 +185,62 @@ export function PulseTrace({ entries, onPointClick }: Props) {
         )),
       )}
 
+      {/* Launch pulse — a burst of light as the orb ignites and sets off */}
+      {multi && (
+        <>
+          <motion.div
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: [0.3, 1.3, 0.9], opacity: [0, 0.85, 0] }}
+            transition={{ duration: 0.7, times: [0, 0.3, 1], ease: 'easeOut' }}
+            style={{
+              position: 'absolute',
+              left: `${points[0].lx}%`,
+              top: `${points[0].ly}%`,
+              width: 44,
+              height: 44,
+              margin: '-22px 0 0 -22px',
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,250,240,0.7), rgba(201,168,124,0))',
+            }}
+          />
+          <motion.div
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: [0.4, 4.6], opacity: [0, 0.55, 0] }}
+            transition={{ duration: 1, times: [0, 0.2, 1], ease: 'easeOut' }}
+            style={{
+              position: 'absolute',
+              left: `${points[0].lx}%`,
+              top: `${points[0].ly}%`,
+              width: 14,
+              height: 14,
+              margin: '-7px 0 0 -7px',
+              borderRadius: '50%',
+              border: '1px solid rgba(201,168,124,0.75)',
+            }}
+          />
+        </>
+      )}
+
       {/* Points — revealed as the orb reaches each, with a one-shot arrival ring */}
       {points.map((p, i) => (
         <div key={p.entry.id}>
-          <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: [0.5, 3.2], opacity: [0, 0.55, 0] }}
-            transition={{ delay: arrival(i), duration: 1, times: [0, 0.25, 1], ease: 'easeOut' }}
-            style={{
-              position: 'absolute',
-              left: `${p.lx}%`,
-              top: `${p.ly}%`,
-              width: 12,
-              height: 12,
-              margin: '-6px 0 0 -6px',
-              borderRadius: '50%',
-              border: '1px solid rgba(201,168,124,0.6)',
-            }}
-          />
+          {i > 0 && (
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: [0.5, 3.2], opacity: [0, 0.55, 0] }}
+              transition={{ delay: arrival(i), duration: 1, times: [0, 0.25, 1], ease: 'easeOut' }}
+              style={{
+                position: 'absolute',
+                left: `${p.lx}%`,
+                top: `${p.ly}%`,
+                width: 12,
+                height: 12,
+                margin: '-6px 0 0 -6px',
+                borderRadius: '50%',
+                border: '1px solid rgba(201,168,124,0.6)',
+              }}
+            />
+          )}
           <motion.button
             onClick={() => onPointClick(p.entry)}
             initial={{ opacity: 0, scale: 0.4 }}
