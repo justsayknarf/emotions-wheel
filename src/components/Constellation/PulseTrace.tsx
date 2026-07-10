@@ -84,7 +84,11 @@ export function PulseTrace({ entries, onPointClick }: Props) {
       if (t >= total) return pts[pts.length - 1];
       const u = t / PER_HOP;
       const s = Math.floor(u);
-      const f = u - s;
+      let f = u - s;
+      // Ease out of rest on the first hop so the trace accelerates smoothly
+      // instead of jerking to full speed. g(1)=1 and g'(1)=1, so it hands off
+      // to the constant-speed segments seamlessly (no pause at later points).
+      if (s === 0) f = 2 * f * f - f * f * f;
       const a = pts[s];
       const b = pts[Math.min(s + 1, pts.length - 1)];
       return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
@@ -105,7 +109,8 @@ export function PulseTrace({ entries, onPointClick }: Props) {
       // While moving, emit glow at the orb's position (interpolated to avoid gaps).
       if (t <= total) {
         const cur = posAt(t);
-        const ib = Math.min(t / INTRO, 1) ** 2; // ease-in ignition as it starts moving
+        const ix0 = Math.min(t / INTRO, 1);
+        const ib = ix0 * ix0 * (3 - 2 * ix0); // smoothstep ignition as it starts moving
         ctx.globalCompositeOperation = 'lighter';
         const STEPS = 5;
         for (let k = 1; k <= STEPS; k++) {

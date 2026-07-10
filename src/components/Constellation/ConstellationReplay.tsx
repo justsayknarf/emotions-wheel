@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { recentWindow } from '../../utils/recentEntries';
 import { SessionDetailCard } from '../DiaryHistory/SessionDetailCard';
@@ -24,7 +24,9 @@ const AXIS_LABEL: React.CSSProperties = {
 // the recent window, then leaves the constellation in place for inspection —
 // tapping a point opens its detail; dismissing returns to the mirror.
 export function ConstellationReplay({ entries, onDismiss }: Props) {
-  const windowed = recentWindow(entries);
+  // Memoized so its identity is stable across re-renders (e.g. opening a
+  // detail card) — the pulse animation keys on this and must not restart.
+  const windowed = useMemo(() => recentWindow(entries), [entries]);
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
 
   return (
