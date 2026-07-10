@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
@@ -14,6 +15,25 @@ import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import type { AppView, DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
+
+// Shared style for the field-level header pills (history, replay). Each button
+// adds its own edge anchor (left / right).
+const HEADER_PILL: CSSProperties = {
+  position: 'absolute',
+  top: 20,
+  background: 'rgba(22, 24, 32, 0.8)',
+  border: '1px solid var(--oura-border)',
+  borderRadius: 8,
+  padding: '7px 13px',
+  color: 'var(--oura-text-2)',
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: 'pointer',
+  backdropFilter: 'blur(12px)',
+  zIndex: 20,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+};
 
 function useOnboarding() {
   const [hasInteracted, setHasInteracted] = useState(
@@ -247,23 +267,7 @@ export default function App() {
           {entries.length > 0 && (
             <button
               onClick={() => setView('history')}
-              style={{
-                position: 'absolute',
-                top: 20,
-                right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20,
-                background: 'rgba(22, 24, 32, 0.8)',
-                border: '1px solid var(--oura-border)',
-                borderRadius: 8,
-                padding: '7px 13px',
-                color: 'var(--oura-text-2)',
-                fontSize: 11,
-                fontWeight: 500,
-                cursor: 'pointer',
-                backdropFilter: 'blur(12px)',
-                zIndex: 20,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}
+              style={{ ...HEADER_PILL, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20 }}
             >
               history
             </button>
@@ -272,23 +276,7 @@ export default function App() {
           {showMirror && (
             <button
               onClick={() => setView('constellation')}
-              style={{
-                position: 'absolute',
-                top: 20,
-                left: 20,
-                background: 'rgba(22, 24, 32, 0.8)',
-                border: '1px solid var(--oura-border)',
-                borderRadius: 8,
-                padding: '7px 13px',
-                color: 'var(--oura-text-2)',
-                fontSize: 11,
-                fontWeight: 500,
-                cursor: 'pointer',
-                backdropFilter: 'blur(12px)',
-                zIndex: 20,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}
+              style={{ ...HEADER_PILL, left: 20 }}
             >
               ✦ replay
             </button>
