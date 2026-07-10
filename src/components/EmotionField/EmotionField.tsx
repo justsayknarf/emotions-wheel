@@ -15,7 +15,6 @@ const AXIS_LABEL: React.CSSProperties = {
   zIndex: 5,
   fontSize: 9,
   fontWeight: 500,
-  color: 'rgba(237, 232, 223, 0.30)',
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
@@ -31,6 +30,9 @@ interface Props {
   onPinRelease: (entry: PinEntry, highlightedIds: string[]) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
+  // When true (e.g. the first-run demo), the axes brighten above their
+  // resting level and settle back when it clears.
+  axisEmphasis?: boolean;
 }
 
 export function EmotionField({
@@ -39,6 +41,7 @@ export function EmotionField({
   onPinRelease,
   onFirstInteraction,
   hasInteracted,
+  axisEmphasis = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -128,6 +131,11 @@ export function EmotionField({
     return map;
   }, [dwellCenter]);
 
+  // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
+  // further while the demo runs.
+  const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
+  const axisLabelColor = axisEmphasis ? 'rgba(237,232,223,0.75)' : 'rgba(237,232,223,0.45)';
+
   return (
     <div
       ref={containerRef}
@@ -140,20 +148,20 @@ export function EmotionField({
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >
       {/* Crosshairs */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
 
       {/* Axis labels */}
-      <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
       </div>
-      <div style={{ ...AXIS_LABEL, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
       </div>
-      <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
       </div>
-      <div style={{ ...AXIS_LABEL, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
       </div>
 
