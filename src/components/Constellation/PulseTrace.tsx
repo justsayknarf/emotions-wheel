@@ -9,27 +9,31 @@ interface Props {
   onPointClick: (entry: DiaryEntry) => void;
 }
 
-const PER_HOP = 0.6;        // seconds the comet spends travelling each segment
-
-// Layers of the light trail. Each is a stroke of a given length that ends at the
-// comet head; stacking short-bright over long-dim makes the tail taper — hot at
-// the tip, fading into a soft glow behind. Lengths clamp so the effect holds for
-// both short and long journeys.
-const TRAIL_LAYERS = [
-  { frac: 0.34, max: 280, width: 13, color: 'rgba(201,168,124,0.13)', filter: 'url(#trailGlowStrong)' },
-  { frac: 0.2, max: 180, width: 7, color: 'rgba(219,193,152,0.34)', filter: 'url(#trailGlowStrong)' },
-  { frac: 0.11, max: 100, width: 3.6, color: 'rgba(244,232,210,0.75)', filter: 'url(#trailGlowSoft)' },
-  { frac: 0.05, max: 46, width: 1.6, color: 'rgba(255,252,246,0.95)', filter: undefined },
-];
+const PER_HOP = 0.6;        // seconds the orb spends travelling each segment
+const DISSIPATE = 1.4;      // seconds the trail takes to fade after the orb stops
+const FADE_PER_FRAME = 0.08; // how much trail alpha is removed each frame (trail length)
 
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
 
-// Draws the recent history as a constellation: a glowing comet with a tapering
-// light trail traces a hairline path from point to point in time order. As it
-// arrives at each check-in, that entry's recorded words ignite at their own
-// coordinates. The final point is the most recent entry — the ghost-pin spot.
+// A soft radial glow blob, drawn additively to build the light trail.
+function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(255,250,240,${a})`);
+  g.addColorStop(0.28, `rgba(219,193,152,${a * 0.45})`);
+  g.addColorStop(1, 'rgba(201,168,124,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Draws the recent history as a constellation: a glowing orb races the route in
+// time order, emitting a light trail that echoes its motion and dissipates once
+// it stops. As it arrives at each check-in, that entry's recorded words ignite
+// at their own coordinates. The final point is the most recent entry.
 export function PulseTrace({ entries, onPointClick }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
@@ -56,75 +60,99 @@ export function PulseTrace({ entries, onPointClick }: Props) {
   const n = points.length;
   const multi = n > 1;
   const total = Math.max(0.6, PER_HOP * (n - 1));
-  const times = multi ? points.map((_, i) => i / (n - 1)) : [0, 1];
   const arrival = (i: number) => (multi ? i * PER_HOP : 0);
 
-  const lefts = points.map((p) => `${p.lx}%`);
-  const tops = points.map((p) => `${p.ly}%`);
-
-  // Pixel geometry for the SVG path + traveling light trail.
   const { w, h } = size;
   const px = points.map((p) => ({ x: (p.lx / 100) * w, y: (p.ly / 100) * h }));
-  const cum = px.reduce<number[]>((acc, p, i) => {
-    acc.push(i === 0 ? 0 : acc[i - 1] + Math.hypot(p.x - px[i - 1].x, p.y - px[i - 1].y));
-    return acc;
-  }, []);
-  const L = cum[cum.length - 1] || 1;
   const pathD = px.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+
+  // Canvas motion-echo trail.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !multi || w === 0) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+
+    const pts = points.map((p) => ({ x: (p.lx / 100) * w, y: (p.ly / 100) * h }));
+
+    const posAt = (t: number) => {
+      if (t >= total) return pts[pts.length - 1];
+      const u = t / PER_HOP;
+      const s = Math.floor(u);
+      const f = u - s;
+      const a = pts[s];
+      const b = pts[Math.min(s + 1, pts.length - 1)];
+      return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+    };
+
+    let raf = 0;
+    const start = performance.now();
+    let prev = posAt(0);
+
+    const frame = (now: number) => {
+      const t = (now - start) / 1000;
+
+      // Fade the whole trail toward transparent — older glow dissipates.
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = `rgba(0,0,0,${FADE_PER_FRAME})`;
+      ctx.fillRect(0, 0, w, h);
+
+      // While moving, emit glow at the orb's position (interpolated to avoid gaps).
+      if (t <= total) {
+        const cur = posAt(t);
+        ctx.globalCompositeOperation = 'lighter';
+        const STEPS = 5;
+        for (let k = 1; k <= STEPS; k++) {
+          const ix = prev.x + (cur.x - prev.x) * (k / STEPS);
+          const iy = prev.y + (cur.y - prev.y) * (k / STEPS);
+          glow(ctx, ix, iy, 11, 0.42);
+        }
+        glow(ctx, cur.x, cur.y, 20, 0.5); // bloom
+        glow(ctx, cur.x, cur.y, 4.5, 0.95); // hot core
+        prev = cur;
+      }
+
+      if (t < total + DISSIPATE) {
+        raf = requestAnimationFrame(frame);
+      } else {
+        ctx.clearRect(0, 0, w, h);
+      }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      ctx.clearRect(0, 0, w, h);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, h, entries]);
 
   return (
     <div ref={rootRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      {w > 0 && (
+      {/* Base hairline — the route the orb traces */}
+      {multi && w > 0 && (
         <svg width={w} height={h} style={{ position: 'absolute', inset: 0 }}>
-          <defs>
-            <filter id="trailGlowStrong" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="7" />
-            </filter>
-            <filter id="trailGlowSoft" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2.4" />
-            </filter>
-          </defs>
-
-          {/* Base hairline — the path the comet traces */}
-          {multi && (
-            <motion.path
-              d={pathD}
-              fill="none"
-              stroke="rgba(201,168,124,0.32)"
-              strokeWidth={1}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            />
-          )}
-
-          {/* Glowing light trail — layered traveling strokes sharing the head */}
-          {multi &&
-            TRAIL_LAYERS.map((layer, k) => {
-              const len = Math.min(layer.frac * L, layer.max);
-              return (
-                <motion.path
-                  key={k}
-                  d={pathD}
-                  fill="none"
-                  stroke={layer.color}
-                  strokeWidth={layer.width}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  filter={layer.filter}
-                  style={{ strokeDasharray: `${len} ${L * 4}` }}
-                  initial={{ strokeDashoffset: len - cum[0] }}
-                  animate={{ strokeDashoffset: cum.map((c) => len - c) }}
-                  transition={{ duration: total, times, ease: 'linear' }}
-                />
-              );
-            })}
+          <motion.path
+            d={pathD}
+            fill="none"
+            stroke="rgba(201,168,124,0.3)"
+            strokeWidth={1}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+          />
         </svg>
       )}
 
-      {/* Words igniting at each check-in as the comet arrives */}
+      {/* Motion-echo light trail */}
+      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+
+      {/* Words igniting at each check-in as the orb arrives */}
       {points.map((p, i) =>
         p.words.map((word, j) => (
           <motion.span
@@ -150,7 +178,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
         )),
       )}
 
-      {/* Points — revealed as the comet reaches each, with a one-shot arrival ring */}
+      {/* Points — revealed as the orb reaches each, with a one-shot arrival ring */}
       {points.map((p, i) => (
         <div key={p.entry.id}>
           <motion.div
@@ -204,19 +232,22 @@ export function PulseTrace({ entries, onPointClick }: Props) {
         </div>
       ))}
 
-      {/* Comet head — the hot bright tip */}
+      {/* Resting orb — the calm "now" glow left after the trail dissipates */}
       {multi && (
         <motion.div
-          animate={{ left: lefts, top: tops }}
-          transition={{ duration: total, times, ease: 'linear' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 0.9, 0.65] }}
+          transition={{ delay: total, duration: 1.3, times: [0, 0.45, 1], ease: 'easeOut' }}
           style={{
             position: 'absolute',
-            width: 11,
-            height: 11,
-            margin: '-5.5px 0 0 -5.5px',
+            left: `${points[n - 1].lx}%`,
+            top: `${points[n - 1].ly}%`,
+            width: 9,
+            height: 9,
+            margin: '-4.5px 0 0 -4.5px',
             borderRadius: '50%',
-            background: 'rgba(255,252,246,0.98)',
-            boxShadow: '0 0 16px 5px rgba(201,168,124,0.9)',
+            background: 'rgba(255,252,246,0.95)',
+            boxShadow: '0 0 12px 3px rgba(201,168,124,0.8)',
           }}
         />
       )}
