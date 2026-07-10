@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EmotionField } from './components/EmotionField/EmotionField';
@@ -59,7 +59,7 @@ export default function App() {
   const [pins, setPins] = useState<PinEntry[]>([]);
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
-  const sessionStartRef = useRef<number>(Date.now());
+  const sessionStartRef = useRef<number>(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
@@ -67,6 +67,12 @@ export default function App() {
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
+
+  // Seed the session clock on mount (kept out of render to stay pure); each new
+  // session/interaction resets it in its own handler.
+  useEffect(() => {
+    sessionStartRef.current = Date.now();
+  }, []);
 
   // On desktop the field occupies a left plane and the tray a right rail;
   // keep the two flush by sizing the field to the remaining width.
