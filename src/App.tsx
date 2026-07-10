@@ -7,6 +7,7 @@ import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
 import { MirrorCard } from './components/EmotionMirror/MirrorCard';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
+import { ConstellationReplay } from './components/Constellation/ConstellationReplay';
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
@@ -267,6 +268,31 @@ export default function App() {
               history
             </button>
           )}
+
+          {showMirror && (
+            <button
+              onClick={() => setView('constellation')}
+              style={{
+                position: 'absolute',
+                top: 20,
+                left: 20,
+                background: 'rgba(22, 24, 32, 0.8)',
+                border: '1px solid var(--oura-border)',
+                borderRadius: 8,
+                padding: '7px 13px',
+                color: 'var(--oura-text-2)',
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: 'pointer',
+                backdropFilter: 'blur(12px)',
+                zIndex: 20,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              ✦ replay
+            </button>
+          )}
         </>
       )}
 
@@ -314,6 +340,21 @@ export default function App() {
             <DiaryHistory
               entries={entries}
               onBack={() => setView('field')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'constellation' && (
+          <motion.div
+            key="constellation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          >
+            <ConstellationReplay
+              entries={entries}
+              onDismiss={() => setView('field')}
             />
           </motion.div>
         )}
