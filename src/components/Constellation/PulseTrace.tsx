@@ -11,7 +11,7 @@ interface Props {
 
 const PER_HOP = 0.6;        // seconds the orb spends travelling each segment
 const DISSIPATE = 1.4;      // seconds the trail takes to fade after the orb stops
-const REVEAL_FRAC = 0.7;    // orb reveals over this fraction of the first hop —
+const REVEAL_FRAC = 0.9;    // orb reveals over this fraction of the first hop —
                             // invisible at the origin, emerging from the launch pulse as it moves
 const FADE_PER_FRAME = 0.08; // how much trail alpha is removed each frame (trail length)
 
