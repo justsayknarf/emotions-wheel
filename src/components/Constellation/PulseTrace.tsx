@@ -63,13 +63,13 @@ export function PulseTrace({ entries, onPointClick }: Props) {
             points={points.map((p) => `${p.lx},${p.ly}`).join(' ')}
             fill="none"
             stroke="rgba(201,168,124,0.38)"
-            strokeWidth={1.1}
+            strokeWidth={1}
             strokeLinejoin="round"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: total, ease: 'linear' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
           />
         </svg>
       )}
