@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
 import type { PinEntry } from '../../types';
 
@@ -19,6 +19,9 @@ interface Props {
   onClear: () => void;
   selectedPinId: string | null;
   onSelectPin: (pinId: string) => void;
+  // The just-dropped pin, still animating in — its card holds off the selected
+  // highlight until it settles, so selection eases in rather than popping.
+  enteringPinId: string | null;
   activeCardRef?: (el: HTMLDivElement | null) => void;
 }
 
@@ -33,6 +36,7 @@ export function EmotionDrawer({
   onClear,
   selectedPinId,
   onSelectPin,
+  enteringPinId,
   activeCardRef,
 }: Props) {
   const reversedPins = [...pins].reverse();
@@ -113,19 +117,30 @@ export function EmotionDrawer({
           {`This session  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
         </div>
       )}
-      {reversedPins.map((pin, i) => (
-        <div key={pin.id} ref={pin.id === selectedPinId ? activeCardRef : undefined}>
-          <CoordinateCard
-            pin={pin}
-            highlightedIds={i === 0 ? Array.from(highlightedIds) : []}
-            isSelected={pin.id === selectedPinId}
-            onSelect={() => onSelectPin(pin.id)}
-            onRecognize={onRecognize}
-            onDerecognize={onDerecognize}
-            onRemove={() => onPinRemove(pin.id)}
-          />
-        </div>
-      ))}
+      <AnimatePresence initial={false}>
+        {reversedPins.map((pin, i) => (
+          <motion.div
+            key={pin.id}
+            layout
+            ref={pin.id === selectedPinId ? activeCardRef : undefined}
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+          >
+            <CoordinateCard
+              pin={pin}
+              highlightedIds={i === 0 ? Array.from(highlightedIds) : []}
+              isSelected={pin.id === selectedPinId}
+              isEntering={pin.id === enteringPinId}
+              onSelect={() => onSelectPin(pin.id)}
+              onRecognize={onRecognize}
+              onDerecognize={onDerecognize}
+              onRemove={() => onPinRemove(pin.id)}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 

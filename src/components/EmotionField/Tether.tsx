@@ -83,9 +83,9 @@ export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
         .tether-path {
           stroke-dasharray: 600;
           stroke-dashoffset: 600;
-          animation: tether-draw 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.45s forwards;
+          animation: tether-draw 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.18s forwards;
         }
-        .tether-anchor { animation: tether-anchor 0.4s ease-out 1.35s both; }
+        .tether-anchor { animation: tether-anchor 0.35s ease-out 0.9s both; }
         @keyframes tether-draw { to { stroke-dashoffset: 0; } }
         @keyframes tether-anchor { from { opacity: 0; } to { opacity: 1; } }
         @media (prefers-reduced-motion: reduce) {

@@ -64,6 +64,10 @@ export default function App() {
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
+  // Bumped only on a pin drop so the tether re-runs its draw-in; plain card
+  // clicks change the pin without a key change, so they reposition instantly.
+  const [tetherKey, setTetherKey] = useState(0);
 
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
@@ -98,6 +102,13 @@ export default function App() {
     setPins((prev) => [...prev, entry]);
     setHighlightedIds(new Set(ids));
     setSelectedPinId(entry.id);
+    setEnteringPinId(entry.id);
+    setTetherKey((k) => k + 1);
+    // Clear the entering flag once the card has settled, letting its selected
+    // highlight ease in as the tether finishes drawing.
+    window.setTimeout(() => {
+      setEnteringPinId((cur) => (cur === entry.id ? null : cur));
+    }, 620);
   }, []);
 
   const handleRecognize = useCallback((emotionId: string) => {
@@ -270,6 +281,7 @@ export default function App() {
                 onClear={() => { setPins([]); setHighlightedIds(new Set()); }}
                 selectedPinId={effectiveSelectedPinId}
                 onSelectPin={setSelectedPinId}
+                enteringPinId={enteringPinId}
                 activeCardRef={sideBySide ? setActiveCardEl : undefined}
               />
             )}
@@ -277,7 +289,7 @@ export default function App() {
 
           {/* Pin-to-card thread — desktop only, follows the selected card */}
           {sideBySide && selectedPin && (
-            <Tether pin={selectedPin} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
+            <Tether key={tetherKey} pin={selectedPin} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
           )}
 
           {entries.length > 0 && (
