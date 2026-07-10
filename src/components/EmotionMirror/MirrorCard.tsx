@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { emotions } from '../../data/emotions';
+import { labelForId } from '../../data/emotions';
 import { formatRelative } from '../../utils/formatDate';
 import { RAIL_WIDTH } from '../EmotionPreview/EmotionDrawer';
 import { RhythmStrip } from './RhythmStrip';
@@ -11,10 +11,6 @@ interface Props {
   entry: DiaryEntry;      // most recent entry
   entries: DiaryEntry[];  // full history, for the rhythm strip
   variant: Variant;
-}
-
-function labelForId(id: string): string {
-  return emotions.find((e) => e.id === id)?.label ?? id;
 }
 
 const MICRO_LABEL: React.CSSProperties = {
