@@ -6,11 +6,8 @@ import { getRegionDescription } from '../../data/regions';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
+import { toPercent } from '../../utils/fieldGeometry';
 import type { PinEntry } from '../../types';
-
-function toPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
-}
 
 const AXIS_LABEL: React.CSSProperties = {
   position: 'absolute',
@@ -18,7 +15,6 @@ const AXIS_LABEL: React.CSSProperties = {
   zIndex: 5,
   fontSize: 9,
   fontWeight: 500,
-  color: 'rgba(237, 232, 223, 0.30)',
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
@@ -34,6 +30,13 @@ interface Props {
   onPinRelease: (entry: PinEntry, highlightedIds: string[]) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
+  // When true (e.g. the first-run demo), the axes brighten above their
+  // resting level and settle back when it clears.
+  axisEmphasis?: boolean;
+  // A quiet marker at the user's most recent coordinate, shown in the
+  // returning-mirror state. A single point today; the shared geometry keeps a
+  // future multi-point constellation cheap to add.
+  ghostPin?: { x: number; y: number } | null;
 }
 
 export function EmotionField({
@@ -42,6 +45,8 @@ export function EmotionField({
   onPinRelease,
   onFirstInteraction,
   hasInteracted,
+  axisEmphasis = false,
+  ghostPin = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -131,6 +136,11 @@ export function EmotionField({
     return map;
   }, [dwellCenter]);
 
+  // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
+  // further while the demo runs.
+  const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
+  const axisLabelColor = axisEmphasis ? 'rgba(237,232,223,0.75)' : 'rgba(237,232,223,0.45)';
+
   return (
     <div
       ref={containerRef}
@@ -143,20 +153,20 @@ export function EmotionField({
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >
       {/* Crosshairs */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(201,168,124,0.04)', pointerEvents: 'none', zIndex: 1 }} />
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
 
       {/* Axis labels */}
-      <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
       </div>
-      <div style={{ ...AXIS_LABEL, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
       </div>
-      <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
       </div>
-      <div style={{ ...AXIS_LABEL, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      <div style={{ ...AXIS_LABEL, color: axisLabelColor, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
       </div>
 
@@ -288,6 +298,49 @@ export function EmotionField({
               </div>
             );
           })}
+
+          {/* Ghost pin — quiet marker at the last recorded coordinate */}
+          {ghostPin && pins.length === 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                left: (toPercent(ghostPin.x) / 100) * size.width,
+                top: (toPercent(-ghostPin.y) / 100) * size.height,
+                pointerEvents: 'none',
+                zIndex: 9,
+                width: 0,
+                height: 0,
+              }}
+            >
+              {/* Soft breathing halo */}
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0.25 }}
+                animate={{ scale: [0.8, 1.25, 0.8], opacity: [0.25, 0.08, 0.25] }}
+                transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+                style={{
+                  position: 'absolute',
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  border: '1px solid rgba(201, 168, 124, 0.5)',
+                  top: -5,
+                  left: -5,
+                }}
+              />
+              {/* Quiet dot */}
+              <div
+                style={{
+                  position: 'absolute',
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  background: 'rgba(201, 168, 124, 0.4)',
+                  top: -2,
+                  left: -2,
+                }}
+              />
+            </div>
+          )}
         </>
       )}
     </div>

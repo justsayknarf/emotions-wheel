@@ -1,4 +1,4 @@
-export type AppView = 'field' | 'cards' | 'complete' | 'history';
+export type AppView = 'field' | 'cards' | 'complete' | 'history' | 'constellation';
 
 // Legacy type — kept for DefinitionCardSequence and EmotionPreviewCard.
 // New code uses PinEntry.

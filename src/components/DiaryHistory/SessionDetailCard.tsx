@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { emotions } from '../../data/emotions';
+import { labelForId } from '../../data/emotions';
 import { formatDate } from '../../utils/formatDate';
 import { MiniCircumplex } from './MiniCircumplex';
 import type { DiaryEntry } from '../../types';
@@ -7,10 +7,6 @@ import type { DiaryEntry } from '../../types';
 interface Props {
   entry: DiaryEntry | null;
   onDismiss: () => void;
-}
-
-function labelForId(id: string): string {
-  return emotions.find(e => e.id === id)?.label ?? id;
 }
 
 export function SessionDetailCard({ entry, onDismiss }: Props) {

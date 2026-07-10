@@ -240,3 +240,10 @@ export const emotions: Emotion[] = [
   { id: 'victim',       label: 'Victim',       x: -0.50, y: -0.60, depth: 'deep',    cluster: 'powerless' },
   { id: 'sensitive',    label: 'Sensitive',    x: -0.20, y: -0.20, depth: 'deep',    cluster: 'powerless' },
 ];
+
+const emotionById = new Map(emotions.map((e) => [e.id, e]));
+
+// Resolve an emotion id to its display label, falling back to the id itself.
+export function labelForId(id: string): string {
+  return emotionById.get(id)?.label ?? id;
+}

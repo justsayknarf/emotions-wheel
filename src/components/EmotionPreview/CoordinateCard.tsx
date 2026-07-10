@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { emotions } from '../../data/emotions';
+import { labelForId } from '../../data/emotions';
 import type { PinEntry } from '../../types';
 
 interface Props {
@@ -13,10 +13,6 @@ interface Props {
 // Maps coordinate [-1, 1] to [5%, 95%] for position bar markers
 function coordToPercent(v: number): number {
   return 5 + ((v + 1) / 2) * 90;
-}
-
-function labelForId(id: string): string {
-  return emotions.find((e) => e.id === id)?.label ?? id;
 }
 
 function RelationalText({ text }: { text: string }) {

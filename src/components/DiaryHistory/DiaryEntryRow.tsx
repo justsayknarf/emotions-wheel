@@ -1,13 +1,9 @@
-import { emotions } from '../../data/emotions';
+import { labelForId } from '../../data/emotions';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
   entry: DiaryEntry;
   onClick?: () => void;
-}
-
-function labelForId(id: string): string {
-  return emotions.find((e) => e.id === id)?.label ?? id;
 }
 
 function formatDate(iso: string): string {

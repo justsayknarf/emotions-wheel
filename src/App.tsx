@@ -1,16 +1,39 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
+import { MirrorCard } from './components/EmotionMirror/MirrorCard';
+import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
+import { ConstellationReplay } from './components/Constellation/ConstellationReplay';
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import type { AppView, DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
+
+// Shared style for the field-level header pills (history, replay). Each button
+// adds its own edge anchor (left / right).
+const HEADER_PILL: CSSProperties = {
+  position: 'absolute',
+  top: 20,
+  background: 'rgba(22, 24, 32, 0.8)',
+  border: '1px solid var(--oura-border)',
+  borderRadius: 8,
+  padding: '7px 13px',
+  color: 'var(--oura-text-2)',
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: 'pointer',
+  backdropFilter: 'blur(12px)',
+  zIndex: 20,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+};
 
 function useOnboarding() {
   const [hasInteracted, setHasInteracted] = useState(
@@ -36,7 +59,7 @@ export default function App() {
   const [pins, setPins] = useState<PinEntry[]>([]);
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
-  const sessionStartRef = useRef<number>(Date.now());
+  const sessionStartRef = useRef<number>(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
@@ -45,10 +68,25 @@ export default function App() {
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
 
+  // Seed the session clock on mount (kept out of render to stay pure); each new
+  // session/interaction resets it in its own handler.
+  useEffect(() => {
+    sessionStartRef.current = Date.now();
+  }, []);
+
   // On desktop the field occupies a left plane and the tray a right rail;
   // keep the two flush by sizing the field to the remaining width.
   const fieldWidth = sideBySide ? `calc(100% - ${RAIL_WIDTH})` : '100%';
   const fieldCenterLeft = sideBySide ? `calc((100% - ${RAIL_WIDTH}) / 2)` : '50%';
+
+  // Empty-state surface selection (all within the 'field' view):
+  //   history + no pins  → returning mirror (rail card + ghost pin)
+  //   no history + fresh → first-run gesture demo
+  //   pins present       → active drawer (existing path)
+  const hasHistory = entries.length > 0;
+  const lastCoord = hasHistory ? entries[entries.length - 1].pins.at(-1) ?? null : null;
+  const showMirror = view === 'field' && pins.length === 0 && hasHistory;
+  const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
 
   const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
     setPins((prev) => [...prev, entry]);
@@ -148,6 +186,8 @@ export default function App() {
           onPinRelease={handlePinRelease}
           onFirstInteraction={handleFirstInteraction}
           hasInteracted={hasInteracted}
+          axisEmphasis={showDemo}
+          ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
         />
       </div>
 
@@ -194,6 +234,22 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
+            {showMirror && (
+              <MirrorCard
+                entry={entries[entries.length - 1]}
+                entries={entries}
+                variant={sideBySide ? 'rail' : 'sheet'}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {showDemo && (
+              <FirstRunDemo fieldWidth={fieldWidth} variant={sideBySide ? 'rail' : 'sheet'} />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
             {pins.length > 0 && (
               <EmotionDrawer
                 pins={pins}
@@ -217,25 +273,18 @@ export default function App() {
           {entries.length > 0 && (
             <button
               onClick={() => setView('history')}
-              style={{
-                position: 'absolute',
-                top: 20,
-                right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20,
-                background: 'rgba(22, 24, 32, 0.8)',
-                border: '1px solid var(--oura-border)',
-                borderRadius: 8,
-                padding: '7px 13px',
-                color: 'var(--oura-text-2)',
-                fontSize: 11,
-                fontWeight: 500,
-                cursor: 'pointer',
-                backdropFilter: 'blur(12px)',
-                zIndex: 20,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}
+              style={{ ...HEADER_PILL, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20 }}
             >
               history
+            </button>
+          )}
+
+          {showMirror && (
+            <button
+              onClick={() => setView('constellation')}
+              style={{ ...HEADER_PILL, left: 20 }}
+            >
+              ✦ replay
             </button>
           )}
         </>
@@ -285,6 +334,21 @@ export default function App() {
             <DiaryHistory
               entries={entries}
               onBack={() => setView('field')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'constellation' && (
+          <motion.div
+            key="constellation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          >
+            <ConstellationReplay
+              entries={entries}
+              onDismiss={() => setView('field')}
             />
           </motion.div>
         )}
