@@ -33,6 +33,10 @@ interface Props {
   // When true (e.g. the first-run demo), the axes brighten above their
   // resting level and settle back when it clears.
   axisEmphasis?: boolean;
+  // A quiet marker at the user's most recent coordinate, shown in the
+  // returning-mirror state. A single point today; the shared geometry keeps a
+  // future multi-point constellation cheap to add.
+  ghostPin?: { x: number; y: number } | null;
 }
 
 export function EmotionField({
@@ -42,6 +46,7 @@ export function EmotionField({
   onFirstInteraction,
   hasInteracted,
   axisEmphasis = false,
+  ghostPin = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -293,6 +298,49 @@ export function EmotionField({
               </div>
             );
           })}
+
+          {/* Ghost pin — quiet marker at the last recorded coordinate */}
+          {ghostPin && pins.length === 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                left: (toPercent(ghostPin.x) / 100) * size.width,
+                top: (toPercent(-ghostPin.y) / 100) * size.height,
+                pointerEvents: 'none',
+                zIndex: 9,
+                width: 0,
+                height: 0,
+              }}
+            >
+              {/* Soft breathing halo */}
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0.25 }}
+                animate={{ scale: [0.8, 1.25, 0.8], opacity: [0.25, 0.08, 0.25] }}
+                transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+                style={{
+                  position: 'absolute',
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  border: '1px solid rgba(201, 168, 124, 0.5)',
+                  top: -5,
+                  left: -5,
+                }}
+              />
+              {/* Quiet dot */}
+              <div
+                style={{
+                  position: 'absolute',
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  background: 'rgba(201, 168, 124, 0.4)',
+                  top: -2,
+                  left: -2,
+                }}
+              />
+            </div>
+          )}
         </>
       )}
     </div>
