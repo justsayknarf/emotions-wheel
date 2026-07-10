@@ -109,10 +109,10 @@ export function PulseTrace({ entries, onPointClick }: Props) {
         for (let k = 1; k <= STEPS; k++) {
           const ix = prev.x + (cur.x - prev.x) * (k / STEPS);
           const iy = prev.y + (cur.y - prev.y) * (k / STEPS);
-          glow(ctx, ix, iy, 11, 0.42);
+          glow(ctx, ix, iy, 8, 0.42);
         }
-        glow(ctx, cur.x, cur.y, 20, 0.5); // bloom
-        glow(ctx, cur.x, cur.y, 4.5, 0.95); // hot core
+        glow(ctx, cur.x, cur.y, 14, 0.5); // bloom
+        glow(ctx, cur.x, cur.y, 3, 0.95); // hot core
         prev = cur;
       }
 
@@ -242,12 +242,12 @@ export function PulseTrace({ entries, onPointClick }: Props) {
             position: 'absolute',
             left: `${points[n - 1].lx}%`,
             top: `${points[n - 1].ly}%`,
-            width: 9,
-            height: 9,
-            margin: '-4.5px 0 0 -4.5px',
+            width: 7,
+            height: 7,
+            margin: '-3.5px 0 0 -3.5px',
             borderRadius: '50%',
             background: 'rgba(255,252,246,0.95)',
-            boxShadow: '0 0 12px 3px rgba(201,168,124,0.8)',
+            boxShadow: '0 0 10px 2px rgba(201,168,124,0.8)',
           }}
         />
       )}
