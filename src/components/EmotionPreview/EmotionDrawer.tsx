@@ -22,7 +22,9 @@ interface Props {
   // The just-dropped pin, still animating in — its card holds off the selected
   // highlight until it settles, so selection eases in rather than popping.
   enteringPinId: string | null;
-  activeCardRef?: (el: HTMLDivElement | null) => void;
+  // The rail's scroll container, so the tether can find the selected card by
+  // data-pin-id and track it through scroll.
+  scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export function EmotionDrawer({
@@ -37,7 +39,7 @@ export function EmotionDrawer({
   selectedPinId,
   onSelectPin,
   enteringPinId,
-  activeCardRef,
+  scrollRef,
 }: Props) {
   const reversedPins = [...pins].reverse();
   const isRail = variant === 'rail';
@@ -92,6 +94,7 @@ export function EmotionDrawer({
 
   const cardList = (
     <div
+      ref={scrollRef}
       style={{
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
@@ -122,7 +125,7 @@ export function EmotionDrawer({
           <motion.div
             key={pin.id}
             layout
-            ref={pin.id === selectedPinId ? activeCardRef : undefined}
+            data-pin-id={pin.id}
             initial={{ opacity: 0, y: -10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}

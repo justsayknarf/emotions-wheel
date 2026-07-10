@@ -8,12 +8,15 @@ function toPercent(v: number): number {
 }
 
 interface Props {
-  // The active (most recent) pin the thread connects to.
+  // The selected pin the thread connects to.
   pin: PinEntry;
   // The left field plane, used to map the pin coordinate to pixels.
   fieldPlaneRef: React.RefObject<HTMLDivElement | null>;
-  // The active card element in the rail, used for the thread's endpoint height.
-  cardEl: HTMLDivElement | null;
+  // The rail's scroll container. The selected card is found inside it by
+  // data-pin-id, so the endpoint tracks the actual selected card and its scroll
+  // position rather than a stale ref.
+  railRef: React.RefObject<HTMLDivElement | null>;
+  selectedPinId: string | null;
 }
 
 interface Geo {
@@ -25,7 +28,7 @@ interface Geo {
 
 // A soft gold thread from the active pin to its card in the rail, so the card
 // reads as a margin note on a point in emotional space rather than a panel.
-export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
+export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
   const [geo, setGeo] = useState<Geo | null>(null);
   const rafRef = useRef<number | null>(null);
   const reduce = useReducedMotion();
@@ -37,14 +40,20 @@ export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
       const rect = plane.getBoundingClientRect();
       const px = (toPercent(pin.x) / 100) * rect.width;
       const py = (toPercent(-pin.y) / 100) * rect.height;
-      // Endpoint x is the rail's left edge (the field plane's right edge), which
-      // is stable while the card springs in horizontally — so the thread never
-      // lags the animation. Endpoint y is the card's vertical center.
+      // Endpoint x is the rail's left edge (the field plane's right edge).
       const ex = rect.width;
       let ey = rect.height * 0.3;
-      if (cardEl) {
-        const c = cardEl.getBoundingClientRect();
-        ey = c.top - rect.top + c.height / 2;
+      const rail = railRef.current;
+      const card = rail?.querySelector(`[data-pin-id="${selectedPinId}"]`) as HTMLElement | null;
+      if (rail && card) {
+        const c = card.getBoundingClientRect();
+        const railRect = rail.getBoundingClientRect();
+        const raw = c.top - rect.top + c.height / 2;
+        // Clamp to the rail's visible range so a scrolled-out selected card
+        // pulls the thread to the top/bottom edge instead of off-screen.
+        const top = railRect.top - rect.top + 10;
+        const bottom = railRect.bottom - rect.top - 10;
+        ey = Math.max(top, Math.min(bottom, raw));
       }
       setGeo({ px, py, ex, ey });
     };
@@ -56,15 +65,19 @@ export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
 
     schedule();
     const plane = fieldPlaneRef.current;
-    const ro = plane ? new ResizeObserver(schedule) : null;
-    if (plane && ro) ro.observe(plane);
+    const rail = railRef.current;
+    const ro = new ResizeObserver(schedule);
+    if (plane) ro.observe(plane);
+    if (rail) ro.observe(rail);
+    rail?.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      ro?.disconnect();
+      ro.disconnect();
+      rail?.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, [pin.x, pin.y, pin.id, cardEl, fieldPlaneRef]);
+  }, [pin.x, pin.y, pin.id, selectedPinId, railRef, fieldPlaneRef]);
 
   if (!geo) return null;
 

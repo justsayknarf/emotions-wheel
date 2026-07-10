@@ -62,7 +62,7 @@ export default function App() {
   const sessionStartRef = useRef<number>(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
-  const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
+  const railScrollRef = useRef<HTMLDivElement>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
   // Bumped only on a pin drop so the tether re-runs its draw-in; plain card
@@ -282,14 +282,20 @@ export default function App() {
                 selectedPinId={effectiveSelectedPinId}
                 onSelectPin={setSelectedPinId}
                 enteringPinId={enteringPinId}
-                activeCardRef={sideBySide ? setActiveCardEl : undefined}
+                scrollRef={railScrollRef}
               />
             )}
           </AnimatePresence>
 
           {/* Pin-to-card thread — desktop only, follows the selected card */}
           {sideBySide && selectedPin && (
-            <Tether key={tetherKey} pin={selectedPin} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
+            <Tether
+              key={tetherKey}
+              pin={selectedPin}
+              fieldPlaneRef={fieldPlaneRef}
+              railRef={railScrollRef}
+              selectedPinId={effectiveSelectedPinId}
+            />
           )}
 
           {entries.length > 0 && (
