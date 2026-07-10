@@ -37,6 +37,9 @@ interface Props {
   // returning-mirror state. A single point today; the shared geometry keeps a
   // future multi-point constellation cheap to add.
   ghostPin?: { x: number; y: number } | null;
+  // The pin whose card is currently selected in the tray — rendered larger and
+  // brighter so the card↔point link reads both ways.
+  emphasizedPinId?: string | null;
 }
 
 export function EmotionField({
@@ -47,6 +50,7 @@ export function EmotionField({
   hasInteracted,
   axisEmphasis = false,
   ghostPin = null,
+  emphasizedPinId = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -252,6 +256,8 @@ export function EmotionField({
           {pins.map((pin) => {
             const px = (toPercent(pin.x) / 100) * size.width;
             const py = (toPercent(-pin.y) / 100) * size.height;
+            const isEmphasized = pin.id === emphasizedPinId;
+            const dotSize = isEmphasized ? 7 : 4;
             return (
               <div
                 key={pin.id}
@@ -280,19 +286,37 @@ export function EmotionField({
                     left: -4,
                   }}
                 />
-                {/* Dot */}
+                {/* Emphasis halo — persistent ring on the selected pin */}
+                {isEmphasized && (
+                  <motion.div
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                    style={{
+                      position: 'absolute',
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      border: '1px solid rgba(201, 168, 124, 0.5)',
+                      top: -8,
+                      left: -8,
+                    }}
+                  />
+                )}
+                {/* Dot — larger and brighter when its card is selected */}
                 <motion.div
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 25 }}
                   style={{
                     position: 'absolute',
-                    width: 4,
-                    height: 4,
+                    width: dotSize,
+                    height: dotSize,
                     borderRadius: '50%',
-                    background: 'rgba(201, 168, 124, 0.7)',
-                    top: -2,
-                    left: -2,
+                    background: isEmphasized ? 'rgba(201, 168, 124, 1)' : 'rgba(201, 168, 124, 0.7)',
+                    boxShadow: isEmphasized ? '0 0 8px 1px rgba(201, 168, 124, 0.7)' : 'none',
+                    top: -dotSize / 2,
+                    left: -dotSize / 2,
                   }}
                 />
               </div>

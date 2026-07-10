@@ -17,6 +17,8 @@ interface Props {
   onPinRemove: (pinId: string) => void;
   onDone: () => void;
   onClear: () => void;
+  selectedPinId: string | null;
+  onSelectPin: (pinId: string) => void;
   activeCardRef?: (el: HTMLDivElement | null) => void;
 }
 
@@ -29,6 +31,8 @@ export function EmotionDrawer({
   onPinRemove,
   onDone,
   onClear,
+  selectedPinId,
+  onSelectPin,
   activeCardRef,
 }: Props) {
   const reversedPins = [...pins].reverse();
@@ -110,10 +114,12 @@ export function EmotionDrawer({
         </div>
       )}
       {reversedPins.map((pin, i) => (
-        <div key={pin.id} ref={i === 0 ? activeCardRef : undefined}>
+        <div key={pin.id} ref={pin.id === selectedPinId ? activeCardRef : undefined}>
           <CoordinateCard
             pin={pin}
             highlightedIds={i === 0 ? Array.from(highlightedIds) : []}
+            isSelected={pin.id === selectedPinId}
+            onSelect={() => onSelectPin(pin.id)}
             onRecognize={onRecognize}
             onDerecognize={onDerecognize}
             onRemove={() => onPinRemove(pin.id)}

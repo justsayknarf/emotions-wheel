@@ -63,6 +63,7 @@ export default function App() {
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
 
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
@@ -87,10 +88,16 @@ export default function App() {
   const lastCoord = hasHistory ? entries[entries.length - 1].pins.at(-1) ?? null : null;
   const showMirror = view === 'field' && pins.length === 0 && hasHistory;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
+  // Resolve the stored selection at render, falling back to the newest pin when
+  // the selected card was removed (or none exists) — so the tether never
+  // dangles and no effect is needed to reconcile state.
+  const selectedPin = pins.find((p) => p.id === selectedPinId) ?? (pins.length > 0 ? pins[pins.length - 1] : null);
+  const effectiveSelectedPinId = selectedPin?.id ?? null;
 
   const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
     setPins((prev) => [...prev, entry]);
     setHighlightedIds(new Set(ids));
+    setSelectedPinId(entry.id);
   }, []);
 
   const handleRecognize = useCallback((emotionId: string) => {
@@ -188,6 +195,7 @@ export default function App() {
           hasInteracted={hasInteracted}
           axisEmphasis={showDemo}
           ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
+          emphasizedPinId={effectiveSelectedPinId}
         />
       </div>
 
@@ -260,14 +268,16 @@ export default function App() {
                 onPinRemove={handlePinRemove}
                 onDone={handleDone}
                 onClear={() => { setPins([]); setHighlightedIds(new Set()); }}
+                selectedPinId={effectiveSelectedPinId}
+                onSelectPin={setSelectedPinId}
                 activeCardRef={sideBySide ? setActiveCardEl : undefined}
               />
             )}
           </AnimatePresence>
 
-          {/* Pin-to-card thread — desktop only */}
-          {sideBySide && pins.length > 0 && (
-            <Tether pin={pins[pins.length - 1]} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
+          {/* Pin-to-card thread — desktop only, follows the selected card */}
+          {sideBySide && selectedPin && (
+            <Tether pin={selectedPin} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
           )}
 
           {entries.length > 0 && (
