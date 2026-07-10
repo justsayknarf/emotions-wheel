@@ -6,11 +6,8 @@ import { getRegionDescription } from '../../data/regions';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord } from './EmotionWord';
+import { toPercent } from '../../utils/fieldGeometry';
 import type { PinEntry } from '../../types';
-
-function toPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
-}
 
 const AXIS_LABEL: React.CSSProperties = {
   position: 'absolute',

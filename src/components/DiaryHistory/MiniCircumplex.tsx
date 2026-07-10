@@ -1,13 +1,9 @@
+import { toPercent } from '../../utils/fieldGeometry';
 import type { PinEntry } from '../../types';
 
 interface Props {
   pins: PinEntry[];
   size?: number;
-}
-
-// Same formula as EmotionField: maps [-1,1] → [5,95]%
-function toPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
 }
 
 export function MiniCircumplex({ pins, size = 80 }: Props) {
