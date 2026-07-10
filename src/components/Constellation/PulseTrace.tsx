@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toPercent } from '../../utils/fieldGeometry';
 import { emotions } from '../../data/emotions';
@@ -10,24 +11,35 @@ interface Props {
 
 const PER_HOP = 0.6;        // seconds the comet spends travelling each segment
 
-// One radial trail behind the comet head — each dot lags a little more and
-// dims, so together they read as a fading light trail hugging the path.
-const TRAIL = [
-  { lag: 0.05, size: 8, opacity: 0.5 },
-  { lag: 0.1, size: 7, opacity: 0.38 },
-  { lag: 0.16, size: 6, opacity: 0.28 },
-  { lag: 0.22, size: 5, opacity: 0.2 },
-  { lag: 0.29, size: 4, opacity: 0.13 },
-  { lag: 0.37, size: 3, opacity: 0.08 },
+// Layers of the light trail. Each is a stroke of a given length that ends at the
+// comet head; stacking short-bright over long-dim makes the tail taper — hot at
+// the tip, fading into a soft glow behind. Lengths clamp so the effect holds for
+// both short and long journeys.
+const TRAIL_LAYERS = [
+  { frac: 0.34, max: 280, width: 13, color: 'rgba(201,168,124,0.13)', filter: 'url(#trailGlowStrong)' },
+  { frac: 0.2, max: 180, width: 7, color: 'rgba(219,193,152,0.34)', filter: 'url(#trailGlowStrong)' },
+  { frac: 0.11, max: 100, width: 3.6, color: 'rgba(244,232,210,0.75)', filter: 'url(#trailGlowSoft)' },
+  { frac: 0.05, max: 46, width: 1.6, color: 'rgba(255,252,246,0.95)', filter: undefined },
 ];
 
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
 
-// Draws the recent history as a constellation: a glowing comet traces a hairline
-// path from point to point in time order. As it arrives at each check-in, that
-// entry's recorded words ignite at their own coordinates on the circumplex. The
-// final point is the most recent entry — the mirror's ghost-pin coordinate.
+// Draws the recent history as a constellation: a glowing comet with a tapering
+// light trail traces a hairline path from point to point in time order. As it
+// arrives at each check-in, that entry's recorded words ignite at their own
+// coordinates. The final point is the most recent entry — the ghost-pin spot.
 export function PulseTrace({ entries, onPointClick }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   const points = entries
     .map((entry) => {
       const pin = entry.pins.at(-1);
@@ -50,42 +62,80 @@ export function PulseTrace({ entries, onPointClick }: Props) {
   const lefts = points.map((p) => `${p.lx}%`);
   const tops = points.map((p) => `${p.ly}%`);
 
+  // Pixel geometry for the SVG path + traveling light trail.
+  const { w, h } = size;
+  const px = points.map((p) => ({ x: (p.lx / 100) * w, y: (p.ly / 100) * h }));
+  const cum = px.reduce<number[]>((acc, p, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + Math.hypot(p.x - px[i - 1].x, p.y - px[i - 1].y));
+    return acc;
+  }, []);
+  const L = cum[cum.length - 1] || 1;
+  const pathD = px.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-      {/* Hairline trail line — draws in step with the comet */}
-      {multi && (
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-        >
-          <motion.polyline
-            points={points.map((p) => `${p.lx},${p.ly}`).join(' ')}
-            fill="none"
-            stroke="rgba(201,168,124,0.38)"
-            strokeWidth={1}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, ease: 'easeOut' }}
-          />
+    <div ref={rootRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      {w > 0 && (
+        <svg width={w} height={h} style={{ position: 'absolute', inset: 0 }}>
+          <defs>
+            <filter id="trailGlowStrong" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="7" />
+            </filter>
+            <filter id="trailGlowSoft" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2.4" />
+            </filter>
+          </defs>
+
+          {/* Base hairline — the path the comet traces */}
+          {multi && (
+            <motion.path
+              d={pathD}
+              fill="none"
+              stroke="rgba(201,168,124,0.32)"
+              strokeWidth={1}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+            />
+          )}
+
+          {/* Glowing light trail — layered traveling strokes sharing the head */}
+          {multi &&
+            TRAIL_LAYERS.map((layer, k) => {
+              const len = Math.min(layer.frac * L, layer.max);
+              return (
+                <motion.path
+                  key={k}
+                  d={pathD}
+                  fill="none"
+                  stroke={layer.color}
+                  strokeWidth={layer.width}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter={layer.filter}
+                  style={{ strokeDasharray: `${len} ${L * 4}` }}
+                  initial={{ strokeDashoffset: len - cum[0] }}
+                  animate={{ strokeDashoffset: cum.map((c) => len - c) }}
+                  transition={{ duration: total, times, ease: 'linear' }}
+                />
+              );
+            })}
         </svg>
       )}
 
       {/* Words igniting at each check-in as the comet arrives */}
       {points.map((p, i) =>
-        p.words.map((w, j) => (
+        p.words.map((word, j) => (
           <motion.span
-            key={`${p.entry.id}-${w.label}-${j}`}
+            key={`${p.entry.id}-${word.label}-${j}`}
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: [0, 1, 0.4], scale: [0.85, 1.05, 1] }}
             transition={{ delay: arrival(i), duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }}
             style={{
               position: 'absolute',
-              left: `${w.wx}%`,
-              top: `${w.wy}%`,
+              left: `${word.wx}%`,
+              top: `${word.wy}%`,
               transform: 'translate(-50%, -50%)',
               fontSize: 12,
               fontWeight: 400,
@@ -95,7 +145,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
               whiteSpace: 'nowrap',
             }}
           >
-            {w.label}
+            {word.label}
           </motion.span>
         )),
       )}
@@ -154,39 +204,21 @@ export function PulseTrace({ entries, onPointClick }: Props) {
         </div>
       ))}
 
-      {/* Comet — a lagging light trail plus the bright head */}
+      {/* Comet head — the hot bright tip */}
       {multi && (
-        <>
-          {TRAIL.map((t, k) => (
-            <motion.div
-              key={k}
-              animate={{ left: lefts, top: tops }}
-              transition={{ duration: total, times, ease: 'linear', delay: t.lag }}
-              style={{
-                position: 'absolute',
-                width: t.size,
-                height: t.size,
-                margin: `${-t.size / 2}px 0 0 ${-t.size / 2}px`,
-                borderRadius: '50%',
-                background: `rgba(201,168,124,${t.opacity})`,
-                filter: 'blur(0.5px)',
-              }}
-            />
-          ))}
-          <motion.div
-            animate={{ left: lefts, top: tops }}
-            transition={{ duration: total, times, ease: 'linear' }}
-            style={{
-              position: 'absolute',
-              width: 10,
-              height: 10,
-              margin: '-5px 0 0 -5px',
-              borderRadius: '50%',
-              background: 'rgba(244,232,210,0.98)',
-              boxShadow: '0 0 14px 4px rgba(201,168,124,0.85)',
-            }}
-          />
-        </>
+        <motion.div
+          animate={{ left: lefts, top: tops }}
+          transition={{ duration: total, times, ease: 'linear' }}
+          style={{
+            position: 'absolute',
+            width: 11,
+            height: 11,
+            margin: '-5.5px 0 0 -5.5px',
+            borderRadius: '50%',
+            background: 'rgba(255,252,246,0.98)',
+            boxShadow: '0 0 16px 5px rgba(201,168,124,0.9)',
+          }}
+        />
       )}
     </div>
   );
