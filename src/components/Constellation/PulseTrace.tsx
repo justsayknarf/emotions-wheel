@@ -11,6 +11,7 @@ interface Props {
 
 const PER_HOP = 0.6;        // seconds the orb spends travelling each segment
 const DISSIPATE = 1.4;      // seconds the trail takes to fade after the orb stops
+const INTRO = 0.4;          // seconds the orb takes to ignite as it starts moving
 const FADE_PER_FRAME = 0.08; // how much trail alpha is removed each frame (trail length)
 
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
@@ -104,15 +105,16 @@ export function PulseTrace({ entries, onPointClick }: Props) {
       // While moving, emit glow at the orb's position (interpolated to avoid gaps).
       if (t <= total) {
         const cur = posAt(t);
+        const ib = Math.min(t / INTRO, 1) ** 2; // ease-in ignition as it starts moving
         ctx.globalCompositeOperation = 'lighter';
         const STEPS = 5;
         for (let k = 1; k <= STEPS; k++) {
           const ix = prev.x + (cur.x - prev.x) * (k / STEPS);
           const iy = prev.y + (cur.y - prev.y) * (k / STEPS);
-          glow(ctx, ix, iy, 8, 0.42);
+          glow(ctx, ix, iy, 8, 0.42 * ib);
         }
-        glow(ctx, cur.x, cur.y, 14, 0.5); // bloom
-        glow(ctx, cur.x, cur.y, 3, 0.95); // hot core
+        glow(ctx, cur.x, cur.y, 14, 0.5 * ib); // bloom
+        glow(ctx, cur.x, cur.y, 3, 0.95 * ib); // hot core
         prev = cur;
       }
 
