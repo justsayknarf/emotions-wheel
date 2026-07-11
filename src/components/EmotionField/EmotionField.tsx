@@ -286,20 +286,21 @@ export function EmotionField({
                     left: -4,
                   }}
                 />
-                {/* Emphasis halo — persistent ring on the selected pin */}
+                {/* Emphasis pulse — a slow sonar ping on the selected pin,
+                    echoing the replay's expanding ring pulses */}
                 {isEmphasized && (
                   <motion.div
-                    initial={{ scale: 0.6, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                    initial={{ scale: 0.7, opacity: 0.55 }}
+                    animate={{ scale: 3.4, opacity: 0 }}
+                    transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3 }}
                     style={{
                       position: 'absolute',
-                      width: 16,
-                      height: 16,
+                      width: 12,
+                      height: 12,
                       borderRadius: '50%',
-                      border: '1px solid rgba(201, 168, 124, 0.5)',
-                      top: -8,
-                      left: -8,
+                      border: '1px solid rgba(201, 168, 124, 0.6)',
+                      top: -6,
+                      left: -6,
                     }}
                   />
                 )}
