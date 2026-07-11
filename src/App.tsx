@@ -62,7 +62,12 @@ export default function App() {
   const sessionStartRef = useRef<number>(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
-  const [activeCardEl, setActiveCardEl] = useState<HTMLDivElement | null>(null);
+  const railScrollRef = useRef<HTMLDivElement>(null);
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
+  // Bumped only on a pin drop so the tether re-runs its draw-in; plain card
+  // clicks change the pin without a key change, so they reposition instantly.
+  const [tetherKey, setTetherKey] = useState(0);
 
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
@@ -87,10 +92,27 @@ export default function App() {
   const lastCoord = hasHistory ? entries[entries.length - 1].pins.at(-1) ?? null : null;
   const showMirror = view === 'field' && pins.length === 0 && hasHistory;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
+  // Resolve the stored selection at render, falling back to the newest pin when
+  // the selected card was removed (or none exists) — so the tether never
+  // dangles and no effect is needed to reconcile state.
+  const selectedPin = pins.find((p) => p.id === selectedPinId) ?? (pins.length > 0 ? pins[pins.length - 1] : null);
+  const effectiveSelectedPinId = selectedPin?.id ?? null;
 
   const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
     setPins((prev) => [...prev, entry]);
     setHighlightedIds(new Set(ids));
+    setSelectedPinId(entry.id);
+    setEnteringPinId(entry.id);
+    setTetherKey((k) => k + 1);
+    // The new card is prepended at the top — scroll the rail up so it's in view.
+    requestAnimationFrame(() => {
+      railScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    // Clear the entering flag once the card has settled, letting its selected
+    // highlight ease in as the tether finishes drawing.
+    window.setTimeout(() => {
+      setEnteringPinId((cur) => (cur === entry.id ? null : cur));
+    }, 620);
   }, []);
 
   const handleRecognize = useCallback((emotionId: string) => {
@@ -188,6 +210,7 @@ export default function App() {
           hasInteracted={hasInteracted}
           axisEmphasis={showDemo}
           ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
+          emphasizedPinId={effectiveSelectedPinId}
         />
       </div>
 
@@ -260,14 +283,23 @@ export default function App() {
                 onPinRemove={handlePinRemove}
                 onDone={handleDone}
                 onClear={() => { setPins([]); setHighlightedIds(new Set()); }}
-                activeCardRef={sideBySide ? setActiveCardEl : undefined}
+                selectedPinId={effectiveSelectedPinId}
+                onSelectPin={setSelectedPinId}
+                enteringPinId={enteringPinId}
+                scrollRef={railScrollRef}
               />
             )}
           </AnimatePresence>
 
-          {/* Pin-to-card thread — desktop only */}
-          {sideBySide && pins.length > 0 && (
-            <Tether pin={pins[pins.length - 1]} fieldPlaneRef={fieldPlaneRef} cardEl={activeCardEl} />
+          {/* Pin-to-card thread — desktop only, follows the selected card */}
+          {sideBySide && selectedPin && (
+            <Tether
+              key={tetherKey}
+              pin={selectedPin}
+              fieldPlaneRef={fieldPlaneRef}
+              railRef={railScrollRef}
+              selectedPinId={effectiveSelectedPinId}
+            />
           )}
 
           {entries.length > 0 && (

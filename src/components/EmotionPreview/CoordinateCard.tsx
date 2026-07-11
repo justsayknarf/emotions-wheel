@@ -5,6 +5,9 @@ import type { PinEntry } from '../../types';
 interface Props {
   pin: PinEntry;
   highlightedIds: string[];
+  isSelected: boolean;
+  isEntering?: boolean;
+  onSelect: () => void;
   onRecognize: (id: string) => void;
   onDerecognize: (id: string) => void;
   onRemove: () => void;
@@ -46,17 +49,24 @@ const chipVariants = {
   exit: { opacity: 0, scale: 0.85, transition: { duration: 0.1 } },
 };
 
-export function CoordinateCard({ pin, highlightedIds, onRecognize, onDerecognize, onRemove }: Props) {
+export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
   const pillIds = highlightedIds.filter((id) => !recognizedSet.has(id));
+  // Hold off the selected look while the card is still animating in, so the
+  // highlight eases in as the tether lands rather than popping on arrival.
+  const showSelected = isSelected && !isEntering;
 
   return (
     <div
+      onClick={onSelect}
       style={{
         background: 'var(--oura-surface)',
-        border: '1px solid var(--oura-border)',
+        border: showSelected ? '1px solid var(--oura-gold-dim)' : '1px solid var(--oura-border)',
         borderRadius: 12,
         overflow: 'hidden',
+        cursor: 'pointer',
+        boxShadow: showSelected ? '0 0 0 1px var(--oura-gold-dim), 0 6px 22px rgba(201,168,124,0.12)' : 'none',
+        transition: 'border-color 0.35s ease, box-shadow 0.35s ease',
       }}
     >
       {/* Header band */}
@@ -80,7 +90,7 @@ export function CoordinateCard({ pin, highlightedIds, onRecognize, onDerecognize
           Emotional State
         </span>
         <button
-          onClick={onRemove}
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
           style={{
             background: 'none',
             border: 'none',
@@ -195,7 +205,7 @@ export function CoordinateCard({ pin, highlightedIds, onRecognize, onDerecognize
                       initial="hidden"
                       animate="visible"
                       exit="exit"
-                      onClick={() => onDerecognize(id)}
+                      onClick={(e) => { e.stopPropagation(); onDerecognize(id); }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -235,7 +245,7 @@ export function CoordinateCard({ pin, highlightedIds, onRecognize, onDerecognize
                     variants={pillVariants}
                     initial="hidden"
                     animate="visible"
-                    onClick={() => onRecognize(id)}
+                    onClick={(e) => { e.stopPropagation(); onRecognize(id); }}
                     style={{
                       padding: '4px 11px',
                       borderRadius: 5,

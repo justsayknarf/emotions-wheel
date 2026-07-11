@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { PinEntry } from '../../types';
 
 // Maps coordinate [-1, 1] to [5%, 95%] — matches EmotionField/EmotionWord.
@@ -7,12 +8,15 @@ function toPercent(v: number): number {
 }
 
 interface Props {
-  // The active (most recent) pin the thread connects to.
+  // The selected pin the thread connects to.
   pin: PinEntry;
   // The left field plane, used to map the pin coordinate to pixels.
   fieldPlaneRef: React.RefObject<HTMLDivElement | null>;
-  // The active card element in the rail, used for the thread's endpoint height.
-  cardEl: HTMLDivElement | null;
+  // The rail's scroll container. The selected card is found inside it by
+  // data-pin-id, so the endpoint tracks the actual selected card and its scroll
+  // position rather than a stale ref.
+  railRef: React.RefObject<HTMLDivElement | null>;
+  selectedPinId: string | null;
 }
 
 interface Geo {
@@ -24,9 +28,10 @@ interface Geo {
 
 // A soft gold thread from the active pin to its card in the rail, so the card
 // reads as a margin note on a point in emotional space rather than a panel.
-export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
+export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
   const [geo, setGeo] = useState<Geo | null>(null);
   const rafRef = useRef<number | null>(null);
+  const reduce = useReducedMotion();
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -35,14 +40,20 @@ export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
       const rect = plane.getBoundingClientRect();
       const px = (toPercent(pin.x) / 100) * rect.width;
       const py = (toPercent(-pin.y) / 100) * rect.height;
-      // Endpoint x is the rail's left edge (the field plane's right edge), which
-      // is stable while the card springs in horizontally — so the thread never
-      // lags the animation. Endpoint y is the card's vertical center.
+      // Endpoint x is the rail's left edge (the field plane's right edge).
       const ex = rect.width;
       let ey = rect.height * 0.3;
-      if (cardEl) {
-        const c = cardEl.getBoundingClientRect();
-        ey = c.top - rect.top + c.height / 2;
+      const rail = railRef.current;
+      const card = rail?.querySelector(`[data-pin-id="${selectedPinId}"]`) as HTMLElement | null;
+      if (rail && card) {
+        const c = card.getBoundingClientRect();
+        const railRect = rail.getBoundingClientRect();
+        const raw = c.top - rect.top + c.height / 2;
+        // Clamp to the rail's visible range so a scrolled-out selected card
+        // pulls the thread to the top/bottom edge instead of off-screen.
+        const top = railRect.top - rect.top + 10;
+        const bottom = railRect.bottom - rect.top - 10;
+        ey = Math.max(top, Math.min(bottom, raw));
       }
       setGeo({ px, py, ex, ey });
     };
@@ -54,15 +65,19 @@ export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
 
     schedule();
     const plane = fieldPlaneRef.current;
-    const ro = plane ? new ResizeObserver(schedule) : null;
-    if (plane && ro) ro.observe(plane);
+    const rail = railRef.current;
+    const ro = new ResizeObserver(schedule);
+    if (plane) ro.observe(plane);
+    if (rail) ro.observe(rail);
+    rail?.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      ro?.disconnect();
+      ro.disconnect();
+      rail?.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, [pin.x, pin.y, pin.id, cardEl, fieldPlaneRef]);
+  }, [pin.x, pin.y, pin.id, selectedPinId, railRef, fieldPlaneRef]);
 
   if (!geo) return null;
 
@@ -79,35 +94,33 @@ export function Tether({ pin, fieldPlaneRef, cardEl }: Props) {
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 3 }}
       aria-hidden="true"
     >
-      <style>{`
-        .tether-path {
-          stroke-dasharray: 600;
-          stroke-dashoffset: 600;
-          animation: tether-draw 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.45s forwards;
-        }
-        .tether-anchor { animation: tether-anchor 0.4s ease-out 1.35s both; }
-        @keyframes tether-draw { to { stroke-dashoffset: 0; } }
-        @keyframes tether-anchor { from { opacity: 0; } to { opacity: 1; } }
-        @media (prefers-reduced-motion: reduce) {
-          .tether-path { animation: none; stroke-dashoffset: 0; }
-          .tether-anchor { animation: none; opacity: 1; }
-        }
-      `}</style>
       <defs>
         <linearGradient id="tether-thread" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#C9A87C" stopOpacity="0.65" />
           <stop offset="1" stopColor="#C9A87C" stopOpacity="0.22" />
         </linearGradient>
       </defs>
-      <path
-        className="tether-path"
+      {/* pathLength normalizes to the real path length, so the draw reaches the
+          card at any distance (a fixed dash array truncated long threads). */}
+      <motion.path
         d={d}
         fill="none"
         stroke="url(#tether-thread)"
         strokeWidth="1.1"
         strokeLinecap="round"
+        initial={{ pathLength: reduce ? 1 : 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: reduce ? 0 : 0.8, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.18 }}
       />
-      <circle className="tether-anchor" cx={ex} cy={ey} r="2.5" fill="#C9A87C" opacity="0.85" />
+      <motion.circle
+        cx={ex}
+        cy={ey}
+        r="2.5"
+        fill="#C9A87C"
+        initial={{ opacity: reduce ? 0.85 : 0 }}
+        animate={{ opacity: 0.85 }}
+        transition={{ duration: 0.35, delay: reduce ? 0 : 0.9 }}
+      />
     </svg>
   );
 }
