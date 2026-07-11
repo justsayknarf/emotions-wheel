@@ -104,6 +104,10 @@ export default function App() {
     setSelectedPinId(entry.id);
     setEnteringPinId(entry.id);
     setTetherKey((k) => k + 1);
+    // The new card is prepended at the top — scroll the rail up so it's in view.
+    requestAnimationFrame(() => {
+      railScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
     // Clear the entering flag once the card has settled, letting its selected
     // highlight ease in as the tether finishes drawing.
     window.setTimeout(() => {
