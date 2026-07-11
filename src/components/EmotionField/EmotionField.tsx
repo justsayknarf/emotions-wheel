@@ -286,24 +286,26 @@ export function EmotionField({
                     left: -4,
                   }}
                 />
-                {/* Emphasis pulse — a slow sonar ping on the selected pin,
-                    echoing the replay's expanding ring pulses */}
-                {isEmphasized && (
-                  <motion.div
-                    initial={{ scale: 0.7, opacity: 0.55 }}
-                    animate={{ scale: 3.4, opacity: 0 }}
-                    transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3 }}
-                    style={{
-                      position: 'absolute',
-                      width: 12,
-                      height: 12,
-                      borderRadius: '50%',
-                      border: '1px solid rgba(201, 168, 124, 0.6)',
-                      top: -6,
-                      left: -6,
-                    }}
-                  />
-                )}
+                {/* Emphasis pulse — two staggered sonar rings on the selected
+                    pin, echoing the replay's expanding ring pulses */}
+                {isEmphasized &&
+                  [0, 1.1].map((delay, k) => (
+                    <motion.div
+                      key={k}
+                      initial={{ scale: 0.7, opacity: 0.5 }}
+                      animate={{ scale: 3.4, opacity: 0 }}
+                      transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3, delay }}
+                      style={{
+                        position: 'absolute',
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        border: '1px solid rgba(201, 168, 124, 0.6)',
+                        top: -6,
+                        left: -6,
+                      }}
+                    />
+                  ))}
                 {/* Dot — larger and brighter when its card is selected */}
                 <motion.div
                   initial={{ scale: 0, opacity: 0 }}
