@@ -37,7 +37,10 @@ export function adminSavePlugin(): Plugin {
           }
 
           const root = server.config.root;
-          const emotionsPath = path.join(root, 'src/data/emotions.ts');
+          // The admin editor maintains the hand-authored base framework; the
+          // active framework (e.g. the generator-authored radial set) is not
+          // edited here. serializeEmotions emits the circumplex-custom module.
+          const emotionsPath = path.join(root, 'src/data/frameworks/circumplex-custom.ts');
           const descriptionsPath = path.join(root, 'src/data/descriptions.ts');
 
           fs.writeFileSync(emotionsPath, serializeEmotions(payload.emotions), 'utf-8');

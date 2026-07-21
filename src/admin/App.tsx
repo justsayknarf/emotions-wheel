@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
-import { emotions as emotionData } from '../data/emotions';
+// The admin editor edits and saves the hand-authored base framework, not
+// whichever framework is currently active in the app.
+import { circumplexCustom } from '../data/frameworks/circumplex-custom';
 import { descriptions } from '../data/descriptions';
 import type { AdminEmotion } from './types';
 import { AdminHeader } from './components/AdminHeader';
@@ -8,7 +10,7 @@ import { AdminTable } from './components/AdminTable';
 import { generateId } from './lib/idgen';
 
 function initEmotions(): AdminEmotion[] {
-  return emotionData.map(e => ({
+  return circumplexCustom.emotions.map(e => ({
     ...e,
     description: descriptions[e.id]?.description ?? '',
     relatedIds: descriptions[e.id]?.relatedIds ?? [],
