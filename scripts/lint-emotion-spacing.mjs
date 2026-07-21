@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 // Fails when any two emotion words would render as overlapping text at a
-// desktop reference viewport. Guards src/data/emotions.ts against colliding
-// coordinates — including edits saved through the admin editor.
+// desktop reference viewport. Guards the active vocabulary framework against
+// colliding coordinates — including edits saved through the admin editor.
+//
+// The active framework's word list lives in src/data/frameworks/<id>.ts, where
+// <id> is the activeFrameworkId declared in src/data/frameworks/index.ts. This
+// script resolves that file dynamically so it always checks the words the app
+// actually renders.
 //
 // Overlap model (see docs/plans/2026-07-07-002-fix-emotion-word-spacing-plan.md):
 // two words overlap when their horizontal gap is under half the sum of their
@@ -14,7 +19,21 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DATA_PATH = join(ROOT, 'src/data/emotions.ts');
+
+// Resolve which framework is active, then check its data file.
+const REGISTRY_PATH = join(ROOT, 'src/data/frameworks/index.ts');
+const activeIdMatch = readFileSync(REGISTRY_PATH, 'utf8').match(
+  /activeFrameworkId\s*=\s*'([^']+)'/,
+);
+if (!activeIdMatch) {
+  console.error(
+    `Could not read activeFrameworkId from ${REGISTRY_PATH} — the framework registry format changed.`,
+  );
+  process.exit(1);
+}
+const ACTIVE_ID = activeIdMatch[1];
+const DATA_REL = `src/data/frameworks/${ACTIVE_ID}.ts`;
+const DATA_PATH = join(ROOT, DATA_REL);
 
 // Reference render metrics. W is the desktop field *plane* width, not the
 // viewport: the companion-rail layout gives the field `viewport - rail`, which
@@ -63,11 +82,13 @@ function overlaps(a, b) {
 const src = readFileSync(DATA_PATH, 'utf8');
 const emotions = parseEmotions(src);
 
-// R7 guard: fail loudly if the format drifted and the regex silently under-parsed
-const rawCount = (src.match(/\{\s*id:\s*'/g) ?? []).length;
+// R7 guard: fail loudly if the format drifted and the regex silently under-parsed.
+// Count only row-shaped entries (id immediately followed by label) so the
+// Framework wrapper object ({ id, name, emotions }) isn't miscounted as a row.
+const rawCount = (src.match(/\{\s*id:\s*'[^']+',\s*label:/g) ?? []).length;
 if (emotions.length === 0 || emotions.length < rawCount) {
   console.error(
-    `Parse guard failed: matched ${emotions.length} of ${rawCount} entries in src/data/emotions.ts.`,
+    `Parse guard failed: matched ${emotions.length} of ${rawCount} entries in ${DATA_REL}.`,
   );
   console.error(
     'The serializer line format likely drifted from the lint regex — fix the regex before trusting this check.',
@@ -122,5 +143,7 @@ if (fatal.length > 0) {
   process.exit(1);
 }
 
-console.log(`emotion-spacing: OK — ${emotions.length} words, no surface-surface overlaps.`);
+console.log(
+  `emotion-spacing: OK — ${emotions.length} words in ${DATA_REL}, no surface-surface overlaps.`,
+);
 process.exit(0);
