@@ -5,8 +5,15 @@ import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
-import { EmotionWord } from './EmotionWord';
+import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
+import { computeDeoverlap, labelHalfWidth, LABEL_LINE_H, type LabelBox } from './deoverlap';
+import { WordTethers, type TetherSegment } from './WordTethers';
 import { toPercent } from '../../utils/fieldGeometry';
+
+// A revealed label draws a tether back to its dot once it sits this far from the
+// coordinate. Above the resting standoff (so a merely-lifted label has none),
+// below a real de-overlap displacement. (U4, tune per Q3)
+const TETHER_THRESHOLD = 26;
 import type { PinEntry } from '../../types';
 
 const AXIS_LABEL: React.CSSProperties = {
@@ -97,7 +104,10 @@ export function EmotionField({
     hasInteracted,
   });
 
-  const selectedIds = new Set(pins.flatMap((p) => p.recognizedWords));
+  const selectedIds = useMemo(
+    () => new Set(pins.flatMap((p) => p.recognizedWords)),
+    [pins],
+  );
   const proximity = useProximity(surfaceEmotions, revealCenter, isRevealed, selectedIds);
 
   // Pin-based proximity for deep emotions — each pin reveals its nearest
@@ -139,6 +149,68 @@ export function EmotionField({
     });
     return map;
   }, [dwellCenter]);
+
+  // The deep words currently on screen: revealed by dwell, by a pin, or fixed
+  // because they are selected/highlighted.
+  const revealedDeep = useMemo(
+    () =>
+      deepEmotions.filter(
+        (e) =>
+          dwellOpacityMap.has(e.id) ||
+          deepOpacityMap.has(e.id) ||
+          selectedIds.has(e.id) ||
+          highlightedIds.has(e.id),
+      ),
+    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds],
+  );
+
+  // De-overlap the revealed labels: surface labels are fixed obstacles, the
+  // revealed deep labels are nudged off them and each other. Dots never move —
+  // only the label callouts. (U3)
+  const deepLabelOffsets = useMemo(() => {
+    if (size.width === 0 || revealedDeep.length === 0) {
+      return new Map<string, { dx: number; dy: number }>();
+    }
+    const labelBox = (
+      e: (typeof emotions)[number],
+      movable: boolean,
+    ): LabelBox => ({
+      id: e.id,
+      cx: (toPercent(e.x) / 100) * size.width,
+      cy: (toPercent(-e.y) / 100) * size.height - LABEL_STANDOFF,
+      halfW: labelHalfWidth(e.label, e.depth),
+      halfH: LABEL_LINE_H / 2,
+      movable,
+    });
+    const boxes: LabelBox[] = [
+      ...surfaceEmotions.map((e) => labelBox(e, false)),
+      ...revealedDeep.map((e) => labelBox(e, true)),
+    ];
+    return computeDeoverlap(boxes);
+  }, [revealedDeep, size.width, size.height]);
+
+  // Tether any revealed deep label that de-overlap pushed well off its dot.
+  const wordTethers = useMemo<TetherSegment[]>(() => {
+    if (size.width === 0) return [];
+    const segs: TetherSegment[] = [];
+    for (const e of revealedDeep) {
+      const o = deepLabelOffsets.get(e.id) ?? { dx: 0, dy: 0 };
+      const dispX = o.dx;
+      const dispY = o.dy - LABEL_STANDOFF;
+      if (Math.hypot(dispX, dispY) <= TETHER_THRESHOLD) continue;
+      const cx = (toPercent(e.x) / 100) * size.width;
+      const cyCoord = (toPercent(-e.y) / 100) * size.height;
+      segs.push({
+        id: e.id,
+        x1: cx,
+        y1: cyCoord,
+        x2: cx + o.dx,
+        // Meet the label just under its baseline rather than at its center.
+        y2: cyCoord - LABEL_STANDOFF + o.dy + LABEL_LINE_H / 2 - 2,
+      });
+    }
+    return segs;
+  }, [revealedDeep, deepLabelOffsets, size.width, size.height]);
 
   // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
   // further while the demo runs.
@@ -208,6 +280,10 @@ export function EmotionField({
 
       {size.width > 0 && (
         <>
+          {/* Word tethers — beneath the labels, above the crosshairs: a hairline
+              from each displaced label back to its dot. */}
+          <WordTethers segments={wordTethers} />
+
           {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
           {surfaceEmotions.map((emotion) => (
             <EmotionWord
@@ -223,14 +299,7 @@ export function EmotionField({
 
           {/* Deep emotions — revealed near dwell/pins; fade in on mount, out on unmount */}
           <AnimatePresence>
-            {deepEmotions
-              .filter(e =>
-                dwellOpacityMap.has(e.id) ||
-                deepOpacityMap.has(e.id) ||
-                selectedIds.has(e.id) ||
-                highlightedIds.has(e.id)
-              )
-              .map(e => {
+            {revealedDeep.map(e => {
                 const isFixed = selectedIds.has(e.id) || highlightedIds.has(e.id);
                 const pinOpacity = deepOpacityMap.get(e.id) ?? 0;
                 const dwell = dwellOpacityMap.get(e.id);
@@ -248,6 +317,7 @@ export function EmotionField({
                     containerHeight={size.height}
                     enterDelay={enterDelay}
                     animateIn
+                    offset={deepLabelOffsets.get(e.id)}
                   />
                 );
               })}
