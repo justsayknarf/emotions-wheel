@@ -8,6 +8,7 @@ import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
 import { computeDeoverlap, labelHalfWidth, LABEL_LINE_H, type LabelBox } from './deoverlap';
 import { WordTethers, type TetherSegment } from './WordTethers';
+import { FieldSignal } from './FieldSignal';
 import { toPercent } from '../../utils/fieldGeometry';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
@@ -228,6 +229,10 @@ export function EmotionField({
       className="relative w-full h-full overflow-hidden"
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >
+      {/* Light-signaling — still-center pool + outward intensity gradient,
+          beneath every other layer (U4) */}
+      <FieldSignal />
+
       {/* Crosshairs */}
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
       <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
