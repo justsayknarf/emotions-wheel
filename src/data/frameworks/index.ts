@@ -14,4 +14,10 @@ export const frameworks: Record<string, Framework> = {
 // a runtime switcher is deferred to follow-up work.
 export const activeFrameworkId = 'radial-intensity';
 
-export const activeFramework: Framework = frameworks[activeFrameworkId];
+const active = frameworks[activeFrameworkId];
+if (!active) {
+  throw new Error(
+    `activeFrameworkId "${activeFrameworkId}" is not registered in the framework registry.`,
+  );
+}
+export const activeFramework: Framework = active;
