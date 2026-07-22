@@ -6,7 +6,8 @@ import { getRegionDescription } from '../../data/regions';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
-import { computeDeoverlap, labelHalfWidth, LABEL_LINE_H, type LabelBox } from './deoverlap';
+import { labelHalfWidth, LABEL_LINE_H } from './deoverlap';
+import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
 import { FieldSignal } from './FieldSignal';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -165,35 +166,57 @@ export function EmotionField({
     [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds],
   );
 
-  // De-overlap the revealed labels: surface labels are fixed obstacles, the
-  // revealed deep labels are nudged off them and each other. Dots never move —
-  // only the label callouts. (U3)
+  // Reveal foci in pixel space: the dwell centre (when dwelling) and every pin.
+  // Each revealed word fans out of its nearest focus.
+  const fociPx = useMemo(() => {
+    if (size.width === 0) return [] as Array<{ x: number; y: number }>;
+    const toPx = (c: { x: number; y: number }) => ({
+      x: (toPercent(c.x) / 100) * size.width,
+      y: (toPercent(-c.y) / 100) * size.height,
+    });
+    const arr: Array<{ x: number; y: number }> = [];
+    if (dwellCenter) arr.push(toPx(dwellCenter));
+    for (const p of pins) arr.push(toPx(p));
+    return arr;
+  }, [dwellCenter, pins, size.width, size.height]);
+
+  // Lay the revealed labels out as a fan around their nearest focus: each rides
+  // a ray out of the cursor/pin, with a no-crossing pass so their tethers never
+  // tangle. Surface labels are fixed obstacles; dots never move — only the
+  // label callouts. (Q3 radial-fan reveal)
   const deepLabelOffsets = useMemo(() => {
     if (size.width === 0 || revealedDeep.length === 0) {
       return new Map<string, { dx: number; dy: number }>();
     }
-    const labelBox = (
+    const fanBox = (
       e: (typeof emotions)[number],
       movable: boolean,
-    ): LabelBox => ({
-      id: e.id,
-      cx: (toPercent(e.x) / 100) * size.width,
-      cy: (toPercent(-e.y) / 100) * size.height - LABEL_STANDOFF,
-      halfW: labelHalfWidth(e.label, e.depth),
-      halfH: LABEL_LINE_H / 2,
-      movable,
-    });
-    const boxes: LabelBox[] = [
-      ...surfaceEmotions.map((e) => labelBox(e, false)),
-      ...revealedDeep.map((e) => labelBox(e, true)),
+    ): FanBox => {
+      const dotX = (toPercent(e.x) / 100) * size.width;
+      const dotY = (toPercent(-e.y) / 100) * size.height;
+      return {
+        id: e.id,
+        dotX,
+        dotY,
+        cx: dotX,
+        cy: dotY - LABEL_STANDOFF,
+        halfW: labelHalfWidth(e.label, e.depth),
+        halfH: LABEL_LINE_H / 2,
+        movable,
+      };
+    };
+    const boxes: FanBox[] = [
+      ...surfaceEmotions.map((e) => fanBox(e, false)),
+      ...revealedDeep.map((e) => fanBox(e, true)),
     ];
-    return computeDeoverlap(boxes);
-  }, [revealedDeep, size.width, size.height]);
+    return computeRadialFan(boxes, fociPx);
+  }, [revealedDeep, fociPx, size.width, size.height]);
 
-  // Tether any revealed deep label that de-overlap pushed well off its dot.
+  // A tether is drawn (and then faded) from each fanned label back to its dot,
+  // staggered so the nearest word to a focus draws first.
   const wordTethers = useMemo<TetherSegment[]>(() => {
     if (size.width === 0) return [];
-    const segs: TetherSegment[] = [];
+    const raw: Array<{ seg: TetherSegment; d: number }> = [];
     for (const e of revealedDeep) {
       const o = deepLabelOffsets.get(e.id) ?? { dx: 0, dy: 0 };
       const dispX = o.dx;
@@ -201,17 +224,24 @@ export function EmotionField({
       if (Math.hypot(dispX, dispY) <= TETHER_THRESHOLD) continue;
       const cx = (toPercent(e.x) / 100) * size.width;
       const cyCoord = (toPercent(-e.y) / 100) * size.height;
-      segs.push({
-        id: e.id,
-        x1: cx,
-        y1: cyCoord,
-        x2: cx + o.dx,
-        // Meet the label just under its baseline rather than at its center.
-        y2: cyCoord - LABEL_STANDOFF + o.dy + LABEL_LINE_H / 2 - 2,
+      const d = fociPx.length
+        ? Math.min(...fociPx.map((f) => Math.hypot(cx - f.x, cyCoord - f.y)))
+        : 0;
+      raw.push({
+        d,
+        seg: {
+          id: e.id,
+          x1: cx,
+          y1: cyCoord,
+          x2: cx + o.dx,
+          // Meet the label just under its baseline rather than at its center.
+          y2: cyCoord - LABEL_STANDOFF + o.dy + LABEL_LINE_H / 2 - 2,
+        },
       });
     }
-    return segs;
-  }, [revealedDeep, deepLabelOffsets, size.width, size.height]);
+    raw.sort((a, b) => a.d - b.d);
+    return raw.map(({ seg }, i) => ({ ...seg, delay: i * 0.07 }));
+  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height]);
 
   // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
   // further while the demo runs.
