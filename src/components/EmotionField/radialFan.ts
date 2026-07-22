@@ -12,6 +12,7 @@
 // Box metrics mirror deoverlap.ts / lint-emotion-spacing.mjs.
 
 import type { LabelBox, Offset } from './deoverlap';
+import { DEFAULT_TUNING, type RevealTuning } from '../../config/revealTuning';
 
 // A fan box adds the coordinate dot (the tether's fixed end) to a label box.
 export interface FanBox extends LabelBox {
@@ -84,7 +85,11 @@ function uncross(work: WorkBox[]): void {
  * Fixed (surface) labels are immovable obstacles. Returns offsets keyed by id
  * for movable boxes only — the offset from each label's standoff home.
  */
-export function computeRadialFan(boxes: FanBox[], foci: Focus[]): Map<string, Offset> {
+export function computeRadialFan(
+  boxes: FanBox[],
+  foci: Focus[],
+  tuning: RevealTuning = DEFAULT_TUNING,
+): Map<string, Offset> {
   const offsets = new Map<string, Offset>();
   const movable = boxes.filter((b) => b.movable);
   if (movable.length === 0) return offsets;
@@ -119,13 +124,14 @@ export function computeRadialFan(boxes: FanBox[], foci: Focus[]): Map<string, Of
     const mean = circMean(work.map((m) => m.ang0));
     work.sort((a, b) => relAngle(a.ang0, mean) - relAngle(b.ang0, mean));
     const n = work.length;
-    const arc = Math.min(Math.PI * 1.15, 0.55 + n * 0.30);
+    const arc = Math.min(Math.PI * 1.6, (0.55 + n * 0.30) * tuning.arcScale);
 
     // Seat every label on one ring just outside the farthest revealed dot, so
     // the fan reads as an even arc around the focus rather than each label
     // clinging to its own dot at a different radius.
     const baseR =
-      Math.max(48, ...work.map((m) => Math.hypot(m.cx - f.x, m.cy - f.y))) + 16;
+      Math.max(tuning.ringBase, ...work.map((m) => Math.hypot(m.cx - f.x, m.cy - f.y))) +
+      tuning.ringGap;
 
     work.forEach((m, k) => {
       m.ang = mean + (n === 1 ? 0 : (k / (n - 1) - 0.5) * arc);

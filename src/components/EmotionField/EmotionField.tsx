@@ -10,6 +10,7 @@ import { labelHalfWidth, LABEL_LINE_H } from './deoverlap';
 import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
 import { FieldSignal } from './FieldSignal';
+import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
@@ -63,6 +64,7 @@ export function EmotionField({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const tuning = useRevealTuning();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -209,8 +211,8 @@ export function EmotionField({
       ...surfaceEmotions.map((e) => fanBox(e, false)),
       ...revealedDeep.map((e) => fanBox(e, true)),
     ];
-    return computeRadialFan(boxes, fociPx);
-  }, [revealedDeep, fociPx, size.width, size.height]);
+    return computeRadialFan(boxes, fociPx, tuning);
+  }, [revealedDeep, fociPx, size.width, size.height, tuning]);
 
   // A tether is drawn (and then faded) from each fanned label back to its dot,
   // staggered so the nearest word to a focus draws first.
@@ -240,8 +242,8 @@ export function EmotionField({
       });
     }
     raw.sort((a, b) => a.d - b.d);
-    return raw.map(({ seg }, i) => ({ ...seg, delay: i * 0.07 }));
-  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height]);
+    return raw.map(({ seg }, i) => ({ ...seg, delay: i * tuning.staggerStep }));
+  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height, tuning]);
 
   // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
   // further while the demo runs.
@@ -317,7 +319,7 @@ export function EmotionField({
         <>
           {/* Word tethers — beneath the labels, above the crosshairs: a hairline
               from each displaced label back to its dot. */}
-          <WordTethers segments={wordTethers} />
+          <WordTethers segments={wordTethers} duration={tuning.tetherDuration} keep={tuning.keepTethers} />
 
           {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
           {surfaceEmotions.map((emotion) => (

@@ -22,11 +22,18 @@ export interface TetherSegment {
 
 interface Props {
   segments: TetherSegment[];
+  // Total draw + hold + fade time (seconds).
+  duration?: number;
+  // Keep the tether on screen instead of fading it after the draw.
+  keep?: boolean;
 }
 
-export function WordTethers({ segments }: Props) {
+export function WordTethers({ segments, duration = 1.5, keep = false }: Props) {
   const reduce = useReducedMotion();
   if (segments.length === 0) return null;
+
+  // Reduced motion: static, persistent. Keep-tethers: draw in, then hold.
+  // Default: draw in, hold, fade out so the resting field stays clean.
 
   return (
     <svg
@@ -47,17 +54,21 @@ export function WordTethers({ segments }: Props) {
           animate={
             reduce
               ? { pathLength: 1, opacity: 1 }
-              : { pathLength: [0, 1, 1, 1], opacity: [0, 1, 1, 0] }
+              : keep
+                ? { pathLength: [0, 1], opacity: [0, 1] }
+                : { pathLength: [0, 1, 1, 1], opacity: [0, 1, 1, 0] }
           }
           transition={
             reduce
               ? { duration: 0 }
-              : {
-                  duration: 1.5,
-                  delay: s.delay ?? 0,
-                  times: [0, 0.38, 0.66, 1],
-                  ease: 'easeOut',
-                }
+              : keep
+                ? { duration: duration * 0.38, delay: s.delay ?? 0, ease: 'easeOut' }
+                : {
+                    duration,
+                    delay: s.delay ?? 0,
+                    times: [0, 0.38, 0.66, 1],
+                    ease: 'easeOut',
+                  }
           }
         />
       ))}
