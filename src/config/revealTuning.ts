@@ -16,6 +16,8 @@ export interface RevealTuning {
   tetherDuration: number;
   /** Per-word draw delay (seconds) — nearer words draw first. */
   staggerStep: number;
+  /** Draw a tether at all. When false, revealed words just appear in place. */
+  showTethers: boolean;
   /** Keep tethers on screen instead of fading them after the draw. */
   keepTethers: boolean;
 }
@@ -26,6 +28,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   ringGap: 16,
   tetherDuration: 1.5,
   staggerStep: 0.07,
+  showTethers: true,
   keepTethers: false,
 };
 

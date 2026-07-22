@@ -95,9 +95,20 @@ export function AdminRevealTuning() {
       <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
         <input
           type="checkbox"
-          checked={tuning.keepTethers}
-          onChange={(e) => set({ keepTethers: e.target.checked })}
+          checked={tuning.showTethers}
+          onChange={(e) => set({ showTethers: e.target.checked })}
           style={{ accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
+        />
+        <span style={labelStyle}>Show tethers</span>
+      </label>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: tuning.showTethers ? 'pointer' : 'default', opacity: tuning.showTethers ? 1 : 0.4 }}>
+        <input
+          type="checkbox"
+          checked={tuning.keepTethers}
+          disabled={!tuning.showTethers}
+          onChange={(e) => set({ keepTethers: e.target.checked })}
+          style={{ accentColor: 'var(--oura-gold)', cursor: tuning.showTethers ? 'pointer' : 'default' }}
         />
         <span style={labelStyle}>Keep tethers</span>
       </label>

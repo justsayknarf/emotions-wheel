@@ -319,7 +319,7 @@ export function EmotionField({
         <>
           {/* Word tethers — beneath the labels, above the crosshairs: a hairline
               from each displaced label back to its dot. */}
-          <WordTethers segments={wordTethers} duration={tuning.tetherDuration} keep={tuning.keepTethers} />
+          <WordTethers segments={tuning.showTethers ? wordTethers : []} duration={tuning.tetherDuration} keep={tuning.keepTethers} />
 
           {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
           {surfaceEmotions.map((emotion) => (
