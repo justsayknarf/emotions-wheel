@@ -168,6 +168,11 @@ export function EmotionField({
     [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds],
   );
 
+  // Live cursor proximity for the revealed deep words, so they react to the
+  // cursor (size + colour) the way surface anchors do. Only the scale/nearness
+  // are used — a deep word's visibility stays reveal-driven, not cursor-driven.
+  const deepProximity = useProximity(revealedDeep, revealCenter, isRevealed, selectedIds);
+
   // Reveal foci in pixel space: the dwell centre (when dwelling) and every pin.
   // Each revealed word fans out of its nearest focus.
   const fociPx = useMemo(() => {
@@ -343,11 +348,13 @@ export function EmotionField({
                 const dwellOpacity = dwell?.opacity ?? 0;
                 const opacity = isFixed ? 1 : Math.max(dwellOpacity, pinOpacity);
                 const enterDelay = !isFixed && dwell ? dwell.rank * 0.08 : 0;
+                // Reveal drives opacity; the live cursor drives size + colour.
+                const live = deepProximity.get(e.id);
                 return (
                   <EmotionWord
                     key={e.id}
                     emotion={e}
-                    proximity={{ opacity, scale: 1.0, isCandidate: false }}
+                    proximity={{ opacity, scale: live?.scale ?? 1, isCandidate: false, nearness: live?.nearness ?? 0 }}
                     isSelected={selectedIds.has(e.id)}
                     isHighlighted={highlightedIds.has(e.id)}
                     containerWidth={size.width}
