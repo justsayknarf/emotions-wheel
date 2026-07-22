@@ -111,31 +111,52 @@ export function computeRadialFan(
     if (g) g.push(m); else groups.set(best, [m]);
   }
 
-  // Fixed labels are obstacles at their home positions.
-  const placed: Array<{ x: number; y: number; halfW: number; halfH: number }> =
-    boxes.filter((b) => !b.movable).map((b) => ({ x: b.cx, y: b.cy, halfW: b.halfW, halfH: b.halfH }));
+  // Fixed labels (surface anchors) are obstacles at their home positions.
+  const fixedObs = boxes
+    .filter((b) => !b.movable)
+    .map((b) => ({ x: b.cx, y: b.cy, halfW: b.halfW, halfH: b.halfH }));
+  const homeBox = (m: FanBox) => ({ x: m.cx, y: m.cy, halfW: m.halfW, halfH: m.halfH });
 
+  // A revealed word only leaves its coordinate if its label would collide at
+  // home — with a surface anchor or another revealed word. Everything else
+  // renders in place (no arc, no tether). This keeps sparse reveals quiet and
+  // reserves the fan for the dense zones that actually need decluttering.
+  const conflicted = new Set<string>();
+  for (const m of movable) {
+    if (fixedObs.some((p) => overlaps(homeBox(m), p))) conflicted.add(m.id);
+  }
+  for (let i = 0; i < movable.length; i++) {
+    for (let j = i + 1; j < movable.length; j++) {
+      if (overlaps(homeBox(movable[i]), homeBox(movable[j]))) {
+        conflicted.add(movable[i].id);
+        conflicted.add(movable[j].id);
+      }
+    }
+  }
+
+  // Non-conflicted words stay home; they also become obstacles for the fan.
+  const placed = [...fixedObs];
+  for (const m of movable) {
+    if (!conflicted.has(m.id)) {
+      offsets.set(m.id, { dx: 0, dy: 0 });
+      placed.push(homeBox(m));
+    }
+  }
+
+  // Fan only the conflicted words, grouped by nearest focus.
   for (const [fi, group] of groups) {
     const f = foci[fi];
-    const work: WorkBox[] = group.map((m) => ({
-      ...m, x: m.cx, y: m.cy,
-      ang0: Math.atan2(m.cy - f.y, m.cx - f.x), ang: 0,
-    }));
-    const mean = circMean(work.map((m) => m.ang0));
-    work.sort((a, b) => relAngle(a.ang0, mean) - relAngle(b.ang0, mean));
-    const n = work.length;
-    const arc = Math.min(Math.PI * 1.6, (0.55 + n * 0.30) * tuning.arcScale);
+    const fanSet: WorkBox[] = group
+      .filter((m) => conflicted.has(m.id))
+      .map((m) => ({ ...m, x: m.cx, y: m.cy, ang0: Math.atan2(m.cy - f.y, m.cx - f.x), ang: 0 }));
+    if (fanSet.length === 0) continue;
 
-    // Seat every label on one ring just outside the farthest revealed dot, so
-    // the fan reads as an even arc around the focus rather than each label
-    // clinging to its own dot at a different radius.
-    const baseR =
-      Math.max(tuning.ringBase, ...work.map((m) => Math.hypot(m.cx - f.x, m.cy - f.y))) +
-      tuning.ringGap;
+    const mean = circMean(fanSet.map((m) => m.ang0));
+    fanSet.sort((a, b) => relAngle(a.ang0, mean) - relAngle(b.ang0, mean));
+    const n = fanSet.length;
 
-    work.forEach((m, k) => {
-      m.ang = mean + (n === 1 ? 0 : (k / (n - 1) - 0.5) * arc);
-      let r = baseR;
+    const march = (m: WorkBox, startR: number) => {
+      let r = startR;
       for (let s = 0; s < 90; s++) {
         m.x = f.x + Math.cos(m.ang) * r;
         m.y = f.y + Math.sin(m.ang) * r;
@@ -143,10 +164,29 @@ export function computeRadialFan(
         r += 5;
       }
       placed.push(m);
-    });
+    };
 
-    uncross(work);
-    for (const m of work) offsets.set(m.id, { dx: m.x - m.cx, dy: m.y - m.cy });
+    if (n === 1) {
+      // A lone conflicting word just steps out along its own ray until it
+      // clears — the shortest tether that resolves the overlap, no full ring.
+      const m = fanSet[0];
+      m.ang = m.ang0;
+      march(m, Math.hypot(m.cx - f.x, m.cy - f.y));
+    } else {
+      // Several conflicting words: seat them on one ring just outside the
+      // farthest of them, fanned evenly by angle, for a clean arc.
+      const arc = Math.min(Math.PI * 1.6, (0.55 + n * 0.30) * tuning.arcScale);
+      const baseR =
+        Math.max(tuning.ringBase, ...fanSet.map((m) => Math.hypot(m.cx - f.x, m.cy - f.y))) +
+        tuning.ringGap;
+      fanSet.forEach((m, k) => {
+        m.ang = mean + (k / (n - 1) - 0.5) * arc;
+        march(m, baseR);
+      });
+    }
+
+    uncross(fanSet);
+    for (const m of fanSet) offsets.set(m.id, { dx: m.x - m.cx, dy: m.y - m.cy });
   }
 
   return offsets;

@@ -49,3 +49,35 @@ const angs = words.map((w) => {
   return Math.atan2((b.cy + o.dy) - focus.y, (b.cx + o.dx) - focus.x) * 180 / Math.PI;
 });
 console.log('\nangle spread:', Math.round(Math.max(...angs) - Math.min(...angs)) + '°');
+
+// --- Sparse checks (collision-driven placement) ---
+function fanBox(id: string, label: string, x: number, y: number, movable: boolean): FanBox {
+  const dx = toPxX(x), dy = toPxY(y);
+  return { id, dotX: dx, dotY: dy, cx: dx, cy: dy - STANDOFF, halfW: hw(label), halfH: LINE_H / 2, movable };
+}
+const mag = (o: { dx: number; dy: number }) => Math.round(Math.hypot(o.dx, o.dy));
+
+// (a) lone revealed word in open space (nearest surface anchor far away)
+{
+  const anchor = fanBox('far', 'Peaceful', -0.66, 0.60, false); // top-left, far
+  const lone = fanBox('lonely', 'Lonely', 0.20, -0.30, true);
+  const o = computeRadialFan([anchor, lone], [{ x: toPxX(0.2), y: toPxY(-0.3) }]).get('lonely')!;
+  console.log('\n(a) lone word, open space  -> |offset|', mag(o), '(expect 0 = in place)');
+}
+
+// (b) lone revealed word whose home overlaps a surface anchor
+{
+  const anchor = fanBox('anchor', 'Confident', 0.30, 0.30, false);
+  const near = fanBox('near', 'Curious', 0.31, 0.30, true); // basically on top of the anchor
+  const o = computeRadialFan([anchor, near], [{ x: toPxX(0.30), y: toPxY(0.30) }]).get('near')!;
+  console.log('(b) lone word on an anchor -> |offset|', mag(o), '(expect > 0, small push)');
+}
+
+// (c) two revealed words far apart, no overlap
+{
+  const a = fanBox('a', 'Brave', 0.5, 0.5, true);
+  const b = fanBox('b', 'Weary', -0.5, -0.5, true);
+  const oa = computeRadialFan([a, b], [{ x: toPxX(0), y: toPxY(0) }]).get('a')!;
+  const ob = computeRadialFan([a, b], [{ x: toPxX(0), y: toPxY(0) }]).get('b')!;
+  console.log('(c) two words far apart    -> |offset| a', mag(oa), 'b', mag(ob), '(expect 0, 0)');
+}
