@@ -79,15 +79,23 @@ export function EmotionField({
   const handleRelease = useCallback((center: { x: number; y: number }) => {
     const regionDescription = getRegionDescription(center.x, center.y, emotions);
 
-    const nearby: Array<{ id: string; dist: number }> = [];
+    const nearby: Array<{ id: string; dist: number; surface: boolean }> = [];
     for (const em of emotions) {
       const d = Math.sqrt((em.x - center.x) ** 2 + (em.y - center.y) ** 2);
       if (d <= VISIBILITY_RADIUS) {
-        nearby.push({ id: em.id, dist: d });
+        nearby.push({ id: em.id, dist: d, surface: em.depth === 'surface' });
       }
     }
     nearby.sort((a, b) => a.dist - b.dist);
-    const newHighlightedIds = nearby.slice(0, 6).map((n) => n.id);
+
+    const count = Math.max(1, Math.round(tuning.tagCount));
+    const newHighlightedIds = nearby.slice(0, count).map((n) => n.id);
+    // Always include the nearest surface anchor in range, even if deeper words
+    // crowded it out of the top N — the anchor is the region's landmark word.
+    const nearestSurface = nearby.find((n) => n.surface);
+    if (nearestSurface && !newHighlightedIds.includes(nearestSurface.id)) {
+      newHighlightedIds.push(nearestSurface.id);
+    }
 
     const entry: PinEntry = {
       id: uuidv4(),
@@ -98,7 +106,7 @@ export function EmotionField({
     };
 
     onPinRelease(entry, newHighlightedIds);
-  }, [onPinRelease]);
+  }, [onPinRelease, tuning]);
 
   const { isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,

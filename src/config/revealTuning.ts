@@ -20,6 +20,8 @@ export interface RevealTuning {
   showTethers: boolean;
   /** Keep tethers on screen instead of fading them after the draw. */
   keepTethers: boolean;
+  /** How many nearest emotions to prompt as tags when recording a check-in. */
+  tagCount: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -30,6 +32,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   staggerStep: 0.07,
   showTethers: true,
   keepTethers: false,
+  tagCount: 6,
 };
 
 const KEY = 'reveal-tuning';
