@@ -1,6 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { labelForId } from '../../data/emotions';
+import { emotions, labelForId } from '../../data/emotions';
 import type { PinEntry } from '../../types';
+
+// Surface emotions are the field's always-visible anchor words. A nearby tag
+// that is one gets a whisper of a marker (see the leading dot below).
+const surfaceIds = new Set(emotions.filter((e) => e.depth === 'surface').map((e) => e.id));
 
 interface Props {
   pin: PinEntry;
@@ -247,6 +251,9 @@ export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = f
                     animate="visible"
                     onClick={(e) => { e.stopPropagation(); onRecognize(id); }}
                     style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
                       padding: '4px 11px',
                       borderRadius: 5,
                       border: '1px solid rgba(237, 232, 223, 0.12)',
@@ -258,6 +265,14 @@ export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = f
                       letterSpacing: '0.01em',
                     }}
                   >
+                    {surfaceIds.has(id) && (
+                      // Anchor tag: a tiny bone dot echoing the word's coordinate
+                      // dot in the field. Deliberately near-imperceptible.
+                      <span
+                        aria-hidden="true"
+                        style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(237, 232, 223, 0.4)', flex: 'none' }}
+                      />
+                    )}
                     {labelForId(id)}
                   </motion.button>
                 ))}
