@@ -37,7 +37,7 @@ const deepEmotions = emotions.filter(e => e.depth === 'deep');
 interface Props {
   pins: PinEntry[];
   highlightedIds: Set<string>;
-  onPinRelease: (entry: PinEntry, highlightedIds: string[]) => void;
+  onPinRelease: (entry: PinEntry) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
   // When true (e.g. the first-run demo), the axes brighten above their
@@ -77,36 +77,18 @@ export function EmotionField({
   }, []);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
-    const regionDescription = getRegionDescription(center.x, center.y, emotions);
-
-    const nearby: Array<{ id: string; dist: number; surface: boolean }> = [];
-    for (const em of emotions) {
-      const d = Math.sqrt((em.x - center.x) ** 2 + (em.y - center.y) ** 2);
-      if (d <= VISIBILITY_RADIUS) {
-        nearby.push({ id: em.id, dist: d, surface: em.depth === 'surface' });
-      }
-    }
-    nearby.sort((a, b) => a.dist - b.dist);
-
-    const count = Math.max(1, Math.round(tuning.tagCount));
-    const topIds = nearby.slice(0, count).map((n) => n.id);
-    // The nearest surface anchor leads the list and is always included, even if
-    // deeper words crowded it out of the top N — it's the region's landmark word.
-    const nearestSurface = nearby.find((n) => n.surface);
-    const newHighlightedIds = nearestSurface
-      ? [nearestSurface.id, ...topIds.filter((id) => id !== nearestSurface.id)]
-      : topIds;
-
+    // The pin carries only its coordinate + narrative. Which emotions it
+    // highlights is derived from the pin (in App), so the highlighted set can
+    // never drift from the pin — see nearestTagIds / the selected-pin memo.
     const entry: PinEntry = {
       id: uuidv4(),
       x: center.x,
       y: center.y,
       recognizedWords: [],
-      regionDescription,
+      regionDescription: getRegionDescription(center.x, center.y, emotions),
     };
-
-    onPinRelease(entry, newHighlightedIds);
-  }, [onPinRelease, tuning]);
+    onPinRelease(entry);
+  }, [onPinRelease]);
 
   const { isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
@@ -122,11 +104,40 @@ export function EmotionField({
   );
   const proximity = useProximity(surfaceEmotions, revealCenter, isRevealed, selectedIds);
 
-  // Pin-based proximity for deep emotions — each pin reveals its nearest
-  // DEEP_REVEAL_CAP words; overlapping pins merge by max opacity
+  // The two emotions the selected card names ("between X and Y") — the nearest
+  // pair, within range, to the emphasized pin. Recomputed from the pin itself
+  // (not the highlighted set) so it stays correct when an older card is
+  // reselected. While these two are lifted, everyone else revealed recedes,
+  // so the card's phrase reads against the geometry.
+  const pairIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!emphasizedPinId) return set;
+    const pin = pins.find((p) => p.id === emphasizedPinId);
+    if (!pin) return set;
+    const nearby: Array<{ id: string; dist: number }> = [];
+    for (const e of emotions) {
+      const dist = Math.sqrt((e.x - pin.x) ** 2 + (e.y - pin.y) ** 2);
+      if (dist <= VISIBILITY_RADIUS) nearby.push({ id: e.id, dist });
+    }
+    nearby.sort((a, b) => a.dist - b.dist);
+    for (const n of nearby.slice(0, 2)) set.add(n.id);
+    return set;
+  }, [emphasizedPinId, pins]);
+
+  // Recede only kicks in when the card actually names a pair (≥2 words in
+  // range) and the knob is above zero.
+  const recedeActive = pairIds.size === 2 && tuning.recedeStrength > 0;
+
+  // Pin-based proximity for deep emotions — the emphasized (selected) pin
+  // reveals its nearest DEEP_REVEAL_CAP words. Only the selected pin reveals a
+  // deep neighbourhood: other pins' deep words would clutter the field and make
+  // it harder to anchor what the selected card names. (Other pins keep their
+  // dots — rendered below — just not their word labels.) With no pin emphasized
+  // we fall back to the full constellation.
   const deepOpacityMap = useMemo(() => {
     const map = new Map<string, number>();
-    for (const pin of pins) {
+    const source = emphasizedPinId ? pins.filter((p) => p.id === emphasizedPinId) : pins;
+    for (const pin of source) {
       const eligible: Array<{ id: string; t: number; dist: number }> = [];
       for (const e of deepEmotions) {
         const dist = Math.sqrt((e.x - pin.x) ** 2 + (e.y - pin.y) ** 2);
@@ -140,7 +151,7 @@ export function EmotionField({
       }
     }
     return map;
-  }, [pins]);
+  }, [pins, emphasizedPinId]);
 
   // Dwell-based proximity for deep emotions — follows cursor, transient
   const dwellOpacityMap = useMemo(() => {
@@ -181,8 +192,11 @@ export function EmotionField({
   // are used — a deep word's visibility stays reveal-driven, not cursor-driven.
   const deepProximity = useProximity(revealedDeep, revealCenter, isRevealed, selectedIds);
 
-  // Reveal foci in pixel space: the dwell centre (when dwelling) and every pin.
-  // Each revealed word fans out of its nearest focus.
+  // Reveal foci in pixel space: the dwell centre (when dwelling) and the
+  // emphasized pin. Each revealed word fans out of its nearest focus — scoped to
+  // the selected pin so the fan matches the words we actually reveal (above),
+  // and no other pin pulls a label toward it. Full constellation when nothing
+  // is emphasized.
   const fociPx = useMemo(() => {
     if (size.width === 0) return [] as Array<{ x: number; y: number }>;
     const toPx = (c: { x: number; y: number }) => ({
@@ -191,9 +205,10 @@ export function EmotionField({
     });
     const arr: Array<{ x: number; y: number }> = [];
     if (dwellCenter) arr.push(toPx(dwellCenter));
-    for (const p of pins) arr.push(toPx(p));
+    const source = emphasizedPinId ? pins.filter((p) => p.id === emphasizedPinId) : pins;
+    for (const p of source) arr.push(toPx(p));
     return arr;
-  }, [dwellCenter, pins, size.width, size.height]);
+  }, [dwellCenter, pins, emphasizedPinId, size.width, size.height]);
 
   // Lay the revealed labels out as a fan around their nearest focus: each rides
   // a ray out of the cursor/pin, with a no-crossing pass so their tethers never
@@ -242,15 +257,28 @@ export function EmotionField({
       const d = fociPx.length
         ? Math.min(...fociPx.map((f) => Math.hypot(cx - f.x, cyCoord - f.y)))
         : 0;
+      // Aim the tether at the label's centre but terminate at the edge of its
+      // bounding box (plus a small gap), along the ray from the centre toward
+      // the dot. So the line points at the word without ever running under the
+      // glyphs — regardless of which side the dot sits on.
+      const lcx = cx + o.dx;
+      const lcy = cyCoord - LABEL_STANDOFF + o.dy;
+      const halfW = labelHalfWidth(e.label, e.depth);
+      const halfH = LABEL_LINE_H / 2;
+      const gap = 4;
+      const toDotX = cx - lcx;
+      const toDotY = cyCoord - lcy;
+      const tX = toDotX !== 0 ? (halfW + gap) / Math.abs(toDotX) : Infinity;
+      const tY = toDotY !== 0 ? (halfH + gap) / Math.abs(toDotY) : Infinity;
+      const t = Math.min(tX, tY, 1);
       raw.push({
         d,
         seg: {
           id: e.id,
           x1: cx,
           y1: cyCoord,
-          x2: cx + o.dx,
-          // Meet the label just under its baseline rather than at its center.
-          y2: cyCoord - LABEL_STANDOFF + o.dy + LABEL_LINE_H / 2 - 2,
+          x2: lcx + toDotX * t,
+          y2: lcy + toDotY * t,
         },
       });
     }
@@ -332,7 +360,15 @@ export function EmotionField({
         <>
           {/* Word tethers — beneath the labels, above the crosshairs: a hairline
               from each displaced label back to its dot. */}
-          <WordTethers segments={tuning.showTethers ? wordTethers : []} duration={tuning.tetherDuration} keep={tuning.keepTethers} />
+          {/* All tethers draw-then-fade when tethers are on; the pair's two
+              always persist (warmed to gold), so even with tethers globally off
+              the two named feelings stay linked to their true coordinates. */}
+          <WordTethers
+            segments={tuning.showTethers ? wordTethers : wordTethers.filter((s) => pairIds.has(s.id))}
+            duration={tuning.tetherDuration}
+            keep={tuning.keepTethers}
+            keepIds={pairIds}
+          />
 
           {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
           {surfaceEmotions.map((emotion) => (
@@ -344,6 +380,7 @@ export function EmotionField({
               isHighlighted={highlightedIds.has(emotion.id)}
               containerWidth={size.width}
               containerHeight={size.height}
+              emphasis={pairIds.has(emotion.id) ? 'pair' : null}
             />
           ))}
 
@@ -370,6 +407,8 @@ export function EmotionField({
                     enterDelay={enterDelay}
                     animateIn
                     offset={deepLabelOffsets.get(e.id)}
+                    emphasis={pairIds.has(e.id) ? 'pair' : recedeActive ? 'recede' : null}
+                    recedeStrength={tuning.recedeStrength}
                   />
                 );
               })}

@@ -121,7 +121,7 @@ export function EmotionDrawer({
         </div>
       )}
       <AnimatePresence initial={false}>
-        {reversedPins.map((pin, i) => (
+        {reversedPins.map((pin) => (
           <motion.div
             key={pin.id}
             layout
@@ -133,7 +133,7 @@ export function EmotionDrawer({
           >
             <CoordinateCard
               pin={pin}
-              highlightedIds={i === 0 ? Array.from(highlightedIds) : []}
+              highlightedIds={pin.id === selectedPinId ? Array.from(highlightedIds) : []}
               isSelected={pin.id === selectedPinId}
               isEntering={pin.id === enteringPinId}
               onSelect={() => onSelectPin(pin.id)}

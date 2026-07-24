@@ -1,6 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { emotions } from './data/emotions';
+import { nearestTagIds } from './data/regions';
+import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
@@ -57,7 +60,6 @@ function useOnboarding() {
 export default function App() {
   const [view, setView] = useState<AppView>('field');
   const [pins, setPins] = useState<PinEntry[]>([]);
-  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
   const sessionStartRef = useRef<number>(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -72,6 +74,7 @@ export default function App() {
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
+  const tuning = useRevealTuning();
 
   // Seed the session clock on mount (kept out of render to stay pure); each new
   // session/interaction resets it in its own handler.
@@ -98,9 +101,21 @@ export default function App() {
   const selectedPin = pins.find((p) => p.id === selectedPinId) ?? (pins.length > 0 ? pins[pins.length - 1] : null);
   const effectiveSelectedPinId = selectedPin?.id ?? null;
 
-  const handlePinRelease = useCallback((entry: PinEntry, ids: string[]) => {
+  // The highlighted emotions are derived from the *selected* pin, not stored on
+  // release — so they track whichever card is active (fresh drop or reselected)
+  // and reset to nothing when the last pin is removed. This is the single source
+  // of truth behind the field's lit words, the fan, and the card's tag pills;
+  // it unifies with the pin emphasis (both key off the selected pin).
+  const highlightedIds = useMemo(
+    () =>
+      selectedPin
+        ? new Set(nearestTagIds(selectedPin.x, selectedPin.y, emotions, tuning.tagCount))
+        : new Set<string>(),
+    [selectedPin, tuning.tagCount],
+  );
+
+  const handlePinRelease = useCallback((entry: PinEntry) => {
     setPins((prev) => [...prev, entry]);
-    setHighlightedIds(new Set(ids));
     setSelectedPinId(entry.id);
     setEnteringPinId(entry.id);
     setTetherKey((k) => k + 1);
@@ -150,7 +165,6 @@ export default function App() {
 
   const handleNewSession = useCallback(() => {
     setPins([]);
-    setHighlightedIds(new Set());
     setLastEntry(null);
     sessionStartRef.current = Date.now();
     setView('field');
@@ -282,7 +296,7 @@ export default function App() {
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
                 onDone={handleDone}
-                onClear={() => { setPins([]); setHighlightedIds(new Set()); }}
+                onClear={() => { setPins([]); }}
                 selectedPinId={effectiveSelectedPinId}
                 onSelectPin={setSelectedPinId}
                 enteringPinId={enteringPinId}
