@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 // Fails when any two emotion words would render as overlapping text at a
-// desktop reference viewport. Guards src/data/emotions.ts against colliding
-// coordinates — including edits saved through the admin editor.
+// desktop reference viewport. Guards the active vocabulary framework against
+// colliding coordinates — including edits saved through the admin editor.
+//
+// The active framework's word list lives in src/data/frameworks/<id>.ts, where
+// <id> is the activeFrameworkId declared in src/data/frameworks/index.ts. This
+// script resolves that file dynamically so it always checks the words the app
+// actually renders.
 //
 // Overlap model (see docs/plans/2026-07-07-002-fix-emotion-word-spacing-plan.md):
 // two words overlap when their horizontal gap is under half the sum of their
@@ -14,7 +19,26 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DATA_PATH = join(ROOT, 'src/data/emotions.ts');
+
+// Resolve which framework is active, then check its data file.
+const REGISTRY_PATH = join(ROOT, 'src/data/frameworks/index.ts');
+const activeIdMatch = readFileSync(REGISTRY_PATH, 'utf8').match(
+  /activeFrameworkId\s*=\s*'([^']+)'/,
+);
+if (!activeIdMatch) {
+  console.error(
+    `Could not read activeFrameworkId from ${REGISTRY_PATH} — the framework registry format changed.`,
+  );
+  process.exit(1);
+}
+const ACTIVE_ID = activeIdMatch[1];
+// Guard the active framework (what the app renders) AND circumplex-custom (the
+// hand-authored base the admin editor and relax script write) — deduped — so an
+// overlap introduced through either path is caught, not just the active one.
+const TARGETS = [...new Set([ACTIVE_ID, 'circumplex-custom'])].map((id) => {
+  const rel = `src/data/frameworks/${id}.ts`;
+  return { rel, path: join(ROOT, rel) };
+});
 
 // Reference render metrics. W is the desktop field *plane* width, not the
 // viewport: the companion-rail layout gives the field `viewport - rail`, which
@@ -60,67 +84,72 @@ function overlaps(a, b) {
   return dx < hThreshold && dy < LINE;
 }
 
-const src = readFileSync(DATA_PATH, 'utf8');
-const emotions = parseEmotions(src);
-
-// R7 guard: fail loudly if the format drifted and the regex silently under-parsed
-const rawCount = (src.match(/\{\s*id:\s*'/g) ?? []).length;
-if (emotions.length === 0 || emotions.length < rawCount) {
-  console.error(
-    `Parse guard failed: matched ${emotions.length} of ${rawCount} entries in src/data/emotions.ts.`,
-  );
-  console.error(
-    'The serializer line format likely drifted from the lint regex — fix the regex before trusting this check.',
-  );
-  process.exit(1);
-}
-
-const buckets = { 'surface-surface': [], 'surface-deep': [], 'deep-deep': [] };
-for (let i = 0; i < emotions.length; i++) {
-  for (let j = i + 1; j < emotions.length; j++) {
-    const a = emotions[i];
-    const b = emotions[j];
-    if (!overlaps(a, b)) continue;
-    const key =
-      a.depth === 'surface' && b.depth === 'surface'
-        ? 'surface-surface'
-        : a.depth === 'deep' && b.depth === 'deep'
-          ? 'deep-deep'
-          : 'surface-deep';
-    const dist = Math.hypot(a.x - b.x, a.y - b.y).toFixed(3);
-    buckets[key].push(
-      `  ${a.label} (${a.x}, ${a.y}) <-> ${b.label} (${b.x}, ${b.y})  [d=${dist}]`,
-    );
-  }
-}
-
 // Only surface-surface overlaps are fatal: every surface word paints in the
 // idle field at all times, so two overlapping surface words are permanently
 // illegible. Deep words render at most DEEP_REVEAL_CAP at a time near a
 // dwell/pin and are transient — global deep non-overlap is both unachievable
 // at the current vocabulary density and unnecessary once the reveal is capped,
 // so deep-involving overlaps are reported as advisory, not failures.
-const fatal = buckets['surface-surface'];
-const advisory =
-  buckets['surface-deep'].length + buckets['deep-deep'].length;
+function checkFile({ rel, path }) {
+  const src = readFileSync(path, 'utf8');
+  const emotions = parseEmotions(src);
 
-if (fatal.length > 0) {
-  console.error(`surface-surface overlaps (${fatal.length}) — always co-visible:`);
-  for (const row of fatal) console.error(row);
-}
-if (advisory > 0) {
-  console.log(
-    `emotion-spacing: advisory — ${buckets['surface-deep'].length} surface-deep, ` +
-      `${buckets['deep-deep'].length} deep-deep overlaps (transient; capped on screen).`,
-  );
+  // R7 guard: fail loudly if the format drifted and the regex silently under-parsed.
+  // Count only row-shaped entries (id immediately followed by label) so the
+  // Framework wrapper object ({ id, name, emotions }) isn't miscounted as a row.
+  const rawCount = (src.match(/\{\s*id:\s*'[^']+',\s*label:/g) ?? []).length;
+  if (emotions.length === 0 || emotions.length < rawCount) {
+    console.error(
+      `Parse guard failed: matched ${emotions.length} of ${rawCount} entries in ${rel}.`,
+    );
+    console.error(
+      'The serializer line format likely drifted from the lint regex — fix the regex before trusting this check.',
+    );
+    process.exit(1);
+  }
+
+  const buckets = { 'surface-surface': [], 'surface-deep': [], 'deep-deep': [] };
+  for (let i = 0; i < emotions.length; i++) {
+    for (let j = i + 1; j < emotions.length; j++) {
+      const a = emotions[i];
+      const b = emotions[j];
+      if (!overlaps(a, b)) continue;
+      const key =
+        a.depth === 'surface' && b.depth === 'surface'
+          ? 'surface-surface'
+          : a.depth === 'deep' && b.depth === 'deep'
+            ? 'deep-deep'
+            : 'surface-deep';
+      const dist = Math.hypot(a.x - b.x, a.y - b.y).toFixed(3);
+      buckets[key].push(
+        `  ${a.label} (${a.x}, ${a.y}) <-> ${b.label} (${b.x}, ${b.y})  [d=${dist}]`,
+      );
+    }
+  }
+
+  const fatal = buckets['surface-surface'];
+  const advisory = buckets['surface-deep'].length + buckets['deep-deep'].length;
+
+  if (fatal.length > 0) {
+    console.error(`surface-surface overlaps in ${rel} (${fatal.length}) — always co-visible:`);
+    for (const row of fatal) console.error(row);
+    console.error(
+      `\nemotion-spacing: FAIL — ${fatal.length} surface-surface overlap(s) across ${emotions.length} words in ${rel}.`,
+    );
+  } else {
+    if (advisory > 0) {
+      console.log(
+        `emotion-spacing: advisory (${rel}) — ${buckets['surface-deep'].length} surface-deep, ` +
+          `${buckets['deep-deep'].length} deep-deep overlaps (transient; capped on screen).`,
+      );
+    }
+    console.log(
+      `emotion-spacing: OK — ${emotions.length} words in ${rel}, no surface-surface overlaps.`,
+    );
+  }
+  return fatal.length;
 }
 
-if (fatal.length > 0) {
-  console.error(
-    `\nemotion-spacing: FAIL — ${fatal.length} surface-surface overlap(s) across ${emotions.length} words.`,
-  );
-  process.exit(1);
-}
-
-console.log(`emotion-spacing: OK — ${emotions.length} words, no surface-surface overlaps.`);
-process.exit(0);
+let totalFatal = 0;
+for (const target of TARGETS) totalFatal += checkFile(target);
+process.exit(totalFatal > 0 ? 1 : 0);

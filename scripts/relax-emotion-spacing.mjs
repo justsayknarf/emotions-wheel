@@ -4,7 +4,9 @@
 // Each word is clamped to within MAX_DISPLACEMENT of its starting position and
 // never crosses a quadrant axis, so valence/arousal meaning and cluster layout
 // are preserved. Coordinates are rewritten in place (per-line token swap), so
-// the hand-formatted alignment and cluster comments in emotions.ts survive.
+// the hand-formatted alignment and cluster comments in the base framework file
+// survive. Targets the hand-authored base set (circumplex-custom), which the
+// admin editor also maintains; the active framework may be generator-authored.
 //
 // Run: node scripts/relax-emotion-spacing.mjs
 // Then verify: node scripts/lint-emotion-spacing.mjs
@@ -14,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DATA_PATH = join(ROOT, 'src/data/emotions.ts');
+const DATA_PATH = join(ROOT, 'src/data/frameworks/circumplex-custom.ts');
 
 // Reference render metrics — must match lint-emotion-spacing.mjs.
 // W is the desktop field plane width (viewport minus companion rail, ~870 at a

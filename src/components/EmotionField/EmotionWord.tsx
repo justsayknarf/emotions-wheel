@@ -38,10 +38,18 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   const left = (toPercent(emotion.x) / 100) * containerWidth;
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
-  const { opacity, scale, isCandidate } = proximity;
+  const { opacity, scale, isCandidate, nearness } = proximity;
 
   const resolvedOpacity = isSelected || isHighlighted ? 1 : opacity;
   const resolvedScale = isCandidate ? 1.3 : (isSelected ? 1 : (isHighlighted ? 1.05 : scale));
+
+  // Warm toward the gold accent as the cursor nears, so proximity reads in
+  // colour as well as size — for surface anchors and revealed deep words alike.
+  const n = Math.max(0, Math.min(1, nearness)) * 0.85;
+  const mix = (bone: number, gold: number) => Math.round(bone + (gold - bone) * n);
+  const proximityColor = `rgb(${mix(237, 201)}, ${mix(232, 168)}, ${mix(223, 124)})`;
+  const proximityGlow =
+    n > 0.04 ? `0 0 ${Math.round(12 * n)}px rgba(201, 168, 124, ${(0.35 * n).toFixed(2)})` : undefined;
 
   // The coordinate dot is the word's true anchor: it sits at the point and holds
   // a steady, depth-encoded presence, independent of the label's proximity
@@ -100,7 +108,7 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
             ? '#C9A87C'
             : isHighlighted
               ? 'rgba(201, 168, 124, 0.7)'
-              : 'rgba(237, 232, 223, 1)',
+              : proximityColor,
           // Depth tiers (U5): surface words are the landmarks — the larger size
           // (text-sm), kept light and airy. Deep words stay a step smaller
           // (text-xs) but carry more weight so they read at that size once
@@ -113,7 +121,7 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
             ? '0 0 16px rgba(201, 168, 124, 0.4)'
             : isHighlighted
               ? '0 0 10px rgba(201, 168, 124, 0.2)'
-              : undefined,
+              : proximityGlow,
         }}
         initial={animateIn ? { opacity: 0, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) } : false}
         animate={{ opacity: resolvedOpacity, scale: resolvedScale, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) }}

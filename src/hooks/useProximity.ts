@@ -11,6 +11,10 @@ export interface ProximityResult {
   opacity: number;
   scale: number;
   isCandidate: boolean;
+  // How near the cursor is, 0 (far / no cursor) → 1 (at the point). Drives the
+  // size/colour reaction independently of opacity, so revealed deep words can
+  // react to the cursor while their visibility stays reveal-driven.
+  nearness: number;
 }
 
 function euclidean(x1: number, y1: number, x2: number, y2: number): number {
@@ -43,13 +47,13 @@ export function useProximity(
     for (const emotion of emotions) {
       // Branch 1: selected — always fully visible, never a candidate
       if (selectedIds.has(emotion.id)) {
-        results.set(emotion.id, { opacity: 1, scale: 1, isCandidate: false });
+        results.set(emotion.id, { opacity: 1, scale: 1, isCandidate: false, nearness: 0 });
         continue;
       }
 
       // Branch 2: not pressed or no reveal center — ambient floor
       if (!isPressed || revealCenter === null) {
-        results.set(emotion.id, { opacity: 0.05, scale: 1.0, isCandidate: false });
+        results.set(emotion.id, { opacity: 0.05, scale: 1.0, isCandidate: false, nearness: 0 });
         continue;
       }
 
@@ -57,7 +61,7 @@ export function useProximity(
 
       // Branch 3: outside visibility radius — ambient floor
       if (dist > VISIBILITY_RADIUS) {
-        results.set(emotion.id, { opacity: 0.05, scale: 1.0, isCandidate: false });
+        results.set(emotion.id, { opacity: 0.05, scale: 1.0, isCandidate: false, nearness: 0 });
         continue;
       }
 
@@ -65,7 +69,7 @@ export function useProximity(
       const t = 1 - dist / VISIBILITY_RADIUS; // 0 at edge, 1 at center
       const opacity = 0.05 + t * 0.95;        // 0.05 → 1.0
       const scale = 1.0 + t * 0.1;            // 1.0 → 1.1
-      results.set(emotion.id, { opacity, scale, isCandidate: emotion.id === candidateId });
+      results.set(emotion.id, { opacity, scale, isCandidate: emotion.id === candidateId, nearness: t });
     }
 
     return results;
