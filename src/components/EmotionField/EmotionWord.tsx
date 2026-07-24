@@ -14,7 +14,20 @@ interface Props {
   // De-overlap displacement (px) applied to the label on top of the standoff.
   // The dot never moves; only the label callout slides. (U3)
   offset?: { dx: number; dy: number };
+  // While a check-in card is selected, the two emotions it names are lifted
+  // ('pair') and everyone else revealed is pushed back ('recede'), so the card's
+  // "between X and Y" reads against the geometry. null = the resting field.
+  emphasis?: 'pair' | 'recede' | null;
+  // How firmly a 'recede' word steps back (0–1). Ignored otherwise.
+  recedeStrength?: number;
 }
+
+// Recede floors: even at full strength a pushed-back word keeps this share of
+// its opacity/scale, so the surrounding context never disappears.
+const RECEDE_MIN_OPACITY = 0.4;
+const RECEDE_MIN_SCALE = 0.85;
+// The named pair grows slightly past its resting size to claim the eye.
+const PAIR_SCALE_BOOST = 1.16;
 
 // Map coordinate [-1, 1] to [5%, 95%] of container dimension
 function toPercent(v: number): number {
@@ -34,7 +47,7 @@ export const LABEL_STANDOFF = 11;
 // aliases to a generic serif.
 const FIELD_FONT = "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
-export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset }: Props) {
+export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0 }: Props) {
   const left = (toPercent(emotion.x) / 100) * containerWidth;
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
@@ -42,6 +55,19 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
 
   const resolvedOpacity = isSelected || isHighlighted ? 1 : opacity;
   const resolvedScale = isCandidate ? 1.3 : (isSelected ? 1 : (isHighlighted ? 1.05 : scale));
+
+  // Card emphasis, layered on top of the resting treatment. 'pair' forces the
+  // gold, lifted read even for a word that wasn't otherwise highlighted;
+  // 'recede' scales opacity + size down toward the floors above.
+  const s = Math.max(0, Math.min(1, recedeStrength));
+  const emphasisOpacity =
+    emphasis === 'recede' ? resolvedOpacity * (1 - s * (1 - RECEDE_MIN_OPACITY)) : resolvedOpacity;
+  const emphasisScale =
+    emphasis === 'pair'
+      ? resolvedScale * PAIR_SCALE_BOOST
+      : emphasis === 'recede'
+        ? resolvedScale * (1 - s * (1 - RECEDE_MIN_SCALE))
+        : resolvedScale;
 
   // Warm toward the gold accent as the cursor nears, so proximity reads in
   // colour as well as size — for surface anchors and revealed deep words alike.
@@ -57,8 +83,15 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   // only render when revealed — are quieter. Bone-toned, so they stay distinct
   // from the user's gold pins (KTD2).
   const isSurface = emotion.depth === 'surface';
-  const dotSize = isSurface ? 3 : 2;
+  // The named pair's coordinate dots lift to a gold, formerly-dropped-pin-sized
+  // point (smaller than the selected pin) so the two "between" coordinates stay
+  // clearly anchored — matching the kept gold tether, and following the selected
+  // card via the same `emphasis` signal. Every other dot keeps its quiet bone
+  // presence.
+  const isPair = emphasis === 'pair';
+  const dotSize = isPair ? 4 : isSurface ? 3 : 2;
   const dotOpacity = isSurface ? 0.32 : 0.16;
+  const dotColor = isPair ? 'rgba(201, 168, 124, 0.7)' : `rgba(237, 232, 223, ${dotOpacity})`;
 
   return (
     <motion.span
@@ -92,7 +125,7 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
           marginLeft: -dotSize / 2,
           marginTop: -dotSize / 2,
           borderRadius: '50%',
-          background: `rgba(237, 232, 223, ${dotOpacity})`,
+          background: dotColor,
           pointerEvents: 'none',
         }}
       />
@@ -104,7 +137,7 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
         style={{
           display: 'inline-block',
           fontFamily: FIELD_FONT,
-          color: isSelected
+          color: isSelected || emphasis === 'pair'
             ? '#C9A87C'
             : isHighlighted
               ? 'rgba(201, 168, 124, 0.7)'
@@ -115,16 +148,18 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
           // revealed. Surface stays at its tuned width (the data is spaced right
           // to the edge, so widening it would collide). Selected/highlighted gold
           // treatment is unchanged.
-          fontWeight: isSelected ? 500 : isHighlighted ? 400 : isSurface ? 300 : 400,
+          fontWeight: emphasis === 'pair' || isSelected ? 500 : isHighlighted ? 400 : isSurface ? 300 : 400,
           letterSpacing: isSelected ? '0.01em' : '0.02em',
-          textShadow: isSelected
-            ? '0 0 16px rgba(201, 168, 124, 0.4)'
-            : isHighlighted
-              ? '0 0 10px rgba(201, 168, 124, 0.2)'
-              : proximityGlow,
+          textShadow: emphasis === 'pair'
+            ? '0 0 14px rgba(201, 168, 124, 0.45)'
+            : isSelected
+              ? '0 0 16px rgba(201, 168, 124, 0.4)'
+              : isHighlighted
+                ? '0 0 10px rgba(201, 168, 124, 0.2)'
+                : proximityGlow,
         }}
         initial={animateIn ? { opacity: 0, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) } : false}
-        animate={{ opacity: resolvedOpacity, scale: resolvedScale, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) }}
+        animate={{ opacity: emphasisOpacity, scale: emphasisScale, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
       >
         {emotion.label}

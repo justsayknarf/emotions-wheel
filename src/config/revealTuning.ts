@@ -22,6 +22,14 @@ export interface RevealTuning {
   keepTethers: boolean;
   /** How many nearest emotions to prompt as tags when recording a check-in. */
   tagCount: number;
+  /**
+   * How firmly the field recedes everyone *except* the card's two named
+   * emotions while a check-in card is selected. 0 = off (nothing recedes);
+   * 1 = maximum. A built-in floor keeps receded words legible even at 1, so
+   * the surrounding context — and the meaning of "the closest two" — is never
+   * lost. Applied to revealed deep words only; surface landmarks stay put.
+   */
+  recedeStrength: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -33,6 +41,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   showTethers: true,
   keepTethers: false,
   tagCount: 6,
+  recedeStrength: 0.55,
 };
 
 const KEY = 'reveal-tuning';

@@ -59,3 +59,32 @@ export function getRegionDescription(
 
   return { relational, narrative };
 }
+
+/**
+ * The nearest emotions to prompt as tags for a check-in at (x, y): the closest
+ * `tagCount` within range, with the nearest surface anchor always included and
+ * placed first (the region's landmark word). Pure — the single source of truth
+ * for both a fresh pin drop and a reselected card, so the highlighted set can
+ * never drift from the pin it actually describes.
+ */
+export function nearestTagIds(
+  x: number,
+  y: number,
+  emotions: Emotion[],
+  tagCount: number,
+): string[] {
+  const nearby: Array<{ id: string; dist: number; surface: boolean }> = [];
+  for (const em of emotions) {
+    const d = euclidean(x, y, em.x, em.y);
+    if (d <= VISIBILITY_RADIUS) {
+      nearby.push({ id: em.id, dist: d, surface: em.depth === 'surface' });
+    }
+  }
+  nearby.sort((a, b) => a.dist - b.dist);
+  const count = Math.max(1, Math.round(tagCount));
+  const topIds = nearby.slice(0, count).map((n) => n.id);
+  const nearestSurface = nearby.find((n) => n.surface);
+  return nearestSurface
+    ? [nearestSurface.id, ...topIds.filter((id) => id !== nearestSurface.id)]
+    : topIds;
+}
