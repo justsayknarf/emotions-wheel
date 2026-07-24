@@ -89,13 +89,13 @@ export function EmotionField({
     nearby.sort((a, b) => a.dist - b.dist);
 
     const count = Math.max(1, Math.round(tuning.tagCount));
-    const newHighlightedIds = nearby.slice(0, count).map((n) => n.id);
-    // Always include the nearest surface anchor in range, even if deeper words
-    // crowded it out of the top N — the anchor is the region's landmark word.
+    const topIds = nearby.slice(0, count).map((n) => n.id);
+    // The nearest surface anchor leads the list and is always included, even if
+    // deeper words crowded it out of the top N — it's the region's landmark word.
     const nearestSurface = nearby.find((n) => n.surface);
-    if (nearestSurface && !newHighlightedIds.includes(nearestSurface.id)) {
-      newHighlightedIds.push(nearestSurface.id);
-    }
+    const newHighlightedIds = nearestSurface
+      ? [nearestSurface.id, ...topIds.filter((id) => id !== nearestSurface.id)]
+      : topIds;
 
     const entry: PinEntry = {
       id: uuidv4(),
