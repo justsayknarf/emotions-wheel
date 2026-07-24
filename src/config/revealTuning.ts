@@ -35,12 +35,33 @@ export const DEFAULT_TUNING: RevealTuning = {
 const KEY = 'reveal-tuning';
 const EVENT = 'reveal-tuning-change';
 
+// Accept a persisted value only when it matches the default's type (and, for
+// numbers, is finite). A wrong-typed or NaN knob would otherwise flow into the
+// fan geometry and animation and make revealed labels vanish. Unknown/invalid
+// fields fall back to the default.
+function sanitize(parsed: unknown): RevealTuning {
+  const out: Record<string, unknown> = { ...DEFAULT_TUNING };
+  if (parsed && typeof parsed === 'object') {
+    const src = parsed as Record<string, unknown>;
+    for (const key of Object.keys(DEFAULT_TUNING) as Array<keyof RevealTuning>) {
+      const dv = DEFAULT_TUNING[key];
+      const pv = src[key];
+      if (typeof dv === 'number' && typeof pv === 'number' && Number.isFinite(pv)) {
+        out[key] = pv;
+      } else if (typeof dv === 'boolean' && typeof pv === 'boolean') {
+        out[key] = pv;
+      }
+    }
+  }
+  return out as unknown as RevealTuning;
+}
+
 export function loadTuning(): RevealTuning {
   if (typeof localStorage === 'undefined') return DEFAULT_TUNING;
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULT_TUNING;
-    return { ...DEFAULT_TUNING, ...(JSON.parse(raw) as Partial<RevealTuning>) };
+    return sanitize(JSON.parse(raw));
   } catch {
     return DEFAULT_TUNING;
   }

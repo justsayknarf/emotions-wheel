@@ -5,7 +5,14 @@ function fmt(n: number): string {
 }
 
 function escape(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  // Backslash and quote must be escaped; newlines/CR can't appear raw inside a
+  // single-quoted TS literal, so encode them too (a multi-line description would
+  // otherwise emit an unterminated string and break the generated module).
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
 }
 
 export function serializeEmotions(emotions: AdminEmotion[]): string {
@@ -40,7 +47,7 @@ export function serializeDescriptions(emotions: AdminEmotion[]): string {
       const relatedStr = e.relatedIds
         .map((id) => `'${escape(id)}'`)
         .join(', ');
-      return `  ${escape(e.id)}: {\n    description: '${escape(e.description)}',\n    relatedIds: [${relatedStr}],\n  },`;
+      return `  '${escape(e.id)}': {\n    description: '${escape(e.description)}',\n    relatedIds: [${relatedStr}],\n  },`;
     })
     .join('\n');
 

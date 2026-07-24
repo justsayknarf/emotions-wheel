@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint . && node scripts/lint-emotion-spacing.mjs",
     "lint:spacing": "node scripts/lint-emotion-spacing.mjs",
+    "check:fan": "npx tsx scripts/test-fan.ts",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -15,6 +15,17 @@ while ((m = re.exec(src))) {
   rows.push({ id: m[1], label: m[2], x: +m[3], y: +m[4], cluster: m[6] });
 }
 
+// Guard: abort rather than overwrite the active framework file with an
+// under-parsed set if the source format drifts (mirrors the spacing lint's
+// parse guard). Count row-shaped entries and require the regex matched them all.
+const rawCount = (src.match(/\{\s*id:\s*'[^']+',\s*label:/g) ?? []).length;
+if (rows.length === 0 || rows.length < rawCount) {
+  console.error(
+    `gen-radial-intensity: parsed ${rows.length} of ${rawCount} rows from circumplex-custom.ts — aborting so radial-intensity.ts is not overwritten with an under-parsed set.`,
+  );
+  process.exit(1);
+}
+
 // preserve original file order for output; group for the radius transform
 const order = rows.map(r => r.id);
 const by = {};
