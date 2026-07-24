@@ -87,7 +87,7 @@ export function EmotionField({
       }
     }
     nearby.sort((a, b) => a.dist - b.dist);
-    const newHighlightedIds = nearby.slice(0, 3).map((n) => n.id);
+    const newHighlightedIds = nearby.slice(0, 6).map((n) => n.id);
 
     const entry: PinEntry = {
       id: uuidv4(),
