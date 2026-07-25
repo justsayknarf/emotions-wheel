@@ -10,6 +10,7 @@ import { labelHalfWidth, LABEL_LINE_H } from './deoverlap';
 import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
 import { FieldSignal } from './FieldSignal';
+import { FieldAura } from './FieldAura';
 import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 
@@ -302,6 +303,9 @@ export function EmotionField({
       className="relative w-full h-full overflow-hidden"
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >
+      {/* Ambient watercolor aura — the deepest layer, pure background mood */}
+      <FieldAura />
+
       {/* Light-signaling — still-center pool + outward intensity gradient,
           beneath every other layer (U4) */}
       <FieldSignal />
