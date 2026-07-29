@@ -28,6 +28,10 @@ const KNOBS: Knob[] = [
   { key: 'staggerStep', label: 'Stagger', min: 0, max: 0.2, step: 0.01, fmt: (v) => `${Math.round(v * 1000)}ms` },
   { key: 'tagCount', label: 'Nearby tags', min: 1, max: 12, step: 1, fmt: (v) => String(v) },
   { key: 'recedeStrength', label: 'Recede', min: 0, max: 1, step: 0.05, fmt: (v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`) },
+  { key: 'axisFade', label: 'Axis fade', min: 0.1, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'axisPulseDelay', label: 'Pulse delay', min: 0, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'axisPulseStagger', label: 'Pulse stagger', min: 0, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'axisPulseDuration', label: 'Pulse length', min: 0.4, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
 ];
 
 const labelStyle: React.CSSProperties = {

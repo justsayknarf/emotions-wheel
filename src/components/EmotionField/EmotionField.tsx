@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
@@ -30,6 +30,10 @@ const AXIS_LABEL: React.CSSProperties = {
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
 };
+
+// Opaque bone — brightness is carried by the element's animated opacity, not the
+// colour alpha, so the labels can pulse above their emphasized level.
+const AXIS_TEXT = 'rgb(237,232,223)';
 
 // Partition once at module load — emotions array is a static import constant
 const surfaceEmotions = emotions.filter(e => e.depth === 'surface');
@@ -288,9 +292,42 @@ export function EmotionField({
   }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height, tuning]);
 
   // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
-  // further while the demo runs.
+  // further while emphasized (welcome / demo). Alpha lives in element opacity so
+  // the label can both fade with emphasis and pulse above the emphasized level.
   const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
-  const axisLabelColor = axisEmphasis ? 'rgba(237,232,223,0.75)' : 'rgba(237,232,223,0.45)';
+  const AXIS_REST = 0.45;   // resting label opacity
+  const AXIS_EMPH = 0.75;   // emphasized (welcome / demo) label opacity
+  const AXIS_PEAK = 0.98;   // soft pulse peak
+
+  // Two shared controls drive the label pairs: vertical (Positive / Negative)
+  // and horizontal (Calm / Activated). The emphasis fade and the guiding pulse
+  // both run through them, so the pulse always settles back to the live base.
+  const vAxis = useAnimationControls();
+  const hAxis = useAnimationControls();
+
+  // Emphasis ↔ resting: a smooth fade both ways (the requested transition out of
+  // the highlighted state), timed by the admin `axisFade` knob.
+  useEffect(() => {
+    const base = axisEmphasis ? AXIS_EMPH : AXIS_REST;
+    const t = { duration: tuning.axisFade, ease: 'easeInOut' as const };
+    vAxis.start({ opacity: base, transition: t });
+    hAxis.start({ opacity: base, transition: t });
+  }, [axisEmphasis, tuning.axisFade, vAxis, hAxis]);
+
+  // Guiding pulse: once emphasis is on and the welcome text has had time to
+  // settle (axisPulseDelay), a very soft light pulse rises on the vertical axis
+  // labels, then — after axisPulseStagger — on the horizontal ones. One-shot per
+  // emphasis; cancelled if emphasis clears first.
+  useEffect(() => {
+    if (!axisEmphasis) return;
+    let cancelled = false;
+    const pulse = { opacity: [AXIS_EMPH, AXIS_PEAK, AXIS_EMPH], transition: { duration: tuning.axisPulseDuration, ease: 'easeInOut' as const } };
+    const timers = [
+      window.setTimeout(() => { if (!cancelled) vAxis.start(pulse); }, tuning.axisPulseDelay * 1000),
+      window.setTimeout(() => { if (!cancelled) hAxis.start(pulse); }, (tuning.axisPulseDelay + tuning.axisPulseStagger) * 1000),
+    ];
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, [axisEmphasis, tuning.axisPulseDelay, tuning.axisPulseStagger, tuning.axisPulseDuration, vAxis, hAxis]);
 
   return (
     <div
@@ -311,22 +348,24 @@ export function EmotionField({
       <FieldSignal />
 
       {/* Crosshairs */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
-      {/* Axis labels */}
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      {/* Axis labels — opacity carries both the emphasis fade and the guiding
+          pulse (via vAxis / hAxis controls); colour stays opaque. Vertical pair
+          (Positive / Negative) pulses first, horizontal (Calm / Activated) after. */}
+      <motion.div initial={{ opacity: AXIS_REST }} animate={vAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
-      </div>
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      </motion.div>
+      <motion.div initial={{ opacity: AXIS_REST }} animate={vAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
-      </div>
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      </motion.div>
+      <motion.div initial={{ opacity: AXIS_REST }} animate={hAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
-      </div>
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      </motion.div>
+      <motion.div initial={{ opacity: AXIS_REST }} animate={hAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
-      </div>
+      </motion.div>
 
       {/* Axis position indicators — visible only while dragging */}
       {isRevealed && revealCenter && (
