@@ -298,7 +298,9 @@ export function EmotionField({
   const AXIS_REST = 0.45;   // resting label opacity
   const AXIS_EMPH = 0.75;   // emphasized (welcome / demo) label opacity
   const AXIS_PEAK = 1;      // pulse peak
-  const GLOW_NONE = 'drop-shadow(0 0 0px rgba(201,168,124,0))';
+  // Two-layer none, matching pulseGlow's layer count so framer interpolates cleanly.
+  const GLOW_NONE = 'drop-shadow(0 0 0px rgba(201,168,124,0)) drop-shadow(0 0 0px rgba(201,168,124,0))';
+  const LINE_GLOW_NONE = '0 0 0px 0px rgba(201,168,124,0)';
 
   // The guiding pulse is driven declaratively: two booleans (vertical /
   // horizontal) toggle the labels to their bloomed target, and framer animates
@@ -307,9 +309,15 @@ export function EmotionField({
   const [vPulse, setVPulse] = useState(false);
   const [hPulse, setHPulse] = useState(false);
 
-  // Warm light bloom (drop-shadow) scaled by strength — a bare opacity lift
-  // washes out against the aura, so the glow carries the signal.
-  const pulseGlow = `drop-shadow(0 0 ${Math.round(6 + 16 * tuning.axisPulseStrength)}px rgba(201,168,124,${(0.95 * tuning.axisPulseStrength).toFixed(2)}))`;
+  // Warm light bloom scaled by strength — a bare opacity lift washes out against
+  // the aura, so the glow carries the signal. Two stacked drop-shadows (a tight
+  // core + a wide halo) read far stronger than a single blur.
+  const s = tuning.axisPulseStrength;
+  const pulseGlow =
+    `drop-shadow(0 0 ${Math.round(4 + 12 * s)}px rgba(201,168,124,${Math.min(1, 1.0 * s).toFixed(2)})) ` +
+    `drop-shadow(0 0 ${Math.round(14 + 40 * s)}px rgba(201,168,124,${(0.75 * s).toFixed(2)}))`;
+  // Glow for the thin crosshair lines — box-shadow with spread so a 1px line blooms.
+  const lineGlow = `0 0 ${Math.round(10 + 26 * s)}px ${(1 + 4 * s).toFixed(1)}px rgba(201,168,124,${(0.7 * s).toFixed(2)})`;
 
   // Once emphasis is on and the welcome text has settled (axisPulseDelay), the
   // vertical labels bloom, then — after axisPulseStagger — the horizontal ones.
@@ -343,6 +351,15 @@ export function EmotionField({
     };
   };
 
+  // The crosshair line for an axis glows along with its label pair.
+  const lineAnim = (pulse: boolean) => {
+    const bloom = axisEmphasis && pulse;
+    return {
+      animate: { boxShadow: bloom ? lineGlow : LINE_GLOW_NONE },
+      transition: { duration: bloom ? tuning.axisPulseDuration : tuning.axisFade, ease: 'easeInOut' as const },
+    };
+  };
+
   return (
     <div
       ref={containerRef}
@@ -361,9 +378,10 @@ export function EmotionField({
           beneath every other layer (U4) */}
       <FieldSignal />
 
-      {/* Crosshairs */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+      {/* Crosshairs — each line glows with its axis's label pair: the vertical
+          line with Positive/Negative, the horizontal line with Calm/Activated. */}
+      <motion.div {...lineAnim(vPulse)} style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+      <motion.div {...lineAnim(hPulse)} style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
       {/* Axis labels — opacity + a warm glow carry the emphasis fade and the
           guiding pulse. Colour stays opaque; brightness is the animated opacity.

@@ -59,7 +59,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   axisPulseDelay: 1.1,
   axisPulseStagger: 0.9,
   axisPulseDuration: 1.4,
-  axisPulseStrength: 0.7,
+  axisPulseStrength: 0.9,
 };
 
 const KEY = 'reveal-tuning';
