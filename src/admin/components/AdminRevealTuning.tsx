@@ -6,10 +6,10 @@ import {
   type RevealTuning,
 } from '../../config/revealTuning';
 
-// Live knobs for the radial-fan reveal. Writes to localStorage; the field
-// (open in another tab/window) re-reads on change, so tuning updates the reveal
-// in real time. This edits interaction feel only — it does not touch the
-// vocabulary data, so it is independent of the Save button.
+// Live knobs for interaction feel. Writes to localStorage; the field (open in
+// another tab/window) re-reads on change, so tuning updates in real time. This
+// edits interaction feel only — it does not touch the vocabulary data, so it is
+// independent of the Save button.
 
 interface Knob {
   key: keyof RevealTuning;
@@ -20,7 +20,8 @@ interface Knob {
   fmt?: (v: number) => string;
 }
 
-const KNOBS: Knob[] = [
+// Radial-fan reveal knobs.
+const REVEAL_KNOBS: Knob[] = [
   { key: 'arcScale', label: 'Fan spread', min: 0.4, max: 1.6, step: 0.05, fmt: (v) => `${v.toFixed(2)}×` },
   { key: 'ringBase', label: 'Ring base', min: 20, max: 120, step: 2, fmt: (v) => `${v}px` },
   { key: 'ringGap', label: 'Ring gap', min: 0, max: 80, step: 2, fmt: (v) => `${v}px` },
@@ -28,6 +29,10 @@ const KNOBS: Knob[] = [
   { key: 'staggerStep', label: 'Stagger', min: 0, max: 0.2, step: 0.01, fmt: (v) => `${Math.round(v * 1000)}ms` },
   { key: 'tagCount', label: 'Nearby tags', min: 1, max: 12, step: 1, fmt: (v) => String(v) },
   { key: 'recedeStrength', label: 'Recede', min: 0, max: 1, step: 0.05, fmt: (v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`) },
+];
+
+// Grounding-welcome knobs: the axis emphasis fade and the guiding pulse.
+const WELCOME_KNOBS: Knob[] = [
   { key: 'axisFade', label: 'Axis fade', min: 0.1, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'axisPulseDelay', label: 'Pulse delay', min: 0, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'axisPulseStagger', label: 'Pulse stagger', min: 0, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
@@ -42,6 +47,24 @@ const labelStyle: React.CSSProperties = {
   color: 'var(--oura-text-3)',
 };
 
+const rowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: '10px 22px',
+};
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4, minWidth: 96 }}>
+      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--oura-gold-dim)' }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--oura-text-3)' }}>{subtitle}</div>
+    </div>
+  );
+}
+
 export function AdminRevealTuning() {
   const [tuning, setTuning] = useState<RevealTuning>(loadTuning);
 
@@ -54,90 +77,95 @@ export function AdminRevealTuning() {
   const isDefault = (Object.keys(DEFAULT_TUNING) as Array<keyof RevealTuning>)
     .every((k) => tuning[k] === DEFAULT_TUNING[k]);
 
+  const renderKnob = (k: Knob) => {
+    const value = tuning[k.key] as number;
+    return (
+      <label key={k.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+          <span style={labelStyle}>{k.label}</span>
+          <span style={{ fontSize: 10, color: 'var(--oura-text-1)', fontVariantNumeric: 'tabular-nums' }}>
+            {k.fmt ? k.fmt(value) : String(value)}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={k.min}
+          max={k.max}
+          step={k.step}
+          value={value}
+          onChange={(e) => set({ [k.key]: Number(e.target.value) } as Partial<RevealTuning>)}
+          style={{ width: 118, accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
+        />
+      </label>
+    );
+  };
+
   return (
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '10px 22px',
-        padding: '9px 16px',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '10px 16px',
         borderBottom: '1px solid var(--oura-border)',
         background: 'var(--oura-bg)',
         flexShrink: 0,
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4 }}>
-        <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--oura-gold-dim)' }}>
-          Reveal feel
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--oura-text-3)' }}>
-          open the app in another tab to see it live
-        </div>
+      {/* Reveal feel */}
+      <div style={rowStyle}>
+        <SectionHeader title="Reveal feel" subtitle="open the app in another tab to see it live" />
+
+        {REVEAL_KNOBS.map(renderKnob)}
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={tuning.showTethers}
+            onChange={(e) => set({ showTethers: e.target.checked })}
+            style={{ accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
+          />
+          <span style={labelStyle}>Show tethers</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: tuning.showTethers ? 'pointer' : 'default', opacity: tuning.showTethers ? 1 : 0.4 }}>
+          <input
+            type="checkbox"
+            checked={tuning.keepTethers}
+            disabled={!tuning.showTethers}
+            onChange={(e) => set({ keepTethers: e.target.checked })}
+            style={{ accentColor: 'var(--oura-gold)', cursor: tuning.showTethers ? 'pointer' : 'default' }}
+          />
+          <span style={labelStyle}>Keep tethers</span>
+        </label>
+
+        <button
+          type="button"
+          onClick={() => { setTuning(DEFAULT_TUNING); saveTuning(DEFAULT_TUNING); }}
+          disabled={isDefault}
+          style={{
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            padding: '5px 12px',
+            borderRadius: 5,
+            border: '1px solid var(--oura-border)',
+            background: 'transparent',
+            color: isDefault ? 'var(--oura-text-3)' : 'var(--oura-text-1)',
+            cursor: isDefault ? 'default' : 'pointer',
+            marginLeft: 'auto',
+          }}
+        >
+          Reset all
+        </button>
       </div>
 
-      {KNOBS.map((k) => {
-        const value = tuning[k.key] as number;
-        return (
-          <label key={k.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <span style={labelStyle}>{k.label}</span>
-              <span style={{ fontSize: 10, color: 'var(--oura-text-1)', fontVariantNumeric: 'tabular-nums' }}>
-                {k.fmt ? k.fmt(value) : String(value)}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={k.min}
-              max={k.max}
-              step={k.step}
-              value={value}
-              onChange={(e) => set({ [k.key]: Number(e.target.value) } as Partial<RevealTuning>)}
-              style={{ width: 118, accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
-            />
-          </label>
-        );
-      })}
+      {/* Welcome */}
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--oura-border)', paddingTop: 12 }}>
+        <SectionHeader title="Welcome" subtitle="grounding cue + axis pulse on load" />
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
-        <input
-          type="checkbox"
-          checked={tuning.showTethers}
-          onChange={(e) => set({ showTethers: e.target.checked })}
-          style={{ accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
-        />
-        <span style={labelStyle}>Show tethers</span>
-      </label>
-
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: tuning.showTethers ? 'pointer' : 'default', opacity: tuning.showTethers ? 1 : 0.4 }}>
-        <input
-          type="checkbox"
-          checked={tuning.keepTethers}
-          disabled={!tuning.showTethers}
-          onChange={(e) => set({ keepTethers: e.target.checked })}
-          style={{ accentColor: 'var(--oura-gold)', cursor: tuning.showTethers ? 'pointer' : 'default' }}
-        />
-        <span style={labelStyle}>Keep tethers</span>
-      </label>
-
-      <button
-        type="button"
-        onClick={() => { setTuning(DEFAULT_TUNING); saveTuning(DEFAULT_TUNING); }}
-        disabled={isDefault}
-        style={{
-          fontSize: 10,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          padding: '5px 12px',
-          borderRadius: 5,
-          border: '1px solid var(--oura-border)',
-          background: 'transparent',
-          color: isDefault ? 'var(--oura-text-3)' : 'var(--oura-text-1)',
-          cursor: isDefault ? 'default' : 'pointer',
-        }}
-      >
-        Reset
-      </button>
+        {WELCOME_KNOBS.map(renderKnob)}
+      </div>
     </div>
   );
 }
