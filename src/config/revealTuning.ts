@@ -41,6 +41,8 @@ export interface RevealTuning {
   axisPulseStagger: number;
   /** Seconds for one axis-label pulse to rise and settle back. */
   axisPulseDuration: number;
+  /** How strong the guiding pulse reads: scales its warm glow + brightness. 0 = off. */
+  axisPulseStrength: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -57,6 +59,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   axisPulseDelay: 1.1,
   axisPulseStagger: 0.9,
   axisPulseDuration: 1.4,
+  axisPulseStrength: 0.7,
 };
 
 const KEY = 'reveal-tuning';

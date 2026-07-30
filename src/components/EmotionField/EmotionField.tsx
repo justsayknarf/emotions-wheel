@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
@@ -297,37 +297,51 @@ export function EmotionField({
   const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
   const AXIS_REST = 0.45;   // resting label opacity
   const AXIS_EMPH = 0.75;   // emphasized (welcome / demo) label opacity
-  const AXIS_PEAK = 0.98;   // soft pulse peak
+  const AXIS_PEAK = 1;      // pulse peak
+  const GLOW_NONE = 'drop-shadow(0 0 0px rgba(201,168,124,0))';
 
-  // Two shared controls drive the label pairs: vertical (Positive / Negative)
-  // and horizontal (Calm / Activated). The emphasis fade and the guiding pulse
-  // both run through them, so the pulse always settles back to the live base.
-  const vAxis = useAnimationControls();
-  const hAxis = useAnimationControls();
+  // The guiding pulse is driven declaratively: two booleans (vertical /
+  // horizontal) toggle the labels to their bloomed target, and framer animates
+  // to it. No manual controls — the emphasis fade and the pulse are both just
+  // the label's `animate` target reconciling, so nothing competes.
+  const [vPulse, setVPulse] = useState(false);
+  const [hPulse, setHPulse] = useState(false);
 
-  // Emphasis ↔ resting: a smooth fade both ways (the requested transition out of
-  // the highlighted state), timed by the admin `axisFade` knob.
+  // Warm light bloom (drop-shadow) scaled by strength — a bare opacity lift
+  // washes out against the aura, so the glow carries the signal.
+  const pulseGlow = `drop-shadow(0 0 ${Math.round(6 + 16 * tuning.axisPulseStrength)}px rgba(201,168,124,${(0.95 * tuning.axisPulseStrength).toFixed(2)}))`;
+
+  // Once emphasis is on and the welcome text has settled (axisPulseDelay), the
+  // vertical labels bloom, then — after axisPulseStagger — the horizontal ones.
   useEffect(() => {
-    const base = axisEmphasis ? AXIS_EMPH : AXIS_REST;
-    const t = { duration: tuning.axisFade, ease: 'easeInOut' as const };
-    vAxis.start({ opacity: base, transition: t });
-    hAxis.start({ opacity: base, transition: t });
-  }, [axisEmphasis, tuning.axisFade, vAxis, hAxis]);
-
-  // Guiding pulse: once emphasis is on and the welcome text has had time to
-  // settle (axisPulseDelay), a very soft light pulse rises on the vertical axis
-  // labels, then — after axisPulseStagger — on the horizontal ones. One-shot per
-  // emphasis; cancelled if emphasis clears first.
-  useEffect(() => {
-    if (!axisEmphasis) return;
-    let cancelled = false;
-    const pulse = { opacity: [AXIS_EMPH, AXIS_PEAK, AXIS_EMPH], transition: { duration: tuning.axisPulseDuration, ease: 'easeInOut' as const } };
+    // No timers when not emphasized; the animate target below already forces the
+    // resting look, so a stale pulse flag can't show through.
+    if (!axisEmphasis || tuning.axisPulseStrength <= 0) return;
+    const d = tuning.axisPulseDelay * 1000;
+    const dur = tuning.axisPulseDuration * 1000;
+    const stag = tuning.axisPulseStagger * 1000;
     const timers = [
-      window.setTimeout(() => { if (!cancelled) vAxis.start(pulse); }, tuning.axisPulseDelay * 1000),
-      window.setTimeout(() => { if (!cancelled) hAxis.start(pulse); }, (tuning.axisPulseDelay + tuning.axisPulseStagger) * 1000),
+      window.setTimeout(() => setVPulse(true), d),
+      window.setTimeout(() => setVPulse(false), d + dur),
+      window.setTimeout(() => setHPulse(true), d + stag),
+      window.setTimeout(() => setHPulse(false), d + stag + dur),
     ];
-    return () => { cancelled = true; timers.forEach(clearTimeout); };
-  }, [axisEmphasis, tuning.axisPulseDelay, tuning.axisPulseStagger, tuning.axisPulseDuration, vAxis, hAxis]);
+    return () => timers.forEach(clearTimeout);
+  }, [axisEmphasis, tuning.axisPulseDelay, tuning.axisPulseStagger, tuning.axisPulseDuration, tuning.axisPulseStrength]);
+
+  // Target for an axis-label pair: resting when not emphasized; emphasized, and
+  // bloomed to the peak + glow while its pulse flag is on.
+  const axisAnim = (pulse: boolean) => {
+    const bloom = axisEmphasis && pulse;
+    return {
+      animate: {
+        opacity: axisEmphasis ? (bloom ? AXIS_PEAK : AXIS_EMPH) : AXIS_REST,
+        filter: bloom ? pulseGlow : GLOW_NONE,
+      },
+      // Bloom rises over the pulse length; the emphasis fade (and settle) uses axisFade.
+      transition: { duration: bloom ? tuning.axisPulseDuration : tuning.axisFade, ease: 'easeInOut' as const },
+    };
+  };
 
   return (
     <div
@@ -351,19 +365,19 @@ export function EmotionField({
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
       <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
-      {/* Axis labels — opacity carries both the emphasis fade and the guiding
-          pulse (via vAxis / hAxis controls); colour stays opaque. Vertical pair
-          (Positive / Negative) pulses first, horizontal (Calm / Activated) after. */}
-      <motion.div initial={{ opacity: AXIS_REST }} animate={vAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      {/* Axis labels — opacity + a warm glow carry the emphasis fade and the
+          guiding pulse. Colour stays opaque; brightness is the animated opacity.
+          Vertical pair (Positive / Negative) blooms first, horizontal after. */}
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST }} animate={vAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST }} animate={hAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST }} animate={hAxis} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
       </motion.div>
 
