@@ -298,8 +298,13 @@ export function EmotionField({
   const AXIS_REST = 0.45;   // resting label opacity
   const AXIS_EMPH = 0.75;   // emphasized (welcome / demo) label opacity
   const AXIS_PEAK = 1;      // pulse peak
-  // Two-layer none, matching pulseGlow's layer count so framer interpolates cleanly.
-  const GLOW_NONE = 'drop-shadow(0 0 0px rgba(201,168,124,0)) drop-shadow(0 0 0px rgba(201,168,124,0))';
+  const AXIS_SIZE = 9;      // resting label font-size (px)
+  const AXIS_SIZE_PEAK = 11; // label grows slightly at the pulse peak
+  // Font-size is animated instead of scale so the labels' positioning
+  // transforms (translate / rotate) are left untouched.
+  // Single-layer drop-shadow — framer can't reliably interpolate a multi-layer
+  // filter string, and doing so silently freezes the whole label animation.
+  const GLOW_NONE = 'drop-shadow(0 0 0px rgba(201,168,124,0))';
   const LINE_GLOW_NONE = '0 0 0px 0px rgba(201,168,124,0)';
 
   // The guiding pulse is driven declaratively: two booleans (vertical /
@@ -313,9 +318,7 @@ export function EmotionField({
   // the aura, so the glow carries the signal. Two stacked drop-shadows (a tight
   // core + a wide halo) read far stronger than a single blur.
   const s = tuning.axisPulseStrength;
-  const pulseGlow =
-    `drop-shadow(0 0 ${Math.round(4 + 12 * s)}px rgba(201,168,124,${Math.min(1, 1.0 * s).toFixed(2)})) ` +
-    `drop-shadow(0 0 ${Math.round(14 + 40 * s)}px rgba(201,168,124,${(0.75 * s).toFixed(2)}))`;
+  const pulseGlow = `drop-shadow(0 0 ${Math.round(10 + 34 * s)}px rgba(201,168,124,${Math.min(1, 1.05 * s).toFixed(2)}))`;
   // Glow for the thin crosshair lines — box-shadow with spread so a 1px line blooms.
   const lineGlow = `0 0 ${Math.round(10 + 26 * s)}px ${(1 + 4 * s).toFixed(1)}px rgba(201,168,124,${(0.7 * s).toFixed(2)})`;
 
@@ -345,6 +348,7 @@ export function EmotionField({
       animate: {
         opacity: axisEmphasis ? (bloom ? AXIS_PEAK : AXIS_EMPH) : AXIS_REST,
         filter: bloom ? pulseGlow : GLOW_NONE,
+        fontSize: bloom ? AXIS_SIZE_PEAK : AXIS_SIZE,
       },
       // Bloom rises over the pulse length; the emphasis fade (and settle) uses axisFade.
       transition: { duration: bloom ? tuning.axisPulseDuration : tuning.axisFade, ease: 'easeInOut' as const },
@@ -386,16 +390,16 @@ export function EmotionField({
       {/* Axis labels — opacity + a warm glow carry the emphasis fade and the
           guiding pulse. Colour stays opaque; brightness is the animated opacity.
           Vertical pair (Positive / Negative) blooms first, horizontal after. */}
-      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE, fontSize: AXIS_SIZE }} {...axisAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE, fontSize: AXIS_SIZE }} {...axisAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE, fontSize: AXIS_SIZE }} {...axisAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE }} {...axisAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      <motion.div initial={{ opacity: AXIS_REST, filter: GLOW_NONE, fontSize: AXIS_SIZE }} {...axisAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
       </motion.div>
 
