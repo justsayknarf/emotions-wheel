@@ -77,6 +77,9 @@ export default function App() {
   const railScrollRef = useRef<HTMLDivElement>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
+  // Mobile returning-mirror tray: collapsed by default so the field stays
+  // pinnable on load; the peek handle expands it.
+  const [mirrorExpanded, setMirrorExpanded] = useState(false);
   // Bumped only on a pin drop so the tether re-runs its draw-in; plain card
   // clicks change the pin without a key change, so they reposition instantly.
   const [tetherKey, setTetherKey] = useState(0);
@@ -159,6 +162,17 @@ export default function App() {
   const lastCoord = hasHistory ? entries[entries.length - 1].pins.at(-1) ?? null : null;
   const showMirror = view === 'field' && pins.length === 0 && hasHistory;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
+
+  // Every time the mirror re-appears (fresh load, or returning to the field from
+  // history with a previously-expanded tray) start it collapsed, so an expanded
+  // tray never carries over and re-covers the field on a new landing. Done as a
+  // render-phase adjustment (React's store-previous pattern) rather than an
+  // effect, so it settles before paint and never flashes expanded.
+  const [mirrorWasShown, setMirrorWasShown] = useState(false);
+  if (showMirror !== mirrorWasShown) {
+    setMirrorWasShown(showMirror);
+    if (showMirror && mirrorExpanded) setMirrorExpanded(false);
+  }
   // Resolve the stored selection at render, falling back to the newest pin when
   // the selected card was removed (or none exists) — so the tether never
   // dangles and no effect is needed to reconcile state.
@@ -287,7 +301,20 @@ export default function App() {
 
       {/* EmotionField always mounted — single instance, no gesture state issues.
           Sized to the left plane on desktop; full-bleed on mobile. */}
-      <div ref={fieldPlaneRef} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: fieldWidth, zIndex: 2 }}>
+      <div
+        ref={fieldPlaneRef}
+        style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: fieldWidth, zIndex: 2 }}
+        onPointerDownCapture={(e) => {
+          // While the mirror tray is expanded, a press on the field dismisses it
+          // rather than dropping a pin: consume the event (capture-phase stop) so
+          // it never reaches EmotionField's synthetic pointer handlers, so no
+          // gesture starts and no pin is created. Inert while collapsed.
+          if (mirrorExpanded) {
+            setMirrorExpanded(false);
+            e.stopPropagation();
+          }
+        }}
+      >
         <EmotionField
           pins={pins}
           highlightedIds={highlightedIds}
@@ -361,6 +388,8 @@ export default function App() {
                 entry={entries[entries.length - 1]}
                 entries={entries}
                 variant={sideBySide ? 'rail' : 'sheet'}
+                expanded={mirrorExpanded}
+                onToggle={() => setMirrorExpanded((v) => !v)}
               />
             )}
           </AnimatePresence>
