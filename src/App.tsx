@@ -11,6 +11,8 @@ import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
 import { MirrorCard } from './components/EmotionMirror/MirrorCard';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
+import { WelcomeOverlay } from './components/Welcome/WelcomeOverlay';
+import { nextCue } from './data/groundingCues';
 import { ConstellationReplay } from './components/Constellation/ConstellationReplay';
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
@@ -18,6 +20,14 @@ import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import type { AppView, DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
+
+// Grounding welcome message: how long the cue holds before it dissolves on its
+// own, and the two exit speeds — a slow calm fade when it auto-dissolves, snappy
+// when a touch skips it so a quick check-in never feels held up. This is the
+// message only; the axis pulse runs on its own separate lifecycle.
+const WELCOME_HOLD_MS = 4000;
+const WELCOME_EXIT_CALM = 2.2;
+const WELCOME_EXIT_SNAP = 0.35;
 
 // Shared style for the field-level header pills (history, replay). Each button
 // adds its own edge anchor (left / right).
@@ -71,6 +81,20 @@ export default function App() {
   // clicks change the pin without a key change, so they reposition instantly.
   const [tetherKey, setTetherKey] = useState(0);
 
+  // Grounding welcome: a cue shown at the start of each check-in. `nonce` lets
+  // the auto-dissolve timer restart when a new check-in re-opens the welcome
+  // even if it was already showing. `fast` selects the snappy exit on skip.
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [welcomeCue, setWelcomeCue] = useState(() => nextCue().cue);
+  const [welcomeFast, setWelcomeFast] = useState(false);
+  const [welcomeNonce, setWelcomeNonce] = useState(0);
+
+  // The axis pulse is a separate lifecycle from the welcome message: it begins
+  // at the same moment but holds the axis emphasis until its own sequence (the
+  // two axes, one after the other) has finished, then releases independently.
+  const [axisPulseOn, setAxisPulseOn] = useState(true);
+  const [axisPulseNonce, setAxisPulseNonce] = useState(0);
+
   const { entries, record } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
@@ -81,6 +105,46 @@ export default function App() {
   useEffect(() => {
     sessionStartRef.current = Date.now();
   }, []);
+
+  // Tear down the welcome message. `fast` picks the snappy exit (a touch skipped
+  // it); the slow calm exit is the default (auto-dissolve). Harmless if gone.
+  const dismissWelcome = useCallback((fast: boolean) => {
+    setWelcomeFast(fast);
+    setShowWelcome(false);
+  }, []);
+
+  // Release the axis emphasis; the axes then fade out on their own (axisFade).
+  const endAxisPulse = useCallback(() => setAxisPulseOn(false), []);
+
+  // Begin a check-in intro: the grounding cue and the axis pulse start together
+  // (fresh cue, both re-armed via their nonces) but dissolve independently.
+  const beginIntro = useCallback(() => {
+    setWelcomeCue(nextCue().cue);
+    setWelcomeFast(false);
+    setShowWelcome(true);
+    setWelcomeNonce((n) => n + 1);
+    setAxisPulseOn(true);
+    setAxisPulseNonce((n) => n + 1);
+  }, []);
+
+  // Welcome message auto-dissolves on its own hold — independent of the axes.
+  useEffect(() => {
+    if (!showWelcome) return;
+    const t = window.setTimeout(() => dismissWelcome(false), WELCOME_HOLD_MS);
+    return () => window.clearTimeout(t);
+  }, [showWelcome, welcomeNonce, dismissWelcome]);
+
+  // Axis pulse holds emphasis until its full sequence (vertical, then horizontal
+  // after the stagger) has run plus a short settle, then releases — separate
+  // from the welcome message, and re-derived as the pulse knobs are tuned.
+  useEffect(() => {
+    if (!axisPulseOn) return;
+    const span = tuning.axisPulseStrength > 0
+      ? (tuning.axisPulseDelay + tuning.axisPulseStagger + tuning.axisPulseDuration + 0.6) * 1000
+      : WELCOME_HOLD_MS;
+    const t = window.setTimeout(() => setAxisPulseOn(false), span);
+    return () => window.clearTimeout(t);
+  }, [axisPulseOn, axisPulseNonce, tuning.axisPulseStrength, tuning.axisPulseDelay, tuning.axisPulseStagger, tuning.axisPulseDuration]);
 
   // On desktop the field occupies a left plane and the tray a right rail;
   // keep the two flush by sizing the field to the remaining width.
@@ -168,7 +232,8 @@ export default function App() {
     setLastEntry(null);
     sessionStartRef.current = Date.now();
     setView('field');
-  }, []);
+    beginIntro();
+  }, [beginIntro]);
 
   const handleFirstInteraction = useCallback(() => {
     markInteracted();
@@ -179,6 +244,13 @@ export default function App() {
     <div
       style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--oura-bg)' }}
       onPointerDownCapture={(e) => {
+        // Any touch in the field view skips the welcome (snappy exit); the
+        // overlay is pointerEvents:none, so the touch still reaches the field.
+        // A touch begins the check-in — end both the message and the axis pulse.
+        if (view === 'field' && (showWelcome || axisPulseOn)) {
+          if (showWelcome) dismissWelcome(true);
+          endAxisPulse();
+        }
         if (view === 'field' && entries.length > 0) {
           swipeStartRef.current = { x: e.clientX, y: e.clientY };
         }
@@ -222,15 +294,28 @@ export default function App() {
           onPinRelease={handlePinRelease}
           onFirstInteraction={handleFirstInteraction}
           hasInteracted={hasInteracted}
-          axisEmphasis={showDemo}
+          axisEmphasis={showDemo || axisPulseOn}
           ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
           emphasizedPinId={effectiveSelectedPinId}
         />
       </div>
 
-      {/* Field-only chrome: hint + drawer + history button */}
+      {/* Field-only chrome: welcome + hint + drawer + history button */}
       {view === 'field' && (
         <>
+          {/* Grounding welcome — layered above the first-run hint/demo (its own
+              zIndex) so on first run it reads as welcome → demo → field. */}
+          <AnimatePresence>
+            {showWelcome && (
+              <WelcomeOverlay
+                key="welcome"
+                cue={welcomeCue}
+                fieldCenterLeft={fieldCenterLeft}
+                exitDuration={welcomeFast ? WELCOME_EXIT_SNAP : WELCOME_EXIT_CALM}
+              />
+            )}
+          </AnimatePresence>
+
           <AnimatePresence>
             {showHint && (
               <div

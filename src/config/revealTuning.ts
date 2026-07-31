@@ -30,6 +30,19 @@ export interface RevealTuning {
    * lost. Applied to revealed deep words only; surface landmarks stay put.
    */
   recedeStrength: number;
+  /** Seconds for the axis emphasis to fade in/out (highlight ↔ resting). */
+  axisFade: number;
+  /**
+   * Seconds after the axis emphasis begins (i.e. after the welcome text is
+   * fully visible) before the guiding pulse starts on the vertical axis.
+   */
+  axisPulseDelay: number;
+  /** Seconds between the vertical-axis pulse and the horizontal-axis pulse. */
+  axisPulseStagger: number;
+  /** Seconds for one axis-label pulse to rise and settle back. */
+  axisPulseDuration: number;
+  /** How strong the guiding pulse reads: scales its warm glow + brightness. 0 = off. */
+  axisPulseStrength: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -42,6 +55,11 @@ export const DEFAULT_TUNING: RevealTuning = {
   keepTethers: false,
   tagCount: 6,
   recedeStrength: 0.55,
+  axisFade: 1.2,
+  axisPulseDelay: 1.1,
+  axisPulseStagger: 1.0,
+  axisPulseDuration: 2.2,
+  axisPulseStrength: 0.025,
 };
 
 const KEY = 'reveal-tuning';

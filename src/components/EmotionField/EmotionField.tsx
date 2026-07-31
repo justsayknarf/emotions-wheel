@@ -11,6 +11,7 @@ import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
 import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
+import { AxisRadiance } from './AxisRadiance';
 import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 
@@ -30,6 +31,10 @@ const AXIS_LABEL: React.CSSProperties = {
   textTransform: 'uppercase',
   whiteSpace: 'nowrap',
 };
+
+// Opaque bone — brightness is carried by the element's animated opacity, not the
+// colour alpha, so the labels can pulse above their emphasized level.
+const AXIS_TEXT = 'rgb(237,232,223)';
 
 // Partition once at module load — emotions array is a static import constant
 const surfaceEmotions = emotions.filter(e => e.depth === 'surface');
@@ -287,10 +292,26 @@ export function EmotionField({
     return raw.map(({ seg }, i) => ({ ...seg, delay: i * tuning.staggerStep }));
   }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height, tuning]);
 
-  // Axes read legibly at rest (well above the old 0.04 crosshair) and brighten
-  // further while the demo runs.
+  // Axes read legibly at rest and brighten (emphasis) while the intro runs.
   const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
-  const axisLabelColor = axisEmphasis ? 'rgba(237,232,223,0.75)' : 'rgba(237,232,223,0.45)';
+  const AXIS_REST = 0.45;    // resting label opacity
+  const AXIS_EMPH = 0.75;    // emphasized label opacity
+
+  // The guiding light (AxisRadiance) replays each time emphasis rises. `play` is
+  // a rising-edge nonce of axisEmphasis; it starts at 1 so the light also runs
+  // on the first intro.
+  const [play, setPlay] = useState(1);
+  const prevEmph = useRef(axisEmphasis);
+  useEffect(() => {
+    if (axisEmphasis && !prevEmph.current) setPlay((p) => p + 1);
+    prevEmph.current = axisEmphasis;
+  }, [axisEmphasis]);
+
+  // Labels brighten with emphasis; the radiating light does the guiding.
+  const labelAnim = {
+    animate: { opacity: axisEmphasis ? AXIS_EMPH : AXIS_REST },
+    transition: { duration: tuning.axisFade, ease: 'easeInOut' as const },
+  };
 
   return (
     <div
@@ -310,23 +331,34 @@ export function EmotionField({
           beneath every other layer (U4) */}
       <FieldSignal />
 
-      {/* Crosshairs */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: 'background 0.6s ease' }} />
+      {/* Crosshairs — the resting axis lines (emphasis brightens their colour). */}
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
-      {/* Axis labels */}
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      {/* Radiating light — a soft glow pulses from the centre out to the labels
+          (vertical pair first, then horizontal), drawn as an additive canvas
+          trail so it reads as continuous light rather than dots. */}
+      <AxisRadiance
+        play={play}
+        delay={tuning.axisPulseDelay}
+        stagger={tuning.axisPulseStagger}
+        duration={tuning.axisPulseDuration}
+        strength={tuning.axisPulseStrength}
+      />
+
+      {/* Axis labels — brighten with emphasis. */}
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
-      </div>
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      </motion.div>
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
-      </div>
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      </motion.div>
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
-      </div>
-      <div style={{ ...AXIS_LABEL, color: axisLabelColor, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      </motion.div>
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
-      </div>
+      </motion.div>
 
       {/* Axis position indicators — visible only while dragging */}
       {isRevealed && revealCenter && (
