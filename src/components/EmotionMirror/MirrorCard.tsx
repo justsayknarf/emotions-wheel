@@ -17,6 +17,12 @@ interface Props {
   onToggle?: () => void;
 }
 
+// Collapsed mobile peek geometry, shared with App so the field can end exactly
+// at the top of the peek. The collapsed tray height is PEEK_BAR_HEIGHT (the
+// handle button) plus PEEK_SAFE_PAD (the tray's safe-area bottom padding).
+export const PEEK_BAR_HEIGHT = 52;
+export const PEEK_SAFE_PAD = 'max(8px, env(safe-area-inset-bottom))';
+
 const MICRO_LABEL: React.CSSProperties = {
   fontSize: 8.5,
   fontWeight: 500,
@@ -124,7 +130,7 @@ export function MirrorCard({ entry, entries, variant, expanded = false, onToggle
         right: 0,
         borderTop: '1px solid var(--oura-border)',
         borderRadius: '16px 16px 0 0',
-        paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+        paddingBottom: PEEK_SAFE_PAD,
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -136,10 +142,11 @@ export function MirrorCard({ entry, entries, variant, expanded = false, onToggle
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          justifyContent: 'center',
+          gap: 7,
           width: '100%',
-          minHeight: 44,
-          padding: '10px 18px 8px',
+          height: PEEK_BAR_HEIGHT,
+          padding: '0 18px',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',

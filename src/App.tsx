@@ -9,7 +9,7 @@ import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDr
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
-import { MirrorCard } from './components/EmotionMirror/MirrorCard';
+import { MirrorCard, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionMirror/MirrorCard';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
 import { WelcomeOverlay } from './components/Welcome/WelcomeOverlay';
 import { nextCue } from './data/groundingCues';
@@ -163,6 +163,14 @@ export default function App() {
   const showMirror = view === 'field' && pins.length === 0 && hasHistory;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
 
+  // On mobile, when the returning mirror is docked, end the field at the top of
+  // the collapsed peek so the peek never overlaps the field. (On desktop the tray
+  // is a side rail, already handled by fieldWidth.) The field re-layouts into the
+  // shorter area, so no words or pins hide behind the peek.
+  const fieldBottom = !sideBySide && showMirror
+    ? `calc(${PEEK_BAR_HEIGHT}px + ${PEEK_SAFE_PAD})`
+    : 0;
+
   // Every time the mirror re-appears (fresh load, or returning to the field from
   // history with a previously-expanded tray) start it collapsed, so an expanded
   // tray never carries over and re-covers the field on a new landing. Done as a
@@ -303,7 +311,7 @@ export default function App() {
           Sized to the left plane on desktop; full-bleed on mobile. */}
       <div
         ref={fieldPlaneRef}
-        style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: fieldWidth, zIndex: 2 }}
+        style={{ position: 'absolute', top: 0, bottom: fieldBottom, left: 0, width: fieldWidth, zIndex: 2 }}
         onPointerDownCapture={(e) => {
           // While the mirror tray is expanded, a press on the field dismisses it
           // rather than dropping a pin: consume the event (capture-phase stop) so
