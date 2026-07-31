@@ -305,17 +305,20 @@ export function EmotionField({
   const vBloom = axisEmphasis && vPulse;
   const hBloom = axisEmphasis && hPulse;
 
-  // The travelling aura — a blurred gold radial blob, intensity scaled by strength.
+  // A small soft dot; a staggered line of these forms a travelling pulse that
+  // leaves a fading trail — not one big sweeping spotlight. Intensity scales
+  // with strength.
   const s = tuning.axisPulseStrength;
-  const SPARK = 150; // px — diameter of the soft aura
-  const sparkStyle: React.CSSProperties = {
+  const DOT = 24;       // px — small aura radius
+  const TRAIL_N = 7;    // dots per ray, centre → label
+  const dotStyle: React.CSSProperties = {
     position: 'absolute',
-    width: SPARK,
-    height: SPARK,
-    marginLeft: -SPARK / 2,
-    marginTop: -SPARK / 2,
+    width: DOT,
+    height: DOT,
+    marginLeft: -DOT / 2,
+    marginTop: -DOT / 2,
     borderRadius: '50%',
-    background: `radial-gradient(circle, rgba(201,168,124,${(0.8 * s).toFixed(2)}) 0%, rgba(201,168,124,${(0.34 * s).toFixed(2)}) 40%, rgba(201,168,124,0) 72%)`,
+    background: `radial-gradient(circle, rgba(201,168,124,${(0.85 * s).toFixed(2)}) 0%, rgba(201,168,124,0) 66%)`,
     filter: 'blur(2px)',
     pointerEvents: 'none',
     zIndex: 2,
@@ -347,6 +350,32 @@ export function EmotionField({
     };
   };
 
+  // A line of dots from the centre out to a label. They light in sequence (delay
+  // grows with distance) and each fades slowly, so earlier ones are still
+  // dissolving as later ones ignite — a soft pulse that travels and trails.
+  const renderTrail = (axis: 'up' | 'down' | 'left' | 'right', on: boolean) => {
+    const vertical = axis === 'up' || axis === 'down';
+    const sign = axis === 'up' || axis === 'left' ? -1 : 1;
+    const dur = tuning.axisPulseDuration;
+    return Array.from({ length: TRAIL_N }, (_, i) => {
+      const f = (i + 1) / TRAIL_N;               // 0 → 1, centre → label
+      const pos = `${50 + sign * f * 44}%`;
+      const dotPos = vertical ? { left: '50%', top: pos } : { top: '50%', left: pos };
+      return (
+        <motion.div
+          key={`${axis}-${i}`}
+          aria-hidden
+          style={{ ...dotStyle, ...dotPos }}
+          initial={{ opacity: 0 }}
+          animate={on ? { opacity: [0, 1, 0] } : { opacity: 0 }}
+          transition={on
+            ? { duration: dur * 0.5, delay: f * dur * 0.45, times: [0, 0.22, 1], ease: 'easeOut' }
+            : { duration: 0.25 }}
+        />
+      );
+    });
+  };
+
   return (
     <div
       ref={containerRef}
@@ -369,29 +398,14 @@ export function EmotionField({
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
       <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
-      {/* Radiating light — a soft aura travels from the centre out to each label:
-          the vertical pair (Positive up / Negative down) first, then the
-          horizontal pair (Calm left / Activated right) after the stagger. */}
-      <motion.div aria-hidden style={{ ...sparkStyle, left: '50%' }}
-        initial={{ top: '50%', opacity: 0 }}
-        animate={vBloom ? { top: ['50%', '4%'], opacity: [0, 1, 0] } : { top: '50%', opacity: 0 }}
-        transition={{ duration: vBloom ? tuning.axisPulseDuration : 0.3, ease: 'easeOut' }}
-      />
-      <motion.div aria-hidden style={{ ...sparkStyle, left: '50%' }}
-        initial={{ top: '50%', opacity: 0 }}
-        animate={vBloom ? { top: ['50%', '96%'], opacity: [0, 1, 0] } : { top: '50%', opacity: 0 }}
-        transition={{ duration: vBloom ? tuning.axisPulseDuration : 0.3, ease: 'easeOut' }}
-      />
-      <motion.div aria-hidden style={{ ...sparkStyle, top: '50%' }}
-        initial={{ left: '50%', opacity: 0 }}
-        animate={hBloom ? { left: ['50%', '4%'], opacity: [0, 1, 0] } : { left: '50%', opacity: 0 }}
-        transition={{ duration: hBloom ? tuning.axisPulseDuration : 0.3, ease: 'easeOut' }}
-      />
-      <motion.div aria-hidden style={{ ...sparkStyle, top: '50%' }}
-        initial={{ left: '50%', opacity: 0 }}
-        animate={hBloom ? { left: ['50%', '96%'], opacity: [0, 1, 0] } : { left: '50%', opacity: 0 }}
-        transition={{ duration: hBloom ? tuning.axisPulseDuration : 0.3, ease: 'easeOut' }}
-      />
+      {/* Radiating light — a soft pulse travels from the centre out to each label
+          as a trail of dots that ignite in sequence and linger: the vertical
+          pair (Positive up / Negative down) first, then the horizontal pair
+          (Calm left / Activated right) after the stagger. */}
+      {renderTrail('up', vBloom)}
+      {renderTrail('down', vBloom)}
+      {renderTrail('left', hBloom)}
+      {renderTrail('right', hBloom)}
 
       {/* Axis labels — brighten with emphasis, plus a brief lift as the light
           arrives at each pair. */}
