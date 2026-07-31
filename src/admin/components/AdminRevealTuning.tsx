@@ -37,7 +37,7 @@ const WELCOME_KNOBS: Knob[] = [
   { key: 'axisPulseDelay', label: 'Pulse delay', min: 0, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'axisPulseStagger', label: 'Pulse stagger', min: 0, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'axisPulseDuration', label: 'Pulse length', min: 0.4, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
-  { key: 'axisPulseStrength', label: 'Pulse strength', min: 0, max: 1, step: 0.05, fmt: (v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`) },
+  { key: 'axisPulseStrength', label: 'Pulse strength', min: 0, max: 1, step: 0.025, fmt: (v) => (v === 0 ? 'off' : `${+(v * 100).toFixed(1)}%`) },
 ];
 
 const labelStyle: React.CSSProperties = {
