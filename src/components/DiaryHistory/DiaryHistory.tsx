@@ -7,6 +7,7 @@ import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { SessionDetailCard } from './SessionDetailCard';
 import { sessionsForDay } from '../../utils/diaryAggregation';
+import { downloadDiaryCsv } from '../../utils/diaryCsv';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -103,6 +104,27 @@ export function DiaryHistory({ entries, onBack }: Props) {
         }}>
           Check-in history
         </h1>
+        {entries.length > 0 && (
+          <button
+            onClick={() => downloadDiaryCsv(entries)}
+            title="Download all check-ins as a CSV file"
+            style={{
+              marginLeft: 'auto',
+              background: 'none',
+              border: '1px solid var(--oura-border)',
+              borderRadius: 6,
+              color: 'var(--oura-gold-dim)',
+              fontSize: 9,
+              fontWeight: 500,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              padding: '6px 12px',
+              cursor: 'pointer',
+            }}
+          >
+            Export CSV
+          </button>
+        )}
       </div>
 
       {/* Tab bar */}
