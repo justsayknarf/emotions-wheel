@@ -115,12 +115,19 @@ export default function App() {
     setWelcomeNonce((n) => n + 1);
   }, []);
 
-  // Auto-dissolve after the hold. Re-arms on each (re)open via the nonce.
+  // Auto-dissolve after the hold. The hold stretches to contain the full axis
+  // pulse (vertical, then horizontal after the stagger) plus a short settle, so
+  // the guiding pulse always completes before the welcome clears — even as the
+  // pulse timings are tuned. Re-arms on each (re)open via the nonce.
   useEffect(() => {
     if (!showWelcome) return;
-    const t = window.setTimeout(() => dismissWelcome(false), WELCOME_HOLD_MS);
+    const pulseSpan = tuning.axisPulseStrength > 0
+      ? (tuning.axisPulseDelay + tuning.axisPulseStagger + tuning.axisPulseDuration + 0.5) * 1000
+      : 0;
+    const hold = Math.max(WELCOME_HOLD_MS, pulseSpan);
+    const t = window.setTimeout(() => dismissWelcome(false), hold);
     return () => window.clearTimeout(t);
-  }, [showWelcome, welcomeNonce, dismissWelcome]);
+  }, [showWelcome, welcomeNonce, dismissWelcome, tuning.axisPulseStrength, tuning.axisPulseDelay, tuning.axisPulseStagger, tuning.axisPulseDuration]);
 
   // On desktop the field occupies a left plane and the tray a right rail;
   // keep the two flush by sizing the field to the remaining width.
