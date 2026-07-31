@@ -45,7 +45,7 @@ export const LABEL_STANDOFF = 11;
 // neutral sans for reading data; this surface is for *recording* a feeling, so
 // it wants a softer, more human voice. Falls back through the common Palatino
 // aliases to a generic serif.
-const FIELD_FONT = "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
+export const FIELD_FONT = "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
 export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0 }: Props) {
   const left = (toPercent(emotion.x) / 100) * containerWidth;
