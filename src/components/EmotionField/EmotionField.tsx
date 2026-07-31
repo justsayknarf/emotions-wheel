@@ -11,6 +11,7 @@ import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
 import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
+import { AxisRadiance } from './AxisRadiance';
 import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 
@@ -295,85 +296,21 @@ export function EmotionField({
   const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
   const AXIS_REST = 0.45;    // resting label opacity
   const AXIS_EMPH = 0.75;    // emphasized label opacity
-  const AXIS_ARRIVE = 0.95;  // brief brighten as the radiating light reaches a label
 
-  // The guiding gesture: a soft light radiates from the field centre out along
-  // each axis to its labels — the vertical pair first, then the horizontal pair
-  // after the stagger. Two booleans time the two legs.
-  const [vPulse, setVPulse] = useState(false);
-  const [hPulse, setHPulse] = useState(false);
-  const vBloom = axisEmphasis && vPulse;
-  const hBloom = axisEmphasis && hPulse;
-
-  // A small soft dot; a staggered line of these forms a travelling pulse that
-  // leaves a fading trail — not one big sweeping spotlight. Intensity scales
-  // with strength.
-  const s = tuning.axisPulseStrength;
-  const DOT = 24;       // px — small aura radius
-  const TRAIL_N = 7;    // dots per ray, centre → label
-  const dotStyle: React.CSSProperties = {
-    position: 'absolute',
-    width: DOT,
-    height: DOT,
-    marginLeft: -DOT / 2,
-    marginTop: -DOT / 2,
-    borderRadius: '50%',
-    background: `radial-gradient(circle, rgba(201,168,124,${(0.85 * s).toFixed(2)}) 0%, rgba(201,168,124,0) 66%)`,
-    filter: 'blur(2px)',
-    pointerEvents: 'none',
-    zIndex: 2,
-  };
-
-  // Once emphasis is on and the welcome text has settled (axisPulseDelay), the
-  // vertical light radiates, then — after axisPulseStagger — the horizontal one.
+  // The guiding light (AxisRadiance) replays each time emphasis rises. `play` is
+  // a rising-edge nonce of axisEmphasis; it starts at 1 so the light also runs
+  // on the first intro.
+  const [play, setPlay] = useState(1);
+  const prevEmph = useRef(axisEmphasis);
   useEffect(() => {
-    if (!axisEmphasis || tuning.axisPulseStrength <= 0) return;
-    const d = tuning.axisPulseDelay * 1000;
-    const dur = tuning.axisPulseDuration * 1000;
-    const stag = tuning.axisPulseStagger * 1000;
-    const timers = [
-      window.setTimeout(() => setVPulse(true), d),
-      window.setTimeout(() => setVPulse(false), d + dur),
-      window.setTimeout(() => setHPulse(true), d + stag),
-      window.setTimeout(() => setHPulse(false), d + stag + dur),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [axisEmphasis, tuning.axisPulseDelay, tuning.axisPulseStagger, tuning.axisPulseDuration, tuning.axisPulseStrength]);
+    if (axisEmphasis && !prevEmph.current) setPlay((p) => p + 1);
+    prevEmph.current = axisEmphasis;
+  }, [axisEmphasis]);
 
-  // Label emphasis: rest → emphasized while the intro runs, with a brief extra
-  // brighten as its axis's light arrives.
-  const labelAnim = (pulse: boolean) => {
-    const arrive = axisEmphasis && pulse;
-    return {
-      animate: { opacity: axisEmphasis ? (arrive ? AXIS_ARRIVE : AXIS_EMPH) : AXIS_REST },
-      transition: { duration: arrive ? tuning.axisPulseDuration : tuning.axisFade, ease: 'easeInOut' as const },
-    };
-  };
-
-  // A line of dots from the centre out to a label. They light in sequence (delay
-  // grows with distance) and each fades slowly, so earlier ones are still
-  // dissolving as later ones ignite — a soft pulse that travels and trails.
-  const renderTrail = (axis: 'up' | 'down' | 'left' | 'right', on: boolean) => {
-    const vertical = axis === 'up' || axis === 'down';
-    const sign = axis === 'up' || axis === 'left' ? -1 : 1;
-    const dur = tuning.axisPulseDuration;
-    return Array.from({ length: TRAIL_N }, (_, i) => {
-      const f = (i + 1) / TRAIL_N;               // 0 → 1, centre → label
-      const pos = `${50 + sign * f * 44}%`;
-      const dotPos = vertical ? { left: '50%', top: pos } : { top: '50%', left: pos };
-      return (
-        <motion.div
-          key={`${axis}-${i}`}
-          aria-hidden
-          style={{ ...dotStyle, ...dotPos }}
-          initial={{ opacity: 0 }}
-          animate={on ? { opacity: [0, 1, 0] } : { opacity: 0 }}
-          transition={on
-            ? { duration: dur * 0.5, delay: f * dur * 0.45, times: [0, 0.22, 1], ease: 'easeOut' }
-            : { duration: 0.25 }}
-        />
-      );
-    });
+  // Labels brighten with emphasis; the radiating light does the guiding.
+  const labelAnim = {
+    animate: { opacity: axisEmphasis ? AXIS_EMPH : AXIS_REST },
+    transition: { duration: tuning.axisFade, ease: 'easeInOut' as const },
   };
 
   return (
@@ -398,27 +335,28 @@ export function EmotionField({
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
       <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
-      {/* Radiating light — a soft pulse travels from the centre out to each label
-          as a trail of dots that ignite in sequence and linger: the vertical
-          pair (Positive up / Negative down) first, then the horizontal pair
-          (Calm left / Activated right) after the stagger. */}
-      {renderTrail('up', vBloom)}
-      {renderTrail('down', vBloom)}
-      {renderTrail('left', hBloom)}
-      {renderTrail('right', hBloom)}
+      {/* Radiating light — a soft glow pulses from the centre out to the labels
+          (vertical pair first, then horizontal), drawn as an additive canvas
+          trail so it reads as continuous light rather than dots. */}
+      <AxisRadiance
+        play={play}
+        delay={tuning.axisPulseDelay}
+        stagger={tuning.axisPulseStagger}
+        duration={tuning.axisPulseDuration}
+        strength={tuning.axisPulseStrength}
+      />
 
-      {/* Axis labels — brighten with emphasis, plus a brief lift as the light
-          arrives at each pair. */}
-      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      {/* Axis labels — brighten with emphasis. */}
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, top: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Positive
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim(vPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>
         Negative
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>
         Calm
       </motion.div>
-      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim(hPulse)} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
+      <motion.div initial={{ opacity: AXIS_REST }} {...labelAnim} style={{ ...AXIS_LABEL, color: AXIS_TEXT, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>
         Activated
       </motion.div>
 
