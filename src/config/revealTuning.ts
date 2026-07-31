@@ -55,10 +55,10 @@ export const DEFAULT_TUNING: RevealTuning = {
   keepTethers: false,
   tagCount: 6,
   recedeStrength: 0.55,
-  axisFade: 0.6,
+  axisFade: 1.2,
   axisPulseDelay: 1.1,
-  axisPulseStagger: 0.9,
-  axisPulseDuration: 1.4,
+  axisPulseStagger: 1.0,
+  axisPulseDuration: 2.2,
   axisPulseStrength: 0.9,
 };
 
