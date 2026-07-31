@@ -72,7 +72,6 @@ export default function App() {
   const [pins, setPins] = useState<PinEntry[]>([]);
   const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
   const sessionStartRef = useRef<number>(0);
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const railScrollRef = useRef<HTMLDivElement>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
@@ -243,7 +242,7 @@ export default function App() {
   return (
     <div
       style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--oura-bg)' }}
-      onPointerDownCapture={(e) => {
+      onPointerDownCapture={() => {
         // Any touch in the field view skips the welcome (snappy exit); the
         // overlay is pointerEvents:none, so the touch still reaches the field.
         // A touch begins the check-in — end both the message and the axis pulse.
@@ -251,21 +250,7 @@ export default function App() {
           if (showWelcome) dismissWelcome(true);
           endAxisPulse();
         }
-        if (view === 'field' && entries.length > 0) {
-          swipeStartRef.current = { x: e.clientX, y: e.clientY };
-        }
       }}
-      onPointerMoveCapture={(e) => {
-        if (!swipeStartRef.current) return;
-        const dx = e.clientX - swipeStartRef.current.x;
-        const dy = e.clientY - swipeStartRef.current.y;
-        if (dx < -60 && Math.abs(dx) / Math.abs(dy || 1) > 2) {
-          swipeStartRef.current = null;
-          setView('history');
-        }
-      }}
-      onPointerUpCapture={() => { swipeStartRef.current = null; }}
-      onPointerCancelCapture={() => { swipeStartRef.current = null; }}
     >
       {/* Quiet rail backdrop — present on desktop so the right region reads as
           an intentional plane even before a pin is placed */}
