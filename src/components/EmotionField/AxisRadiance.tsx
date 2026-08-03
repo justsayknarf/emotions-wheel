@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 interface Props {
   play: number;      // increments to trigger a play; the canvas replays on change
@@ -33,24 +33,19 @@ function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a:
 export function AxisRadiance({ play, delay, stagger, duration, strength }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    // Read the size synchronously on mount (the observer's first callback is
-    // unreliable for an already-laid-out element), then track later changes.
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    measure();
-    const obs = new ResizeObserver(measure);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  useEffect(() => {
+    const root = rootRef.current;
     const canvas = canvasRef.current;
-    const { w, h } = size;
-    if (!canvas || w === 0 || play === 0 || strength <= 0) return;
+    if (!root || !canvas || play === 0 || strength <= 0) return;
+    // Measure synchronously at the start of the pulse. Size is deliberately NOT
+    // a dependency: a pulse is a one-shot triggered by `play`, and the field
+    // plane resizes for unrelated reasons (e.g. the mobile check-in tray docking
+    // insets the field). Keying the animation off size would restart or clear
+    // the pulse on every such resize — instead we snapshot the size once here.
+    const w = root.clientWidth;
+    const h = root.clientHeight;
+    if (w === 0 || h === 0) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = w * dpr;
@@ -115,8 +110,7 @@ export function AxisRadiance({ play, delay, stagger, duration, strength }: Props
       cancelAnimationFrame(raf);
       ctx.clearRect(0, 0, w, h);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [play, size.w, size.h, delay, stagger, duration, strength]);
+  }, [play, delay, stagger, duration, strength]);
 
   return (
     <div ref={rootRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
