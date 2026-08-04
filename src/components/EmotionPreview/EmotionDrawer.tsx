@@ -20,6 +20,8 @@ interface Props {
   // Live draft coordinate while a card slider is dragged (field preview only).
   // Optional: wired once the field overlay consumes it.
   onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
+  // Tunable timings (seconds) for the card's word dissolve on a coordinate commit.
+  dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
   onClear: () => void;
   selectedPinId: string | null;
@@ -41,6 +43,7 @@ export function EmotionDrawer({
   onPinRemove,
   onAdjust,
   onAdjustDraft,
+  dissolve,
   onDone,
   onClear,
   selectedPinId,
@@ -149,6 +152,7 @@ export function EmotionDrawer({
               onRemove={() => onPinRemove(pin.id)}
               onAdjust={onAdjust}
               onAdjustDraft={onAdjustDraft}
+              dissolve={dissolve}
             />
           </motion.div>
         ))}

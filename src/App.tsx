@@ -414,6 +414,7 @@ export default function App() {
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
                 onAdjust={handleAdjustPin}
+                dissolve={{ fadeOut: tuning.captionFadeOut, fadeIn: tuning.captionFadeIn, hold: tuning.captionHold }}
                 onDone={handleDone}
                 onClear={() => { setPins([]); }}
                 selectedPinId={effectiveSelectedPinId}

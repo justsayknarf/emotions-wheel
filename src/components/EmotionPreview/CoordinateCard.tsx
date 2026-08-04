@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
 import type { PinEntry } from '../../types';
@@ -26,6 +26,8 @@ interface Props {
   onAdjust: (pinId: string, x: number, y: number) => void;
   // Live draft coordinate during a slider drag (field preview only). Optional.
   onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
+  // Tunable timings (seconds) for the word/tag dissolve on a coordinate commit.
+  dissolve?: { fadeOut: number; fadeIn: number; hold: number };
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -140,8 +142,21 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
+
+  // The slot dissolve on a coordinate commit — tunable, and collapsed to an
+  // instant swap when the viewer prefers reduced motion.
+  const reduced = useReducedMotion();
+  const fadeOut = reduced ? 0 : dissolve?.fadeOut ?? 0.26;
+  const fadeIn = reduced ? 0 : dissolve?.fadeIn ?? 0.3;
+  const hold = reduced ? 0 : dissolve?.hold ?? 0.05;
+  const slotAnim = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0, transition: { duration: fadeOut } },
+    transition: { duration: fadeIn, delay: hold },
+  };
   // Hold off the selected look while the card is still animating in, so the
   // highlight eases in as the tether lands rather than popping on arrival.
   const showSelected = isSelected && !isEntering;
@@ -330,7 +345,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             <div style={{ fontFamily: FIELD_SERIF, fontSize: 15.5, color: 'var(--oura-text-2)', lineHeight: 1.55 }}>
               Does{' '}
               <AnimatePresence mode="wait" initial={false}>
-                <motion.span key={guesses[0].id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.28 }} style={{ display: 'inline-block' }}>
+                <motion.span key={guesses[0].id} {...slotAnim} style={{ display: 'inline-block' }}>
                   {renderGuess(guesses[0])}
                 </motion.span>
               </AnimatePresence>
@@ -338,7 +353,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
                 <>
                   {' '}<span style={{ color: 'var(--oura-text-3)' }}>or</span>{' '}
                   <AnimatePresence mode="wait" initial={false}>
-                    <motion.span key={guesses[1].id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.28 }} style={{ display: 'inline-block' }}>
+                    <motion.span key={guesses[1].id} {...slotAnim} style={{ display: 'inline-block' }}>
                       {renderGuess(guesses[1])}
                     </motion.span>
                   </AnimatePresence>
@@ -353,7 +368,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
                   or nearby
                 </span>
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.div key={near.map((n) => n.id).join(',')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.28 }} style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
+                  <motion.div key={near.map((n) => n.id).join(',')} {...slotAnim} style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
                     {nearbyTags.map(renderTag)}
                   </motion.div>
                 </AnimatePresence>
