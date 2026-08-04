@@ -27,21 +27,48 @@ function valenceBand(y: number): number {
   return 1;
 }
 
+export interface NearbyEmotion {
+  id: string;
+  label: string;
+}
+
+/**
+ * Emotions within VISIBILITY_RADIUS of (x, y), nearest first by pure distance.
+ * The shared primitive behind the region description, the caption's guesses/tags,
+ * and the field's fan — one collect-and-sort so the three can never drift. Sort
+ * is stable, so equal-distance emotions keep their source order.
+ */
+function nearbyWithin(x: number, y: number, emotions: Emotion[]): Emotion[] {
+  return emotions
+    .map((em) => ({ em, dist: euclidean(x, y, em.x, em.y) }))
+    .filter((n) => n.dist <= VISIBILITY_RADIUS)
+    .sort((a, b) => a.dist - b.dist)
+    .map((n) => n.em);
+}
+
+/**
+ * The emotions within range of (x, y), nearest first, capped at `limit`. Used by
+ * the check-in card to name its two closest guesses and the neighborhood of tags
+ * beneath them — a true distance order, so the guesses are genuinely the nearest
+ * (distinct from nearestTagIds, which floats a surface landmark to the front).
+ */
+export function nearbyEmotions(
+  x: number,
+  y: number,
+  emotions: Emotion[],
+  limit: number,
+): NearbyEmotion[] {
+  return nearbyWithin(x, y, emotions)
+    .slice(0, Math.max(0, limit))
+    .map((em) => ({ id: em.id, label: em.label }));
+}
+
 export function getRegionDescription(
   x: number,
   y: number,
   emotions: Emotion[],
 ): RegionDescription {
-  // Collect up to 2 nearest words within VISIBILITY_RADIUS, sorted by distance
-  const nearby: Array<{ label: string; dist: number }> = [];
-  for (const em of emotions) {
-    const d = euclidean(x, y, em.x, em.y);
-    if (d <= VISIBILITY_RADIUS) {
-      nearby.push({ label: em.label, dist: d });
-    }
-  }
-  nearby.sort((a, b) => a.dist - b.dist);
-  const top = nearby.slice(0, 2);
+  const top = nearbyWithin(x, y, emotions).slice(0, 2);
 
   let relational: string;
   if (top.length >= 2) {
@@ -73,17 +100,10 @@ export function nearestTagIds(
   emotions: Emotion[],
   tagCount: number,
 ): string[] {
-  const nearby: Array<{ id: string; dist: number; surface: boolean }> = [];
-  for (const em of emotions) {
-    const d = euclidean(x, y, em.x, em.y);
-    if (d <= VISIBILITY_RADIUS) {
-      nearby.push({ id: em.id, dist: d, surface: em.depth === 'surface' });
-    }
-  }
-  nearby.sort((a, b) => a.dist - b.dist);
+  const nearby = nearbyWithin(x, y, emotions);
   const count = Math.max(1, Math.round(tagCount));
-  const topIds = nearby.slice(0, count).map((n) => n.id);
-  const nearestSurface = nearby.find((n) => n.surface);
+  const topIds = nearby.slice(0, count).map((em) => em.id);
+  const nearestSurface = nearby.find((em) => em.depth === 'surface');
   return nearestSurface
     ? [nearestSurface.id, ...topIds.filter((id) => id !== nearestSurface.id)]
     : topIds;

@@ -1,64 +1,266 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
+import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
 import type { PinEntry } from '../../types';
 
-// Surface emotions are the field's always-visible anchor words. A nearby tag
-// that is one gets a whisper of a marker (see the leading dot below).
-const surfaceIds = new Set(emotions.filter((e) => e.depth === 'surface').map((e) => e.id));
+// The caption offers the two nearest words as guesses and this many more beneath
+// as a neighborhood of tags. (Made tunable in a later step.)
+const NEARBY_TAG_COUNT = 5;
+// The question is set in a warm serif — this surface is for recording a feeling,
+// not reading data — matching the field's own words.
+const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
 interface Props {
   pin: PinEntry;
-  highlightedIds: string[];
   isSelected: boolean;
   isEntering?: boolean;
   onSelect: () => void;
   onRecognize: (id: string) => void;
   onDerecognize: (id: string) => void;
   onRemove: () => void;
+  // Commit an adjusted coordinate for this pin (a slider was released).
+  onAdjust: (pinId: string, x: number, y: number) => void;
+  // Live draft coordinate during a slider drag (field preview only). Optional.
+  onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
+  // Tunable timings (seconds) for the word/tag dissolve on a coordinate commit.
+  dissolve?: { fadeOut: number; fadeIn: number; hold: number };
 }
 
-// Maps coordinate [-1, 1] to [5%, 95%] for position bar markers
-function coordToPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
-}
+const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
+// Coordinate [-1, 1] → [0%, 100%] across a full-width slider track.
+const pct = (v: number) => ((v + 1) / 2) * 100;
 
-function RelationalText({ text }: { text: string }) {
-  const parts = text.split(/(\*[^*]+\*)/g);
+const endLabelStyle = {
+  fontSize: 8,
+  fontWeight: 500,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: 'var(--oura-text-3)',
+};
+
+// A single draggable axis. Reports the value live while dragging (onDrag) and
+// once more on release (onCommit) — the card commits on release. The origin tick
+// marks where the pin was first dropped, so travel from the felt drop is visible.
+function AxisSlider({
+  labelLow,
+  labelHigh,
+  value,
+  origin,
+  onGrab,
+  onDrag,
+  onCommit,
+}: {
+  labelLow: string;
+  labelHigh: string;
+  value: number;
+  origin: number;
+  onGrab?: () => void;
+  onDrag: (v: number) => void;
+  onCommit: (v: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const valueAt = (clientX: number) => {
+    const r = trackRef.current?.getBoundingClientRect();
+    if (!r || r.width === 0) return value;
+    return clampUnit(((clientX - r.left) / r.width) * 2 - 1);
+  };
+  const p = pct(value);
+
   return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith('*') && part.endsWith('*') ? (
-          <em key={i} style={{ fontStyle: 'normal', color: 'var(--oura-text-1)', fontWeight: 400 }}>
-            {part.slice(1, -1)}
-          </em>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
-    </>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={endLabelStyle}>{labelLow}</span>
+        <span style={endLabelStyle}>{labelHigh}</span>
+      </div>
+      <div
+        ref={trackRef}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          // Select this pin as the drag begins so the field's adjust ghost/travel
+          // overlay anchors to the pin actually being moved (not whichever card
+          // happened to be selected).
+          onGrab?.();
+          draggingRef.current = true;
+          trackRef.current?.setPointerCapture(e.pointerId);
+          onDrag(valueAt(e.clientX));
+        }}
+        onPointerMove={(e) => { if (draggingRef.current) onDrag(valueAt(e.clientX)); }}
+        onPointerUp={(e) => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          trackRef.current?.releasePointerCapture(e.pointerId);
+          onCommit(valueAt(e.clientX));
+        }}
+        onPointerCancel={() => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          onCommit(value);
+        }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          height: 5,
+          borderRadius: 3,
+          background: 'rgba(237,232,223,0.09)',
+          cursor: 'pointer',
+          touchAction: 'none',
+        }}
+      >
+        {/* fill runs from the center out to the thumb */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            borderRadius: 3,
+            background: 'rgba(201,168,124,0.12)',
+            left: value >= 0 ? '50%' : `${p}%`,
+            right: value >= 0 ? `${100 - p}%` : '50%',
+          }}
+        />
+        {/* origin tick — where this pin was dropped */}
+        <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--oura-text-3)', left: `${pct(origin)}%` }} />
+        {/* thumb */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            width: 15,
+            height: 15,
+            marginTop: -7.5,
+            marginLeft: -7.5,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--oura-gold) 62%)',
+            boxShadow: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+            left: `${p}%`,
+            touchAction: 'none',
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
-const pillVariants = {
-  hidden: { opacity: 0, y: 5, scale: 0.95 },
-  visible: (i: number) => ({
-    opacity: 1, y: 0, scale: 1,
-    transition: { delay: i * 0.06, type: 'spring' as const, stiffness: 300, damping: 26 },
-  }),
-};
-
-const chipVariants = {
-  hidden: { opacity: 0, scale: 0.85 },
-  visible: { opacity: 1, scale: 1, transition: { type: 'spring' as const, stiffness: 380, damping: 26 } },
-  exit: { opacity: 0, scale: 0.85, transition: { duration: 0.1 } },
-};
-
-export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
-  const pillIds = highlightedIds.filter((id) => !recognizedSet.has(id));
+
+  // The slot dissolve on a coordinate commit — tunable, and collapsed to an
+  // instant swap when the viewer prefers reduced motion.
+  const reduced = useReducedMotion();
+  const fadeOut = reduced ? 0 : dissolve?.fadeOut ?? 0.26;
+  const fadeIn = reduced ? 0 : dissolve?.fadeIn ?? 0.3;
+  const hold = reduced ? 0 : dissolve?.hold ?? 0.05;
+  const slotAnim = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0, transition: { duration: fadeOut } },
+    transition: { duration: fadeIn, delay: hold },
+  };
   // Hold off the selected look while the card is still animating in, so the
   // highlight eases in as the tether lands rather than popping on arrival.
   const showSelected = isSelected && !isEntering;
+
+  // The caption's neighborhood: the two nearest words are the guesses, the rest
+  // are the tags. Keyed to the committed coordinate (not the live draft) so the
+  // words hold steady while a slider is dragged and only resolve on release.
+  const near = nearbyEmotions(pin.x, pin.y, emotions, 2 + NEARBY_TAG_COUNT);
+  const guesses = near.slice(0, 2);
+  const nearbyTags = near.slice(2);
+
+  // "None of these" hides the suggestion until the pin moves again. Keyed to the
+  // committed coordinate (rather than a bare boolean reset in an effect) so a new
+  // position clears the dismissal on its own.
+  const coordKey = `${pin.x},${pin.y}`;
+  const [dismissedAt, setDismissedAt] = useState<string | null>(null);
+  const dismissed = dismissedAt === coordKey;
+
+  const toggleName = (id: string) => {
+    if (recognizedSet.has(id)) onDerecognize(id);
+    else onRecognize(id);
+  };
+
+  // A guess word inside the question — tappable to name (or un-name).
+  const renderGuess = (e: NearbyEmotion) => {
+    const named = recognizedSet.has(e.id);
+    return (
+      <button
+        onClick={(ev) => { ev.stopPropagation(); toggleName(e.id); }}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: FIELD_SERIF,
+          fontSize: 15.5,
+          letterSpacing: '0.01em',
+          color: named ? 'var(--oura-gold)' : 'var(--oura-text-1)',
+          borderBottom: named ? '1px solid var(--oura-gold-dim)' : '1px dotted var(--oura-gold-dim)',
+          padding: '0 1px 1px',
+        }}
+      >
+        {e.label.toLowerCase()}{named ? ' ✓' : ''}
+      </button>
+    );
+  };
+
+  // A neighborhood tag beneath the question — tappable to name (or un-name).
+  const renderTag = (e: NearbyEmotion) => {
+    const named = recognizedSet.has(e.id);
+    return (
+      <button
+        key={e.id}
+        onClick={(ev) => { ev.stopPropagation(); toggleName(e.id); }}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          padding: '4px 11px',
+          borderRadius: 6,
+          cursor: 'pointer',
+          border: named ? '1px solid var(--oura-gold-dim)' : '1px solid rgba(237,232,223,0.12)',
+          background: named ? 'rgba(201,168,124,0.16)' : 'rgba(237,232,223,0.04)',
+          color: named ? 'var(--oura-gold)' : 'var(--oura-text-2)',
+          fontSize: 12,
+          letterSpacing: '0.01em',
+        }}
+      >
+        {e.label.toLowerCase()}{named ? ' ✓' : ''}
+      </button>
+    );
+  };
+
+  // While a slider is dragged, the thumbs follow this local draft; the committed
+  // pin coordinate (and its words) hold until release. draftRef mirrors the draft
+  // and is read (and written) only inside the pointer handlers — never during
+  // render — so the untouched axis is taken from the latest in-flight value even
+  // when both axis sliders are dragged at once, not a stale render closure.
+  const [draft, setDraft] = useState<{ x: number; y: number } | null>(null);
+  const draftRef = useRef<{ x: number; y: number } | null>(null);
+  const curX = draft?.x ?? pin.x;
+  const curY = draft?.y ?? pin.y;
+  const originX = pin.origin?.x ?? pin.x;
+  const originY = pin.origin?.y ?? pin.y;
+
+  const nextFrom = (axis: 'x' | 'y', v: number) => {
+    const base = draftRef.current ?? { x: pin.x, y: pin.y };
+    return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
+  };
+  const dragAxis = (axis: 'x' | 'y', v: number) => {
+    const next = nextFrom(axis, v);
+    draftRef.current = next;
+    setDraft(next);
+    onAdjustDraft?.(next);
+  };
+  const commitAxis = (axis: 'x' | 'y', v: number) => {
+    const next = nextFrom(axis, v);
+    draftRef.current = null;
+    setDraft(null);
+    onAdjustDraft?.(null);
+    onAdjust(pin.id, next.x, next.y);
+  };
 
   return (
     <div
@@ -115,172 +317,103 @@ export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = f
         </button>
       </div>
 
-      {/* Main metric block */}
-      <div style={{ padding: '8px 14px 14px' }}>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 20,
-            fontWeight: 300,
-            color: 'var(--oura-text-2)',
-            lineHeight: 1.3,
-            letterSpacing: '-0.01em',
-          }}
-        >
-          <RelationalText text={pin.regionDescription.relational} />
-        </p>
-
-        <p
-          style={{
-            margin: '6px 0 0',
-            fontSize: 11,
-            color: 'var(--oura-text-3)',
-            letterSpacing: '0.02em',
-          }}
-        >
-          {pin.regionDescription.narrative}
-        </p>
-
-        {/* Axis position bars */}
-        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Arousal bar */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Calm</span>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Activated</span>
-            </div>
-            <div style={{ position: 'relative', height: 2, background: 'rgba(237,232,223,0.08)', borderRadius: 1 }}>
-              <div style={{
-                position: 'absolute',
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: 'rgba(201,168,124,0.7)',
-                top: -2,
-                left: `${coordToPercent(pin.x)}%`,
-                transform: 'translateX(-50%)',
-              }} />
-            </div>
-          </div>
-          {/* Valence bar */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Negative</span>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Positive</span>
-            </div>
-            <div style={{ position: 'relative', height: 2, background: 'rgba(237,232,223,0.08)', borderRadius: 1 }}>
-              <div style={{
-                position: 'absolute',
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: 'rgba(201,168,124,0.7)',
-                top: -2,
-                left: `${coordToPercent(pin.y)}%`,
-                transform: 'translateX(-50%)',
-              }} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Recognized words + pills — in a slightly recessed band */}
-      {(pin.recognizedWords.length > 0 || pillIds.length > 0) && (
+      {/* Main metric block — sliders on top, then the (read-only for now) words */}
+      <div style={{ padding: '10px 14px 14px' }}>
+        {/* Adjust sliders — nudge the pin after the fact; commit on release */}
         <div
-          style={{
-            borderTop: '1px solid var(--oura-border)',
-            padding: '10px 14px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: 'flex', flexDirection: 'column', gap: 13, marginBottom: 15 }}
         >
-          {pin.recognizedWords.length > 0 && (
-            <div>
-              <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginBottom: 7 }}>
-                Recognized
-              </div>
-              <AnimatePresence mode="popLayout">
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {pin.recognizedWords.map((id) => (
-                    <motion.button
-                      key={id}
-                      variants={chipVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      onClick={(e) => { e.stopPropagation(); onDerecognize(id); }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '4px 10px',
-                        borderRadius: 5,
-                        border: '1px solid rgba(201, 168, 124, 0.35)',
-                        background: 'rgba(201, 168, 124, 0.07)',
-                        color: 'var(--oura-gold)',
-                        fontSize: 12,
-                        fontWeight: 400,
-                        cursor: 'pointer',
-                        letterSpacing: '0.01em',
-                      }}
-                    >
-                      {labelForId(id)}
-                      <span style={{ fontSize: 14, lineHeight: 1, opacity: 0.45 }}>×</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </AnimatePresence>
-            </div>
-          )}
-
-          {pillIds.length > 0 && (
-            <div>
-              {pin.recognizedWords.length === 0 && (
-                <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginBottom: 7 }}>
-                  Nearby
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {pillIds.map((id, i) => (
-                  <motion.button
-                    key={id}
-                    custom={i}
-                    variants={pillVariants}
-                    initial="hidden"
-                    animate="visible"
-                    onClick={(e) => { e.stopPropagation(); onRecognize(id); }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '4px 11px',
-                      borderRadius: 5,
-                      border: '1px solid rgba(237, 232, 223, 0.12)',
-                      background: 'rgba(237, 232, 223, 0.04)',
-                      color: 'var(--oura-text-2)',
-                      fontSize: 12,
-                      fontWeight: 400,
-                      cursor: 'pointer',
-                      letterSpacing: '0.01em',
-                    }}
-                  >
-                    {surfaceIds.has(id) && (
-                      // Anchor tag: a tiny bone dot echoing the word's coordinate
-                      // dot in the field. Deliberately near-imperceptible.
-                      <span
-                        aria-hidden="true"
-                        style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(237, 232, 223, 0.4)', flex: 'none' }}
-                      />
-                    )}
-                    {labelForId(id)}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-          )}
+          <AxisSlider
+            labelLow="Calm"
+            labelHigh="Activated"
+            value={curX}
+            origin={originX}
+            onGrab={onSelect}
+            onDrag={(v) => dragAxis('x', v)}
+            onCommit={(v) => commitAxis('x', v)}
+          />
+          <AxisSlider
+            labelLow="Negative"
+            labelHigh="Positive"
+            value={curY}
+            origin={originY}
+            onGrab={onSelect}
+            onDrag={(v) => dragAxis('y', v)}
+            onCommit={(v) => commitAxis('y', v)}
+          />
         </div>
-      )}
+
+        {/* Honest-question caption — words as an optional, dismissable suggestion.
+            Only the guess slots + tags dissolve on a coordinate commit; the
+            "Does … or … fit?" frame holds still. */}
+        {guesses.length === 0 ? (
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+            {pin.regionDescription.relational}
+          </p>
+        ) : dismissed ? (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+            your spot is enough.
+          </p>
+        ) : (
+          <>
+            <div style={{ fontFamily: FIELD_SERIF, fontSize: 15.5, color: 'var(--oura-text-2)', lineHeight: 1.55 }}>
+              Does{' '}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span key={guesses[0].id} {...slotAnim} style={{ display: 'inline-block' }}>
+                  {renderGuess(guesses[0])}
+                </motion.span>
+              </AnimatePresence>
+              {guesses[1] && (
+                <>
+                  {' '}<span style={{ color: 'var(--oura-text-3)' }}>or</span>{' '}
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span key={guesses[1].id} {...slotAnim} style={{ display: 'inline-block' }}>
+                      {renderGuess(guesses[1])}
+                    </motion.span>
+                  </AnimatePresence>
+                </>
+              )}
+              {' '}fit?
+            </div>
+
+            {nearbyTags.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                <span style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginRight: 2 }}>
+                  or nearby
+                </span>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div key={near.map((n) => n.id).join(',')} {...slotAnim} style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
+                    {nearbyTags.map(renderTag)}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            )}
+
+            <button
+              onClick={(e) => { e.stopPropagation(); setDismissedAt(coordKey); }}
+              style={{ display: 'inline-block', marginTop: 13, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 10.5, letterSpacing: '0.06em', color: 'var(--oura-text-3)', padding: '3px 0' }}
+            >
+              none of these
+            </button>
+          </>
+        )}
+
+        {pin.recognizedWords.length > 0 && (
+          <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: 'var(--oura-gold-dim)', letterSpacing: '0.02em' }}>your words:</span>
+            {pin.recognizedWords.map((id) => (
+              <button
+                key={id}
+                onClick={(e) => { e.stopPropagation(); onDerecognize(id); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, cursor: 'pointer', border: '1px solid var(--oura-gold-dim)', background: 'rgba(201,168,124,0.14)', color: 'var(--oura-gold)', fontSize: 11.5 }}
+              >
+                {labelForId(id)}<span style={{ opacity: 0.5, fontSize: 13 }}>×</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

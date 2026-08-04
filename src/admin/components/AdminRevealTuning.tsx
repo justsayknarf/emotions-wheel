@@ -27,8 +27,15 @@ const REVEAL_KNOBS: Knob[] = [
   { key: 'ringGap', label: 'Ring gap', min: 0, max: 80, step: 2, fmt: (v) => `${v}px` },
   { key: 'tetherDuration', label: 'Tether fade', min: 0.6, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'staggerStep', label: 'Stagger', min: 0, max: 0.2, step: 0.01, fmt: (v) => `${Math.round(v * 1000)}ms` },
-  { key: 'tagCount', label: 'Nearby tags', min: 1, max: 12, step: 1, fmt: (v) => String(v) },
+  { key: 'tagCount', label: 'Field words', min: 1, max: 12, step: 1, fmt: (v) => String(v) },
   { key: 'recedeStrength', label: 'Recede', min: 0, max: 1, step: 0.05, fmt: (v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`) },
+];
+
+// Check-in card knobs: the dissolve when the card's words re-resolve on release.
+const CARD_KNOBS: Knob[] = [
+  { key: 'captionFadeOut', label: 'Word fade out', min: 0, max: 1, step: 0.02, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'captionHold', label: 'Hold', min: 0, max: 1, step: 0.02, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'captionFadeIn', label: 'Word fade in', min: 0, max: 1, step: 0.02, fmt: (v) => `${v.toFixed(2)}s` },
 ];
 
 // Grounding-welcome knobs: the axis emphasis fade and the guiding pulse.
@@ -165,6 +172,13 @@ export function AdminRevealTuning() {
         <SectionHeader title="Welcome" subtitle="grounding cue + axis pulse on load" />
 
         {WELCOME_KNOBS.map(renderKnob)}
+      </div>
+
+      {/* Check-in card */}
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--oura-border)', paddingTop: 12 }}>
+        <SectionHeader title="Check-in card" subtitle="word dissolve when a slider is released" />
+
+        {CARD_KNOBS.map(renderKnob)}
       </div>
     </div>
   );

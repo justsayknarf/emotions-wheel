@@ -56,6 +56,10 @@ interface Props {
   // The pin whose card is currently selected in the tray — rendered larger and
   // brighter so the card↔point link reads both ways.
   emphasizedPinId?: string | null;
+  // The live coordinate while the selected pin's card slider is being dragged —
+  // shown as a ghost preview + a dashed line from the pin, so a card-driven
+  // adjustment reads on the field before it commits.
+  adjustDraft?: { x: number; y: number } | null;
 }
 
 export function EmotionField({
@@ -67,6 +71,7 @@ export function EmotionField({
   axisEmphasis = false,
   ghostPin = null,
   emphasizedPinId = null,
+  adjustDraft = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -522,6 +527,58 @@ export function EmotionField({
               </div>
             );
           })}
+
+          {/* Adjust overlay — the selected pin's drop anchor, a travel line to
+              where it sits now, and a ghost preview at the live slider draft.
+              Keeps a card-driven adjustment anchored to where it was felt. */}
+          {(() => {
+            const emphasized = emphasizedPinId ? pins.find((p) => p.id === emphasizedPinId) : null;
+            if (!emphasized || size.width === 0) return null;
+            const origin = emphasized.origin ?? null;
+            const px = (toPercent(emphasized.x) / 100) * size.width;
+            const py = (toPercent(-emphasized.y) / 100) * size.height;
+            const moved = origin != null && Math.hypot(emphasized.x - origin.x, emphasized.y - origin.y) > 0.02;
+            const ox = origin ? (toPercent(origin.x) / 100) * size.width : 0;
+            const oy = origin ? (toPercent(-origin.y) / 100) * size.height : 0;
+            const gx = adjustDraft ? (toPercent(adjustDraft.x) / 100) * size.width : 0;
+            const gy = adjustDraft ? (toPercent(-adjustDraft.y) / 100) * size.height : 0;
+            if (!moved && !adjustDraft) return null;
+            return (
+              <>
+                <svg
+                  style={{ position: 'absolute', inset: 0, width: size.width, height: size.height, pointerEvents: 'none', zIndex: 8, overflow: 'visible' }}
+                  aria-hidden="true"
+                >
+                  {moved && (
+                    <line x1={ox} y1={oy} x2={px} y2={py} stroke="rgba(201, 168, 124, 0.3)" strokeWidth={1} />
+                  )}
+                  {adjustDraft && (
+                    <>
+                      <line x1={px} y1={py} x2={gx} y2={gy} stroke="rgba(201, 168, 124, 0.5)" strokeWidth={1} strokeDasharray="3 3" />
+                      <circle cx={gx} cy={gy} r={5} fill="none" stroke="rgba(201, 168, 124, 0.6)" strokeWidth={1} strokeDasharray="3 2" />
+                    </>
+                  )}
+                </svg>
+                {moved && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: ox,
+                      top: oy,
+                      width: 11,
+                      height: 11,
+                      marginLeft: -5.5,
+                      marginTop: -5.5,
+                      borderRadius: '50%',
+                      border: '1px solid rgba(237, 232, 223, 0.35)',
+                      pointerEvents: 'none',
+                      zIndex: 8,
+                    }}
+                  />
+                )}
+              </>
+            );
+          })()}
 
           {/* Ghost pin — quiet marker at the last recorded coordinate */}
           {ghostPin && pins.length === 0 && (

@@ -43,6 +43,15 @@ export interface RevealTuning {
   axisPulseDuration: number;
   /** How strong the guiding pulse reads: scales its warm glow + brightness. 0 = off. */
   axisPulseStrength: number;
+  /**
+   * The check-in card's words re-resolve on a coordinate commit by dissolving:
+   * the guess slots + tags fade out, hold a beat, then ease back in — a soft
+   * re-suggestion rather than a snap. These three tune that transition (seconds).
+   */
+  captionFadeOut: number;
+  captionFadeIn: number;
+  /** The empty beat held between fade-out and fade-in — the "re-suggest" pause. */
+  captionHold: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -60,6 +69,9 @@ export const DEFAULT_TUNING: RevealTuning = {
   axisPulseStagger: 1.0,
   axisPulseDuration: 2.2,
   axisPulseStrength: 0.025,
+  captionFadeOut: 0.3,
+  captionFadeIn: 0.6,
+  captionHold: 0.05,
 };
 
 const KEY = 'reveal-tuning';

@@ -21,6 +21,11 @@ export interface PinEntry {
   y: number;
   recognizedWords: string[];   // emotion IDs
   regionDescription: RegionDescription;
+  // The coordinate where this pin was first dropped. Captured once at creation
+  // and never mutated by later adjustments — x/y is the authoritative record,
+  // this is kept as secondary metadata (the "your drop" anchor + history).
+  // Optional so diary entries written before adjustable pins stay valid.
+  origin?: { x: number; y: number };
 }
 
 export interface DiaryEntry {

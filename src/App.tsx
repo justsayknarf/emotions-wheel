@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { emotions } from './data/emotions';
 import { nearestTagIds } from './data/regions';
+import { adjustPin, withOrigin } from './data/pins';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
@@ -75,6 +76,9 @@ export default function App() {
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const railScrollRef = useRef<HTMLDivElement>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  // The live coordinate while a card slider is dragged — drives the field's ghost
+  // preview + travel line. Never persisted; cleared on release (handleAdjustPin).
+  const [adjustDraft, setAdjustDraft] = useState<{ x: number; y: number } | null>(null);
   const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
   // Mobile returning-mirror tray: collapsed by default so the field stays
   // pinnable on load; the peek handle expands it.
@@ -200,7 +204,9 @@ export default function App() {
   );
 
   const handlePinRelease = useCallback((entry: PinEntry) => {
-    setPins((prev) => [...prev, entry]);
+    // Stamp the drop coordinate as the pin's origin (kept for the field anchor +
+    // history); x/y stays authoritative and is what later adjustments move.
+    setPins((prev) => [...prev, withOrigin(entry)]);
     setSelectedPinId(entry.id);
     setEnteringPinId(entry.id);
     setTetherKey((k) => k + 1);
@@ -236,6 +242,20 @@ export default function App() {
 
   const handlePinRemove = useCallback((pinId: string) => {
     setPins((prev) => prev.filter((p) => p.id !== pinId));
+  }, []);
+
+  // Commit an adjusted coordinate (slider released): move the pin and recompute
+  // its description in place. regionDescription is a stored snapshot, so it must
+  // be refreshed here — highlightedIds re-derives on its own from the new x/y.
+  // origin and recognizedWords are deliberately preserved.
+  const handleAdjustPin = useCallback((pinId: string, x: number, y: number) => {
+    setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
+    setAdjustDraft(null);
+  }, []);
+
+  // The live draft coordinate during a slider drag (field preview only); null ends it.
+  const handleAdjustDraft = useCallback((coord: { x: number; y: number } | null) => {
+    setAdjustDraft(coord);
   }, []);
 
   const handleRecord = useCallback(() => {
@@ -317,6 +337,7 @@ export default function App() {
           axisEmphasis={showDemo || axisPulseOn}
           ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
           emphasizedPinId={effectiveSelectedPinId}
+          adjustDraft={adjustDraft}
         />
       </div>
 
@@ -397,11 +418,13 @@ export default function App() {
             {pins.length > 0 && (
               <EmotionDrawer
                 pins={pins}
-                highlightedIds={highlightedIds}
                 variant={sideBySide ? 'rail' : 'sheet'}
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
+                onAdjust={handleAdjustPin}
+                onAdjustDraft={handleAdjustDraft}
+                dissolve={{ fadeOut: tuning.captionFadeOut, fadeIn: tuning.captionFadeIn, hold: tuning.captionHold }}
                 onDone={handleDone}
                 onClear={() => { setPins([]); }}
                 selectedPinId={effectiveSelectedPinId}

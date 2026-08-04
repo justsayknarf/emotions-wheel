@@ -10,11 +10,17 @@ type Variant = 'sheet' | 'rail';
 
 interface Props {
   pins: PinEntry[];
-  highlightedIds: Set<string>;
   variant: Variant;
   onRecognize: (emotionId: string) => void;
   onDerecognize: (emotionId: string) => void;
   onPinRemove: (pinId: string) => void;
+  // Commit an adjusted coordinate for a pin (a card slider was released).
+  onAdjust: (pinId: string, x: number, y: number) => void;
+  // Live draft coordinate while a card slider is dragged (field preview only).
+  // Optional: wired once the field overlay consumes it.
+  onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
+  // Tunable timings (seconds) for the card's word dissolve on a coordinate commit.
+  dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
   onClear: () => void;
   selectedPinId: string | null;
@@ -29,11 +35,13 @@ interface Props {
 
 export function EmotionDrawer({
   pins,
-  highlightedIds,
   variant,
   onRecognize,
   onDerecognize,
   onPinRemove,
+  onAdjust,
+  onAdjustDraft,
+  dissolve,
   onDone,
   onClear,
   selectedPinId,
@@ -133,13 +141,15 @@ export function EmotionDrawer({
           >
             <CoordinateCard
               pin={pin}
-              highlightedIds={pin.id === selectedPinId ? Array.from(highlightedIds) : []}
               isSelected={pin.id === selectedPinId}
               isEntering={pin.id === enteringPinId}
               onSelect={() => onSelectPin(pin.id)}
               onRecognize={onRecognize}
               onDerecognize={onDerecognize}
               onRemove={() => onPinRemove(pin.id)}
+              onAdjust={onAdjust}
+              onAdjustDraft={onAdjustDraft}
+              dissolve={dissolve}
             />
           </motion.div>
         ))}
