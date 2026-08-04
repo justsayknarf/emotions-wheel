@@ -27,6 +27,33 @@ function valenceBand(y: number): number {
   return 1;
 }
 
+export interface NearbyEmotion {
+  id: string;
+  label: string;
+}
+
+/**
+ * The emotions within range of (x, y), nearest first by pure distance, capped at
+ * `limit`. Used by the check-in card to name its two closest guesses and the
+ * neighborhood of tags beneath them — a true distance order, so the guesses are
+ * genuinely the nearest (distinct from nearestTagIds, which floats a surface
+ * landmark to the front for the field's fan).
+ */
+export function nearbyEmotions(
+  x: number,
+  y: number,
+  emotions: Emotion[],
+  limit: number,
+): NearbyEmotion[] {
+  const near: Array<{ id: string; label: string; dist: number }> = [];
+  for (const em of emotions) {
+    const d = euclidean(x, y, em.x, em.y);
+    if (d <= VISIBILITY_RADIUS) near.push({ id: em.id, label: em.label, dist: d });
+  }
+  near.sort((a, b) => a.dist - b.dist);
+  return near.slice(0, Math.max(0, limit)).map(({ id, label }) => ({ id, label }));
+}
+
 export function getRegionDescription(
   x: number,
   y: number,
