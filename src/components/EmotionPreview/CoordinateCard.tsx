@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import type { PinEntry } from '../../types';
@@ -21,9 +22,116 @@ interface Props {
   onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
 }
 
-// Maps coordinate [-1, 1] to [5%, 95%] for position bar markers
-function coordToPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
+const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
+// Coordinate [-1, 1] → [0%, 100%] across a full-width slider track.
+const pct = (v: number) => ((v + 1) / 2) * 100;
+
+const endLabelStyle = {
+  fontSize: 8,
+  fontWeight: 500,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: 'var(--oura-text-3)',
+};
+
+// A single draggable axis. Reports the value live while dragging (onDrag) and
+// once more on release (onCommit) — the card commits on release. The origin tick
+// marks where the pin was first dropped, so travel from the felt drop is visible.
+function AxisSlider({
+  labelLow,
+  labelHigh,
+  value,
+  origin,
+  onDrag,
+  onCommit,
+}: {
+  labelLow: string;
+  labelHigh: string;
+  value: number;
+  origin: number;
+  onDrag: (v: number) => void;
+  onCommit: (v: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const valueAt = (clientX: number) => {
+    const r = trackRef.current?.getBoundingClientRect();
+    if (!r || r.width === 0) return value;
+    return clampUnit(((clientX - r.left) / r.width) * 2 - 1);
+  };
+  const p = pct(value);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={endLabelStyle}>{labelLow}</span>
+        <span style={endLabelStyle}>{labelHigh}</span>
+      </div>
+      <div
+        ref={trackRef}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          draggingRef.current = true;
+          trackRef.current?.setPointerCapture(e.pointerId);
+          onDrag(valueAt(e.clientX));
+        }}
+        onPointerMove={(e) => { if (draggingRef.current) onDrag(valueAt(e.clientX)); }}
+        onPointerUp={(e) => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          trackRef.current?.releasePointerCapture(e.pointerId);
+          onCommit(valueAt(e.clientX));
+        }}
+        onPointerCancel={() => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          onCommit(value);
+        }}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          height: 5,
+          borderRadius: 3,
+          background: 'rgba(237,232,223,0.09)',
+          cursor: 'pointer',
+          touchAction: 'none',
+        }}
+      >
+        {/* fill runs from the center out to the thumb */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            borderRadius: 3,
+            background: 'rgba(201,168,124,0.12)',
+            left: value >= 0 ? '50%' : `${p}%`,
+            right: value >= 0 ? `${100 - p}%` : '50%',
+          }}
+        />
+        {/* origin tick — where this pin was dropped */}
+        <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--oura-text-3)', left: `${pct(origin)}%` }} />
+        {/* thumb */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            width: 15,
+            height: 15,
+            marginTop: -7.5,
+            marginLeft: -7.5,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--oura-gold) 62%)',
+            boxShadow: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+            left: `${p}%`,
+            touchAction: 'none',
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function RelationalText({ text }: { text: string }) {
@@ -57,12 +165,32 @@ const chipVariants = {
   exit: { opacity: 0, scale: 0.85, transition: { duration: 0.1 } },
 };
 
-export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove }: Props) {
+export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
   const pillIds = highlightedIds.filter((id) => !recognizedSet.has(id));
   // Hold off the selected look while the card is still animating in, so the
   // highlight eases in as the tether lands rather than popping on arrival.
   const showSelected = isSelected && !isEntering;
+
+  // While a slider is dragged, the thumbs follow this local draft; the committed
+  // pin coordinate (and its words) hold until release.
+  const [draft, setDraft] = useState<{ x: number; y: number } | null>(null);
+  const curX = draft?.x ?? pin.x;
+  const curY = draft?.y ?? pin.y;
+  const originX = pin.origin?.x ?? pin.x;
+  const originY = pin.origin?.y ?? pin.y;
+
+  const dragAxis = (axis: 'x' | 'y', v: number) => {
+    const next = { x: axis === 'x' ? v : curX, y: axis === 'y' ? v : curY };
+    setDraft(next);
+    onAdjustDraft?.(next);
+  };
+  const commitAxis = (axis: 'x' | 'y', v: number) => {
+    const next = { x: axis === 'x' ? v : curX, y: axis === 'y' ? v : curY };
+    setDraft(null);
+    onAdjustDraft?.(null);
+    onAdjust(pin.id, next.x, next.y);
+  };
 
   return (
     <div
@@ -119,8 +247,31 @@ export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = f
         </button>
       </div>
 
-      {/* Main metric block */}
-      <div style={{ padding: '8px 14px 14px' }}>
+      {/* Main metric block — sliders on top, then the (read-only for now) words */}
+      <div style={{ padding: '10px 14px 14px' }}>
+        {/* Adjust sliders — nudge the pin after the fact; commit on release */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: 'flex', flexDirection: 'column', gap: 13, marginBottom: 15 }}
+        >
+          <AxisSlider
+            labelLow="Calm"
+            labelHigh="Activated"
+            value={curX}
+            origin={originX}
+            onDrag={(v) => dragAxis('x', v)}
+            onCommit={(v) => commitAxis('x', v)}
+          />
+          <AxisSlider
+            labelLow="Negative"
+            labelHigh="Positive"
+            value={curY}
+            origin={originY}
+            onDrag={(v) => dragAxis('y', v)}
+            onCommit={(v) => commitAxis('y', v)}
+          />
+        </div>
+
         <p
           style={{
             margin: 0,
@@ -144,48 +295,6 @@ export function CoordinateCard({ pin, highlightedIds, isSelected, isEntering = f
         >
           {pin.regionDescription.narrative}
         </p>
-
-        {/* Axis position bars */}
-        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Arousal bar */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Calm</span>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Activated</span>
-            </div>
-            <div style={{ position: 'relative', height: 2, background: 'rgba(237,232,223,0.08)', borderRadius: 1 }}>
-              <div style={{
-                position: 'absolute',
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: 'rgba(201,168,124,0.7)',
-                top: -2,
-                left: `${coordToPercent(pin.x)}%`,
-                transform: 'translateX(-50%)',
-              }} />
-            </div>
-          </div>
-          {/* Valence bar */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Negative</span>
-              <span style={{ fontSize: 8, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>Positive</span>
-            </div>
-            <div style={{ position: 'relative', height: 2, background: 'rgba(237,232,223,0.08)', borderRadius: 1 }}>
-              <div style={{
-                position: 'absolute',
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: 'rgba(201,168,124,0.7)',
-                top: -2,
-                left: `${coordToPercent(pin.y)}%`,
-                transform: 'translateX(-50%)',
-              }} />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Recognized words + pills — in a slightly recessed band */}
