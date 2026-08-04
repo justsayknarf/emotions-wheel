@@ -76,6 +76,9 @@ export default function App() {
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const railScrollRef = useRef<HTMLDivElement>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  // The live coordinate while a card slider is dragged — drives the field's ghost
+  // preview + travel line. Never persisted; cleared on release (handleAdjustPin).
+  const [adjustDraft, setAdjustDraft] = useState<{ x: number; y: number } | null>(null);
   const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
   // Mobile returning-mirror tray: collapsed by default so the field stays
   // pinnable on load; the peek handle expands it.
@@ -247,6 +250,12 @@ export default function App() {
   // origin and recognizedWords are deliberately preserved.
   const handleAdjustPin = useCallback((pinId: string, x: number, y: number) => {
     setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
+    setAdjustDraft(null);
+  }, []);
+
+  // The live draft coordinate during a slider drag (field preview only); null ends it.
+  const handleAdjustDraft = useCallback((coord: { x: number; y: number } | null) => {
+    setAdjustDraft(coord);
   }, []);
 
   const handleRecord = useCallback(() => {
@@ -328,6 +337,7 @@ export default function App() {
           axisEmphasis={showDemo || axisPulseOn}
           ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
           emphasizedPinId={effectiveSelectedPinId}
+          adjustDraft={adjustDraft}
         />
       </div>
 
@@ -414,6 +424,7 @@ export default function App() {
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
                 onAdjust={handleAdjustPin}
+                onAdjustDraft={handleAdjustDraft}
                 dissolve={{ fadeOut: tuning.captionFadeOut, fadeIn: tuning.captionFadeIn, hold: tuning.captionHold }}
                 onDone={handleDone}
                 onClear={() => { setPins([]); }}
