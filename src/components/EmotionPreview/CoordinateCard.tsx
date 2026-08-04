@@ -13,9 +13,6 @@ const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, s
 
 interface Props {
   pin: PinEntry;
-  // Still drives the field's lit words upstream; the card now computes its own
-  // nearby list, so this is no longer read here.
-  highlightedIds: string[];
   isSelected: boolean;
   isEntering?: boolean;
   onSelect: () => void;
@@ -50,6 +47,7 @@ function AxisSlider({
   labelHigh,
   value,
   origin,
+  onGrab,
   onDrag,
   onCommit,
 }: {
@@ -57,6 +55,7 @@ function AxisSlider({
   labelHigh: string;
   value: number;
   origin: number;
+  onGrab?: () => void;
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
 }) {
@@ -81,6 +80,10 @@ function AxisSlider({
         onPointerDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
+          // Select this pin as the drag begins so the field's adjust ghost/travel
+          // overlay anchors to the pin actually being moved (not whichever card
+          // happened to be selected).
+          onGrab?.();
           draggingRef.current = true;
           trackRef.current?.setPointerCapture(e.pointerId);
           onDrag(valueAt(e.clientX));
@@ -230,20 +233,30 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   };
 
   // While a slider is dragged, the thumbs follow this local draft; the committed
-  // pin coordinate (and its words) hold until release.
+  // pin coordinate (and its words) hold until release. draftRef mirrors the draft
+  // and is read (and written) only inside the pointer handlers — never during
+  // render — so the untouched axis is taken from the latest in-flight value even
+  // when both axis sliders are dragged at once, not a stale render closure.
   const [draft, setDraft] = useState<{ x: number; y: number } | null>(null);
+  const draftRef = useRef<{ x: number; y: number } | null>(null);
   const curX = draft?.x ?? pin.x;
   const curY = draft?.y ?? pin.y;
   const originX = pin.origin?.x ?? pin.x;
   const originY = pin.origin?.y ?? pin.y;
 
+  const nextFrom = (axis: 'x' | 'y', v: number) => {
+    const base = draftRef.current ?? { x: pin.x, y: pin.y };
+    return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
+  };
   const dragAxis = (axis: 'x' | 'y', v: number) => {
-    const next = { x: axis === 'x' ? v : curX, y: axis === 'y' ? v : curY };
+    const next = nextFrom(axis, v);
+    draftRef.current = next;
     setDraft(next);
     onAdjustDraft?.(next);
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
-    const next = { x: axis === 'x' ? v : curX, y: axis === 'y' ? v : curY };
+    const next = nextFrom(axis, v);
+    draftRef.current = null;
     setDraft(null);
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
@@ -316,6 +329,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelHigh="Activated"
             value={curX}
             origin={originX}
+            onGrab={onSelect}
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
           />
@@ -324,6 +338,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelHigh="Positive"
             value={curY}
             origin={originY}
+            onGrab={onSelect}
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
           />

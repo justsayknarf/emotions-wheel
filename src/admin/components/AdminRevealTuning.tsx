@@ -27,7 +27,7 @@ const REVEAL_KNOBS: Knob[] = [
   { key: 'ringGap', label: 'Ring gap', min: 0, max: 80, step: 2, fmt: (v) => `${v}px` },
   { key: 'tetherDuration', label: 'Tether fade', min: 0.6, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'staggerStep', label: 'Stagger', min: 0, max: 0.2, step: 0.01, fmt: (v) => `${Math.round(v * 1000)}ms` },
-  { key: 'tagCount', label: 'Nearby tags', min: 1, max: 12, step: 1, fmt: (v) => String(v) },
+  { key: 'tagCount', label: 'Field words', min: 1, max: 12, step: 1, fmt: (v) => String(v) },
   { key: 'recedeStrength', label: 'Recede', min: 0, max: 1, step: 0.05, fmt: (v) => (v === 0 ? 'off' : `${Math.round(v * 100)}%`) },
 ];
 

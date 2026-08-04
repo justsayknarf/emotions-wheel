@@ -10,7 +10,6 @@ type Variant = 'sheet' | 'rail';
 
 interface Props {
   pins: PinEntry[];
-  highlightedIds: Set<string>;
   variant: Variant;
   onRecognize: (emotionId: string) => void;
   onDerecognize: (emotionId: string) => void;
@@ -36,7 +35,6 @@ interface Props {
 
 export function EmotionDrawer({
   pins,
-  highlightedIds,
   variant,
   onRecognize,
   onDerecognize,
@@ -143,7 +141,6 @@ export function EmotionDrawer({
           >
             <CoordinateCard
               pin={pin}
-              highlightedIds={pin.id === selectedPinId ? Array.from(highlightedIds) : []}
               isSelected={pin.id === selectedPinId}
               isEntering={pin.id === enteringPinId}
               onSelect={() => onSelectPin(pin.id)}

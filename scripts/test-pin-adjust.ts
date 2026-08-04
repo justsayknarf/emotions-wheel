@@ -6,7 +6,7 @@
 // This repo has no test runner, so this is the only automated exercise of the
 // adjust logic. Exits non-zero on any violation.
 import { adjustPin, withOrigin } from '../src/data/pins';
-import { getRegionDescription } from '../src/data/regions';
+import { getRegionDescription, nearbyEmotions } from '../src/data/regions';
 import { emotions } from '../src/data/emotions';
 import type { PinEntry } from '../src/types';
 
@@ -76,6 +76,41 @@ check(
   'origin is idempotent (not overwritten by a later re-stamp)',
   restamped.origin?.x === 0.2 && restamped.origin?.y === -0.1,
   `origin (${restamped.origin?.x}, ${restamped.origin?.y}) after move to (0.9, 0.9)`,
+);
+
+// --- nearbyEmotions: the caption's guesses + tags (U3 required coverage) ---
+const emById = new Map(emotions.map((e) => [e.id, e]));
+const distTo = (x: number, y: number, id: string) => {
+  const e = emById.get(id)!;
+  return Math.hypot(x - e.x, y - e.y);
+};
+
+const nb = nearbyEmotions(0.51, -0.30, emotions, 7);
+check('nearbyEmotions: within range and capped at limit', nb.length > 0 && nb.length <= 7, `${nb.length} returned`);
+
+const nbDists = nb.map((n) => distTo(0.51, -0.30, n.id));
+check(
+  'nearbyEmotions: sorted nearest-first',
+  nbDists.every((d, i) => i === 0 || d >= nbDists[i - 1]),
+  nbDists.map((d) => d.toFixed(2)).join(', '),
+);
+
+check('nearbyEmotions: limit 0 returns empty', nearbyEmotions(0.51, -0.30, emotions, 0).length === 0, 'empty');
+
+// The caption's two guesses (nb[0], nb[1]) must be the same nearest pair that
+// getRegionDescription names — the "guesses equal the two nearest" contract.
+const rel = getRegionDescription(0.51, -0.30, emotions).relational;
+check(
+  'nearbyEmotions: two nearest match the region relational pair',
+  nb.length >= 2 && rel.includes(nb[0].label) && rel.includes(nb[1].label),
+  `${nb[0].label}, ${nb[1].label} vs "${rel}"`,
+);
+
+// A far corner has fewer neighbors than a populated zone.
+check(
+  'nearbyEmotions: sparse edge returns no more than a dense zone',
+  nearbyEmotions(-0.98, -0.98, emotions, 7).length <= nb.length,
+  'edge neighborhood is not denser than an interior one',
 );
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);

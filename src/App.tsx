@@ -418,7 +418,6 @@ export default function App() {
             {pins.length > 0 && (
               <EmotionDrawer
                 pins={pins}
-                highlightedIds={highlightedIds}
                 variant={sideBySide ? 'rail' : 'sheet'}
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}
