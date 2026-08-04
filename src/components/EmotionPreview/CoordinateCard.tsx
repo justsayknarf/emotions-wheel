@@ -15,6 +15,10 @@ interface Props {
   onRecognize: (id: string) => void;
   onDerecognize: (id: string) => void;
   onRemove: () => void;
+  // Commit an adjusted coordinate for this pin (a slider was released).
+  onAdjust: (pinId: string, x: number, y: number) => void;
+  // Live draft coordinate during a slider drag (field preview only). Optional.
+  onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
 }
 
 // Maps coordinate [-1, 1] to [5%, 95%] for position bar markers

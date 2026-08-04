@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { emotions } from './data/emotions';
 import { nearestTagIds } from './data/regions';
+import { adjustPin, withOrigin } from './data/pins';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
@@ -200,7 +201,9 @@ export default function App() {
   );
 
   const handlePinRelease = useCallback((entry: PinEntry) => {
-    setPins((prev) => [...prev, entry]);
+    // Stamp the drop coordinate as the pin's origin (kept for the field anchor +
+    // history); x/y stays authoritative and is what later adjustments move.
+    setPins((prev) => [...prev, withOrigin(entry)]);
     setSelectedPinId(entry.id);
     setEnteringPinId(entry.id);
     setTetherKey((k) => k + 1);
@@ -236,6 +239,14 @@ export default function App() {
 
   const handlePinRemove = useCallback((pinId: string) => {
     setPins((prev) => prev.filter((p) => p.id !== pinId));
+  }, []);
+
+  // Commit an adjusted coordinate (slider released): move the pin and recompute
+  // its description in place. regionDescription is a stored snapshot, so it must
+  // be refreshed here — highlightedIds re-derives on its own from the new x/y.
+  // origin and recognizedWords are deliberately preserved.
+  const handleAdjustPin = useCallback((pinId: string, x: number, y: number) => {
+    setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
   }, []);
 
   const handleRecord = useCallback(() => {
@@ -402,6 +413,7 @@ export default function App() {
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
+                onAdjust={handleAdjustPin}
                 onDone={handleDone}
                 onClear={() => { setPins([]); }}
                 selectedPinId={effectiveSelectedPinId}

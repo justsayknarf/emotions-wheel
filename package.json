@@ -11,6 +11,7 @@
     "check:fan": "npx tsx scripts/test-fan.ts",
     "check:csv": "npx tsx scripts/test-csv-export.ts",
     "check:cues": "npx tsx scripts/test-grounding-cues.ts",
+    "check:pin": "npx tsx scripts/test-pin-adjust.ts",
     "preview": "vite preview"
   },
   "dependencies": {

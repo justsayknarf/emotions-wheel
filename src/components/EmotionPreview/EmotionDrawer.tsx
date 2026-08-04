@@ -15,6 +15,11 @@ interface Props {
   onRecognize: (emotionId: string) => void;
   onDerecognize: (emotionId: string) => void;
   onPinRemove: (pinId: string) => void;
+  // Commit an adjusted coordinate for a pin (a card slider was released).
+  onAdjust: (pinId: string, x: number, y: number) => void;
+  // Live draft coordinate while a card slider is dragged (field preview only).
+  // Optional: wired once the field overlay consumes it.
+  onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
   onDone: () => void;
   onClear: () => void;
   selectedPinId: string | null;
@@ -34,6 +39,8 @@ export function EmotionDrawer({
   onRecognize,
   onDerecognize,
   onPinRemove,
+  onAdjust,
+  onAdjustDraft,
   onDone,
   onClear,
   selectedPinId,
@@ -140,6 +147,8 @@ export function EmotionDrawer({
               onRecognize={onRecognize}
               onDerecognize={onDerecognize}
               onRemove={() => onPinRemove(pin.id)}
+              onAdjust={onAdjust}
+              onAdjustDraft={onAdjustDraft}
             />
           </motion.div>
         ))}
