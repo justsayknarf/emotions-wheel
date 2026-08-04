@@ -69,8 +69,8 @@ export const DEFAULT_TUNING: RevealTuning = {
   axisPulseStagger: 1.0,
   axisPulseDuration: 2.2,
   axisPulseStrength: 0.025,
-  captionFadeOut: 0.26,
-  captionFadeIn: 0.3,
+  captionFadeOut: 0.3,
+  captionFadeIn: 0.6,
   captionHold: 0.05,
 };
 
