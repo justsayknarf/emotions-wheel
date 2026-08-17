@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
@@ -185,6 +185,25 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // cutting to the quiet line in a single frame.
   const captionMode = guesses.length === 0 ? 'wordless' : dismissed ? 'dismissed' : 'question';
 
+  // The caption changes height when it swaps kind — three rows of question down
+  // to a single quiet line, and back. Animate the *real* height rather than a
+  // transform, so the card's own box follows in normal flow; framer's `layout`
+  // would scale the box instead, squashing the text and leaving the card border
+  // out of sync with it. The drawer's `layout` spring can't cover this either:
+  // it only re-measures when the drawer re-renders, and the dismissal is local
+  // state in here, so the drawer never hears about it.
+  const captionRef = useRef<HTMLDivElement>(null);
+  const [captionHeight, setCaptionHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = captionRef.current;
+    if (!el) return;
+    // observe() fires once immediately, which supplies the initial measurement —
+    // so no setState in the effect body.
+    const ro = new ResizeObserver(() => setCaptionHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const toggleName = (id: string) => {
     if (recognizedSet.has(id)) onDerecognize(id);
     else onRecognize(id);
@@ -358,6 +377,12 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             tunable timings. `popLayout` pulls the outgoing caption out of flow
             so the card eases down to its new height once, instead of collapsing
             into the gap and springing back. */}
+        <motion.div
+          animate={{ height: reduced ? 'auto' : captionHeight ?? 'auto' }}
+          transition={{ duration: reduced ? 0 : fadeOut, ease: 'easeOut' }}
+          style={{ overflow: 'hidden' }}
+        >
+        <div ref={captionRef}>
         <AnimatePresence mode="popLayout" initial={false}>
         <motion.div key={captionMode} {...slotAnim}>
         {captionMode === 'wordless' ? (
@@ -413,6 +438,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         )}
         </motion.div>
         </AnimatePresence>
+        </div>
+        </motion.div>
 
         {pin.recognizedWords.length > 0 && (
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
