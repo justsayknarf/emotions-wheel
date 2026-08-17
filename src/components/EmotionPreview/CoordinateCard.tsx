@@ -42,6 +42,7 @@ const endLabelStyle = {
 // A single draggable axis. Reports the value live while dragging (onDrag) and
 // once more on release (onCommit) — the card commits on release. The origin tick
 // marks where the pin was first dropped, so travel from the felt drop is visible.
+// A gesture the user never finished (onCancel) reverts instead of committing.
 function AxisSlider({
   labelLow,
   labelHigh,
@@ -50,6 +51,7 @@ function AxisSlider({
   onGrab,
   onDrag,
   onCommit,
+  onCancel,
 }: {
   labelLow: string;
   labelHigh: string;
@@ -58,6 +60,7 @@ function AxisSlider({
   onGrab?: () => void;
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
+  onCancel: () => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -98,7 +101,11 @@ function AxisSlider({
         onPointerCancel={() => {
           if (!draggingRef.current) return;
           draggingRef.current = false;
-          onCommit(value);
+          // The browser took the gesture away — a notification, the OS reading
+          // the drag as a system swipe, a palm on the glass. The user never let
+          // go, so there is nothing to commit: revert rather than record a
+          // coordinate they didn't choose.
+          onCancel();
         }}
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -280,6 +287,17 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     setDraft(next);
     onAdjustDraft?.(next);
   };
+  // Abandon an unfinished drag: drop the draft so the thumbs snap back to the
+  // committed coordinate and the field's ghost/travel overlay clears. Cancelling
+  // one axis abandons the whole adjustment rather than just that axis — a
+  // cancel almost always takes every active pointer with it, and a half-kept
+  // draft is harder to reason about than a clean revert to the last committed
+  // position.
+  const cancelAxis = () => {
+    draftRef.current = null;
+    setDraft(null);
+    onAdjustDraft?.(null);
+  };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
     draftRef.current = null;
@@ -358,6 +376,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onGrab={onSelect}
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
+            onCancel={cancelAxis}
           />
           <AxisSlider
             labelLow="Negative"
@@ -367,6 +386,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onGrab={onSelect}
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
+            onCancel={cancelAxis}
           />
         </div>
 
