@@ -178,6 +178,13 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
   const dismissed = dismissedAt === coordKey;
 
+  // Which of the three captions is showing. Keyed on the branch itself and not
+  // on the words inside it, so swapping words still dissolves only the slots
+  // while the "Does … fit?" frame holds still — but going quiet (dismissed, or
+  // drifted out of range of every word) dissolves the whole caption instead of
+  // cutting to the quiet line in a single frame.
+  const captionMode = guesses.length === 0 ? 'wordless' : dismissed ? 'dismissed' : 'question';
+
   const toggleName = (id: string) => {
     if (recognizedSet.has(id)) onDerecognize(id);
     else onRecognize(id);
@@ -346,14 +353,20 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
         {/* Honest-question caption — words as an optional, dismissable suggestion.
             Only the guess slots + tags dissolve on a coordinate commit; the
-            "Does … or … fit?" frame holds still. */}
-        {guesses.length === 0 ? (
+            "Does … or … fit?" frame holds still. Swapping between the question
+            and either quiet caption dissolves the whole block on the same
+            tunable timings. `popLayout` pulls the outgoing caption out of flow
+            so the card eases down to its new height once, instead of collapsing
+            into the gap and springing back. */}
+        <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div key={captionMode} {...slotAnim}>
+        {captionMode === 'wordless' ? (
           <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
             {pin.regionDescription.relational}
           </p>
-        ) : dismissed ? (
+        ) : captionMode === 'dismissed' ? (
           <p style={{ margin: 0, fontSize: 13, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
-            your spot is enough.
+            where you landed is enough.
           </p>
         ) : (
           <>
@@ -398,6 +411,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             </button>
           </>
         )}
+        </motion.div>
+        </AnimatePresence>
 
         {pin.recognizedWords.length > 0 && (
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
