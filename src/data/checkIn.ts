@@ -31,3 +31,23 @@ export function updateEntryInList(entries: DiaryEntry[], updated: DiaryEntry): D
   next[index] = { ...updated, timestamp: original.timestamp };
   return next;
 }
+
+// U2: the previous check-in. It is derived — never stored — from the diary's
+// most recent entry, so recording (which clears the draft) turns the just-
+// recorded entry into the previous check-in through this same function rather
+// than through a second copy kept in app state. There is no age cutoff: a
+// weeks-old entry is still "the previous check-in" if nothing more recent
+// exists.
+//
+// `draftId` excludes the entry whose id the draft currently carries. This
+// only matters once U7 adds reopen (a draft carrying a recorded entry's id
+// while it's being edited) — while an entry is reopened, it must render once,
+// as the draft, not also here. Nothing in the app passes a non-null draftId
+// yet; U2's call site always passes null, which excludes nothing beyond
+// naturally resolving to the single most recent entry.
+export function derivePreviousCheckIn(entries: DiaryEntry[], draftId: string | null): DiaryEntry | null {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].id !== draftId) return entries[i];
+  }
+  return null;
+}

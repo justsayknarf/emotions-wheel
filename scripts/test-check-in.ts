@@ -2,11 +2,12 @@
 // Run: npm run check:checkin
 //
 // U1 covers updateEntryInList — replacing a recorded diary entry in place by
-// id. Later units (U2's previous-check-in derivation, U3's active-check-in /
-// pin resolution) add their assertions to this same script as they land in
+// id. U2 covers derivePreviousCheckIn — the most-recent-entry derivation that
+// stands in for a second stored "previous check-in" copy. U3's active-check-in
+// / pin resolution adds its assertions to this same script as it lands in
 // src/data/checkIn.ts. This repo has no test runner, so this is the only
 // automated exercise of the logic. Exits non-zero on any violation.
-import { updateEntryInList } from '../src/data/checkIn';
+import { updateEntryInList, derivePreviousCheckIn } from '../src/data/checkIn';
 import { updateEntry } from '../src/store/diary';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
@@ -153,6 +154,133 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
     'updateEntry wrapper degrades quietly when the store is unavailable',
     !threw,
     threw ? 'threw instead of degrading' : 'did not throw',
+  );
+}
+
+// === U2: derivePreviousCheckIn ===
+// App.tsx calls this at render, next to the `lastCoord` derivation, with
+// `draftId` always null in this unit (there is no carried-draft-id concept
+// until U7 wires reopen). These assertions exercise the function directly,
+// including the non-null-draftId branch nothing calls yet.
+
+// --- the most recent entry when several exist ---
+{
+  const e1 = entry('e1', '2026-06-01T09:00:00.000Z', [pin('p1', 0.1, 0.1)]);
+  const e2 = entry('e2', '2026-07-15T09:00:00.000Z', [pin('p2', 0.2, 0.2)]);
+  const e3 = entry('e3', '2026-08-10T09:00:00.000Z', [pin('p3', 0.3, 0.3)]);
+  const previous = derivePreviousCheckIn([e1, e2, e3], null);
+
+  check(
+    'previous check-in is the most recent entry when several exist',
+    previous?.id === 'e3',
+    `resolved to ${previous?.id}`,
+  );
+}
+
+// --- Covers AE6: a three-pin check-in surfaces all three pins ---
+{
+  const threePin = entry('e-three', '2026-08-12T09:00:00.000Z', [
+    pin('p1', -0.4, 0.2),
+    pin('p2', 0.1, -0.3),
+    pin('p3', 0.6, 0.6),
+  ]);
+  const previous = derivePreviousCheckIn([threePin], null);
+
+  check(
+    'AE6: a check-in recorded with three pins surfaces all three as the previous check-in',
+    previous?.pins.length === 3 && previous.pins.map((p) => p.id).join(',') === 'p1,p2,p3',
+    JSON.stringify(previous?.pins.map((p) => p.id)),
+  );
+}
+
+// --- excludes the entry whose id the draft carries ---
+{
+  const e1 = entry('e1', '2026-07-01T09:00:00.000Z', [pin('p1', 0, 0)]);
+  const e2 = entry('e2', '2026-08-01T09:00:00.000Z', [pin('p2', 0.5, 0.5)]);
+  // Nothing calls derivePreviousCheckIn with a non-null draftId yet — this
+  // unit's own App.tsx call site always passes null (no carried-id concept
+  // exists in the draft until U7 adds reopen). This proves the exclusion the
+  // function is already built for, ahead of anything using it that way.
+  const previousWhenE2Reopened = derivePreviousCheckIn([e1, e2], 'e2');
+  const previousWithNoDraft = derivePreviousCheckIn([e1, e2], null);
+
+  check(
+    'previous check-in excludes the entry whose id the draft carries, so a reopened check-in resolves to exactly one group',
+    previousWhenE2Reopened?.id === 'e1',
+    `resolved to ${previousWhenE2Reopened?.id}`,
+  );
+  check(
+    'with no carried id, the most recent entry resolves normally',
+    previousWithNoDraft?.id === 'e2',
+    `resolved to ${previousWithNoDraft?.id}`,
+  );
+}
+
+// --- age does not retire a previous check-in ---
+{
+  const weeksOld = entry('e-old', '2026-06-01T09:00:00.000Z', [pin('p1', 0, 0)]);
+  const previous = derivePreviousCheckIn([weeksOld], null);
+
+  check(
+    'a weeks-old entry still resolves as the previous check-in — age does not retire it',
+    previous?.id === 'e-old',
+    `resolved to ${previous?.id}`,
+  );
+}
+
+// --- no history, no draft ---
+{
+  const previous = derivePreviousCheckIn([], null);
+
+  check(
+    'with no history and no draft, neither a previous check-in nor a draft is present',
+    previous === null,
+    `resolved to ${previous}`,
+  );
+}
+
+// --- Covers AE1 (pure-logic half only — see report): recording a one-pin
+// draft leaves the draft empty and one entry recorded. What this asserts is
+// the derivation side: once a draft's pins are recorded into an entry,
+// derivePreviousCheckIn resolves that entry as the previous check-in — the
+// same derivation App.tsx's `previousCheckIn` reads after handleRecord's
+// `setPins([])`. That the draft (`pins` state in App.tsx) actually empties on
+// record is React state and cannot be asserted by this Node script — there is
+// no component harness (AGENTS.md) and this script cannot import App.tsx
+// (framer-motion, DOM-touching hooks, no DOM under `npx tsx`).
+{
+  const before: DiaryEntry[] = [];
+  const recorded = entry('e-recorded', '2026-08-18T09:00:00.000Z', [pin('p1', 0.2, -0.2)]);
+  const after = [...before, recorded]; // models appendEntry's effect
+
+  const previous = derivePreviousCheckIn(after, null);
+
+  check(
+    'AE1 (pure-logic half): the just-recorded one-pin entry becomes the previous check-in',
+    previous?.id === 'e-recorded' && previous.pins.length === 1,
+    `resolved to ${previous?.id} with ${previous?.pins.length ?? 0} pin(s)`,
+  );
+}
+
+// --- Covers AE2 (pure-logic half only — see report): with a draft cleared by
+// recording, no further record call can produce a second entry for it.
+// Pure-logic half: derivePreviousCheckIn is stable over an unchanged diary —
+// deriving twice in a row (modeling "the draft has nothing left, so nothing
+// gets appended between the two looks") still resolves to the same single
+// entry, not a second one. The actual guard — handleDone's
+// `pins.length > 0` check plus handleRecord's `setPins([])` — is React state
+// and needs manual verification; see report.
+{
+  const recorded = entry('e-recorded', '2026-08-18T09:00:00.000Z', [pin('p1', 0, 0)]);
+  const diary = [recorded];
+
+  const firstLook = derivePreviousCheckIn(diary, null);
+  const secondLook = derivePreviousCheckIn(diary, null);
+
+  check(
+    'AE2 (pure-logic half): re-deriving over an unchanged diary still resolves to exactly one entry',
+    diary.length === 1 && firstLook?.id === 'e-recorded' && secondLook?.id === 'e-recorded',
+    `diary length ${diary.length}, first ${firstLook?.id}, second ${secondLook?.id}`,
   );
 }
 

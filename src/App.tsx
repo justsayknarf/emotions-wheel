@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { emotions } from './data/emotions';
 import { nearestTagIds } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
+import { derivePreviousCheckIn } from './data/checkIn';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
@@ -162,7 +163,21 @@ export default function App() {
   //   no history + fresh → first-run gesture demo
   //   pins present       → active drawer (existing path)
   const hasHistory = entries.length > 0;
-  const lastCoord = hasHistory ? entries[entries.length - 1].pins.at(-1) ?? null : null;
+  // The previous check-in: the most recent diary entry, derived at render
+  // rather than stored, so recording (which clears the draft below) turns the
+  // just-recorded entry into this without a second stored copy. `draftId` is
+  // always null until U7 adds reopen (a draft carrying a recorded entry's id
+  // while it's edited) — there is no carried-id concept in the draft yet, so
+  // this excludes nothing beyond naturally resolving to the single most
+  // recent entry.
+  const draftId: string | null = null;
+  const previousCheckIn = derivePreviousCheckIn(entries, draftId);
+  // lastCoord now reads through previousCheckIn rather than indexing entries
+  // directly, so the ghost pin below tracks the same derivation U6/U8 will use
+  // for the full previous-check-in card — one source, not two ways to find
+  // "the last entry". U4 generalizes this single coordinate into the previous
+  // check-in's full pin set; not this unit's scope.
+  const lastCoord = previousCheckIn?.pins.at(-1) ?? null;
   const showMirror = view === 'field' && pins.length === 0 && hasHistory;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
 
@@ -260,6 +275,15 @@ export default function App() {
 
   const handleRecord = useCallback(() => {
     const entry = record(pins, sessionStartRef.current);
+    // Clear the draft so the just-recorded entry becomes the previous
+    // check-in through derivePreviousCheckIn (above) rather than through a
+    // second stored copy — this is what keeps a second handleRecord call from
+    // ever producing a duplicate entry (R20): with the draft empty, there is
+    // nothing left to record. Selection is part of the draft being cleared,
+    // so it resets too rather than pointing at a pin that no longer exists
+    // in it.
+    setPins([]);
+    setSelectedPinId(null);
     setLastEntry(entry);
     setView('complete');
   }, [pins, record]);
@@ -269,7 +293,11 @@ export default function App() {
   }, [pins, handleRecord]);
 
   const handleNewSession = useCallback(() => {
+    // Resets the draft, selection, and view. It does not touch the previous
+    // check-in — that's derived from storage (derivePreviousCheckIn above),
+    // not stored here, so it survives this reset and a reload alike.
     setPins([]);
+    setSelectedPinId(null);
     setLastEntry(null);
     sessionStartRef.current = Date.now();
     setView('field');
