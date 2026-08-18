@@ -10,6 +10,10 @@ type Variant = 'sheet' | 'rail';
 
 interface Props {
   pins: PinEntry[];
+  // The previous check-in's pins (derived from the last diary entry) —
+  // rendered as their own collapsed, read-only group above the draft (R4,
+  // R5, R6). Empty when there is no history.
+  previousPins: PinEntry[];
   variant: Variant;
   onRecognize: (emotionId: string) => void;
   onDerecognize: (emotionId: string) => void;
@@ -35,6 +39,7 @@ interface Props {
 
 export function EmotionDrawer({
   pins,
+  previousPins,
   variant,
   onRecognize,
   onDerecognize,
@@ -50,7 +55,12 @@ export function EmotionDrawer({
   scrollRef,
 }: Props) {
   const reversedPins = [...pins].reverse();
+  const reversedPreviousPins = [...previousPins].reverse();
   const isRail = variant === 'rail';
+  // Save reflects the draft's count only (R21) and is unavailable when the
+  // draft holds nothing new (R19) — `pins` here is always the draft array,
+  // unaffected by the previous check-in's pins.
+  const canSave = pins.length > 0;
 
   const actionBar = (
     <div
@@ -78,21 +88,22 @@ export function EmotionDrawer({
           cursor: 'pointer',
         }}
       >
-        Clear
+        Discard Draft
       </button>
       <button
         onClick={onDone}
+        disabled={!canSave}
         style={{
-          background: 'var(--oura-gold)',
+          background: canSave ? 'var(--oura-gold)' : 'var(--oura-border)',
           border: 'none',
           borderRadius: 6,
           padding: '7px 18px',
-          color: '#0D0F14',
+          color: canSave ? '#0D0F14' : 'var(--oura-text-3)',
           fontSize: 11,
           fontWeight: 600,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
-          cursor: 'pointer',
+          cursor: canSave ? 'pointer' : 'default',
         }}
       >
         {`Save  ·  ${pins.length}`}
@@ -114,6 +125,52 @@ export function EmotionDrawer({
         gap: 8,
       }}
     >
+      {isRail && previousPins.length > 0 && (
+        <div
+          style={{
+            fontSize: 8.5,
+            fontWeight: 500,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: 'var(--oura-text-3)',
+            padding: '6px 0 2px',
+          }}
+        >
+          {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
+        </div>
+      )}
+      {previousPins.length > 0 && (
+        <AnimatePresence initial={false}>
+          {reversedPreviousPins.map((pin) => (
+            <motion.div
+              key={pin.id}
+              layout
+              data-pin-id={pin.id}
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            >
+              <CoordinateCard
+                pin={pin}
+                isSelected={pin.id === selectedPinId}
+                isEntering={false}
+                onSelect={() => onSelectPin(pin.id)}
+                onRecognize={onRecognize}
+                onDerecognize={onDerecognize}
+                // A read-only card never renders the remove control — this
+                // is unreachable, kept only to satisfy the prop's type.
+                onRemove={() => {}}
+                onAdjust={onAdjust}
+                onAdjustDraft={onAdjustDraft}
+                dissolve={dissolve}
+                readOnly
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      )}
+
       {isRail && (
         <div
           style={{
@@ -125,7 +182,7 @@ export function EmotionDrawer({
             padding: '6px 0 2px',
           }}
         >
-          {`This session  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+          {`Draft check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
         </div>
       )}
       <AnimatePresence initial={false}>

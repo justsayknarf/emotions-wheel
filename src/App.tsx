@@ -458,9 +458,10 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {pins.length > 0 && (
+            {(pins.length > 0 || previousCheckIn) && (
               <EmotionDrawer
                 pins={pins}
+                previousPins={previousCheckIn?.pins ?? []}
                 variant={sideBySide ? 'rail' : 'sheet'}
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}

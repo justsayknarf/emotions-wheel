@@ -25,6 +25,9 @@ interface Props {
   onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
   // Tunable timings (seconds) for the word/tag dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
+  // A previous (recorded) check-in's pin: no adjustment, no naming (R5), and
+  // collapsed-by-default with tap-to-inspect (R4) rather than always-expanded.
+  readOnly?: boolean;
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -152,8 +155,18 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
+
+  // Collapsed-by-default inspect state (R4). Local and only meaningful for a
+  // read-only card — a draft card's rendering is unaffected and always shows
+  // its full body, exactly as before this prop existed.
+  const [expanded, setExpanded] = useState(false);
+
+  // The accent that marks this card as recorded rather than draft (R6) — the
+  // same cool hue the field already uses for a recorded pin (U4), so the
+  // treatment reads consistently between the two surfaces.
+  const accentDim = readOnly ? 'var(--oura-recorded-dim)' : 'var(--oura-gold-dim)';
 
   // The slot dissolve on a coordinate commit — tunable, and collapsed to an
   // instant swap when the viewer prefers reduced motion.
@@ -308,14 +321,20 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
   return (
     <div
-      onClick={onSelect}
+      onClick={() => {
+        onSelect();
+        // Tapping a read-only card inspects (expands) and selects — it never
+        // reopens the card for editing (R17). A draft card has no expand
+        // state, so this is a no-op there.
+        if (readOnly) setExpanded((v) => !v);
+      }}
       style={{
         background: 'var(--oura-surface)',
-        border: showSelected ? '1px solid var(--oura-gold-dim)' : '1px solid var(--oura-border)',
+        border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--oura-border)',
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
-        boxShadow: showSelected ? '0 0 0 1px var(--oura-gold-dim), 0 6px 22px rgba(201,168,124,0.12)' : 'none',
+        boxShadow: showSelected ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)` : 'none',
         transition: 'border-color 0.35s ease, box-shadow 0.35s ease',
       }}
     >
@@ -334,34 +353,116 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             fontWeight: 500,
             letterSpacing: '0.14em',
             textTransform: 'uppercase',
-            color: 'var(--oura-gold-dim)',
+            color: accentDim,
           }}
         >
           Emotional State
         </span>
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--oura-text-3)',
-            fontSize: 16,
-            cursor: 'pointer',
-            padding: '0 0 0 8px',
-            lineHeight: 1,
-            display: 'flex',
-            alignItems: 'center',
-            minWidth: 32,
-            minHeight: 32,
-            justifyContent: 'center',
-          }}
-          aria-label="Remove"
-        >
-          ×
-        </button>
+        {readOnly ? (
+          // U7 will put a labeled reopen control in this slot. This unit
+          // leaves it empty rather than rendering a placeholder or a
+          // disabled remove button — a recorded card has nothing to remove.
+          null
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--oura-text-3)',
+              fontSize: 16,
+              cursor: 'pointer',
+              padding: '0 0 0 8px',
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              minWidth: 32,
+              minHeight: 32,
+              justifyContent: 'center',
+            }}
+            aria-label="Remove"
+          >
+            ×
+          </button>
+        )}
       </div>
 
-      {/* Main metric block — sliders on top, then the (read-only for now) words */}
+      {readOnly ? (
+        /* Read-only body: no sliders (R5), collapsed to a one-line summary
+           until tapped, then an inspect-only expanded caption — never the
+           tap-to-recognize affordance, which stays exclusive to the draft. */
+        <div style={{ padding: '10px 14px 14px' }}>
+          {expanded ? (
+            <>
+              {guesses.length === 0 ? (
+                <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+                  {pin.regionDescription.relational}
+                </p>
+              ) : (
+                <div style={{ fontFamily: FIELD_SERIF, fontSize: 15.5, color: 'var(--oura-text-2)', lineHeight: 1.55 }}>
+                  Does{' '}
+                  <span style={{ color: 'var(--oura-text-1)' }}>{guesses[0].label.toLowerCase()}</span>
+                  {guesses[1] && (
+                    <>
+                      {' '}<span style={{ color: 'var(--oura-text-3)' }}>or</span>{' '}
+                      <span style={{ color: 'var(--oura-text-1)' }}>{guesses[1].label.toLowerCase()}</span>
+                    </>
+                  )}
+                  {' '}fit?
+                </div>
+              )}
+
+              {nearbyTags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 12 }}>
+                  <span style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginRight: 2 }}>
+                    or nearby
+                  </span>
+                  {nearbyTags.map((e) => (
+                    <span
+                      key={e.id}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '4px 11px',
+                        borderRadius: 6,
+                        border: '1px solid rgba(237,232,223,0.12)',
+                        background: 'rgba(237,232,223,0.04)',
+                        color: 'var(--oura-text-2)',
+                        fontSize: 12,
+                        letterSpacing: '0.01em',
+                      }}
+                    >
+                      {e.label.toLowerCase()}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {pin.recognizedWords.length > 0 && (
+                <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: accentDim, letterSpacing: '0.02em' }}>named:</span>
+                  {pin.recognizedWords.map((id) => (
+                    <span
+                      key={id}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--oura-recorded)', fontSize: 11.5 }}
+                    >
+                      {labelForId(id)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+              {guesses.length === 0
+                ? pin.regionDescription.relational
+                : `near ${guesses[0].label.toLowerCase()}${guesses[1] ? ` or ${guesses[1].label.toLowerCase()}` : ''}`}
+            </p>
+          )}
+        </div>
+      ) : (
+      /* Main metric block — sliders on top, then the (read-only for now) words */
       <div style={{ padding: '10px 14px 14px' }}>
         {/* Adjust sliders — nudge the pin after the fact; commit on release */}
         <div
@@ -476,6 +577,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
