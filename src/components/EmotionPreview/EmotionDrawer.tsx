@@ -51,6 +51,8 @@ interface Props {
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
   onClear: () => void;
+  // U7: reopen the previous check-in (by its entry id) into the draft.
+  onReopen: (entryId: string) => void;
   selectedPinId: string | null;
   onSelectPin: (pinId: string) => void;
   // The just-dropped pin, still animating in — its card holds off the selected
@@ -79,6 +81,7 @@ export function EmotionDrawer({
   dissolve,
   onDone,
   onClear,
+  onReopen,
   selectedPinId,
   onSelectPin,
   enteringPinId,
@@ -239,6 +242,8 @@ export function EmotionDrawer({
                 onAdjustDraft={onAdjustDraft}
                 dissolve={dissolve}
                 readOnly
+                onReopen={() => onReopen(previousCheckIn!.id)}
+                reopenDisabled={canSave}
               />
             </motion.div>
           ))}

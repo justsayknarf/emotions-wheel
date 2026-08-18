@@ -103,7 +103,7 @@ export default function App() {
   const [axisPulseOn, setAxisPulseOn] = useState(true);
   const [axisPulseNonce, setAxisPulseNonce] = useState(0);
 
-  const { entries, record } = useDiary();
+  const { entries, record, updateEntry } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
   const tuning = useRevealTuning();
@@ -167,19 +167,20 @@ export default function App() {
   // The previous check-in: the most recent diary entry, derived at render
   // rather than stored, so recording (which clears the draft below) turns the
   // just-recorded entry into this without a second stored copy. `draftId` is
-  // always null until U7 adds reopen (a draft carrying a recorded entry's id
-  // while it's edited) — there is no carried-id concept in the draft yet, so
-  // this excludes nothing beyond naturally resolving to the single most
-  // recent entry.
-  const draftId: string | null = null;
+  // the id of the recorded entry the draft currently carries, if it was
+  // opened via reopen (U7) rather than started fresh — real state now, so
+  // reopening a previous check-in excludes it from this derivation for the
+  // duration of the edit, as derivePreviousCheckIn was already built (U2) to
+  // do the instant a non-null id is passed.
+  const [draftId, setDraftId] = useState<string | null>(null);
   const previousCheckIn = derivePreviousCheckIn(entries, draftId);
-  // U8: gated on `previousCheckIn` rather than `hasHistory`. The two are
-  // equivalent today (draftId is always null), but they diverge once U7 lands
-  // reopen — a reopened entry stays in `entries` but drops out of
-  // `previousCheckIn` for the duration of the edit. Gating here on
-  // `previousCheckIn` is what keeps this in sync with what's actually shown
-  // (the field inset and the replay entry point both read this same value)
-  // instead of drifting stale against a reopened check-in. The name
+  // U8: gated on `previousCheckIn` rather than `hasHistory`. The two coincide
+  // whenever nothing is reopened, but diverge while a check-in is (U7) — a
+  // reopened entry stays in `entries` but drops out of `previousCheckIn` for
+  // the duration of the edit. Gating here on `previousCheckIn` is what keeps
+  // this in sync with what's actually shown (the field inset and the replay
+  // entry point both read this same value) instead of drifting stale against
+  // a reopened check-in. The name
   // `showMirror` predates the U8 merge — its role has shifted from "gate a
   // separate mirror card" to "the tray is in its peek-eligible, nothing-new
   // -to-add state" — kept as-is rather than renamed across every call site
@@ -303,23 +304,60 @@ export default function App() {
   }, []);
 
   const handleRecord = useCallback(() => {
-    const entry = record(pins, sessionStartRef.current);
-    // Clear the draft so the just-recorded entry becomes the previous
-    // check-in through derivePreviousCheckIn (above) rather than through a
-    // second stored copy — this is what keeps a second handleRecord call from
-    // ever producing a duplicate entry (R20): with the draft empty, there is
-    // nothing left to record. Selection is part of the draft being cleared,
-    // so it resets too rather than pointing at a pin that no longer exists
-    // in it.
-    setPins([]);
-    setSelectedPinId(null);
-    setLastEntry(entry);
-    setView('complete');
-  }, [pins, record]);
+    if (draftId) {
+      // Saving a reopened check-in (U7/R25) updates its existing record
+      // rather than appending a new one. timestamp and sessionDurationMs
+      // here are placeholders — updateEntryInList (src/data/checkIn.ts)
+      // discards both in favor of the original entry's values, so there is
+      // nothing to look up or compute.
+      updateEntry({
+        id: draftId,
+        pins,
+        timestamp: new Date().toISOString(),
+        sessionDurationMs: 0,
+      });
+      setPins([]);
+      setSelectedPinId(null);
+      setDraftId(null);
+      // Deliberately no setLastEntry/setView('complete') here — saving a
+      // correction returns to the field with the updated check-in active
+      // (R25's "updates its existing record" is not a new completion moment),
+      // not the append path's celebration screen.
+    } else {
+      const entry = record(pins, sessionStartRef.current);
+      // Clear the draft so the just-recorded entry becomes the previous
+      // check-in through derivePreviousCheckIn (above) rather than through a
+      // second stored copy — this is what keeps a second handleRecord call
+      // from ever producing a duplicate entry (R20): with the draft empty,
+      // there is nothing left to record. Selection is part of the draft
+      // being cleared, so it resets too rather than pointing at a pin that no
+      // longer exists in it.
+      setPins([]);
+      setSelectedPinId(null);
+      setLastEntry(entry);
+      setView('complete');
+    }
+  }, [pins, record, updateEntry, draftId]);
 
   const handleDone = useCallback(() => {
     if (pins.length > 0) handleRecord();
   }, [pins, handleRecord]);
+
+  // Reopen a previous check-in (U7): moves its pins into the draft and
+  // carries its id, so it becomes an ordinary, fully-adjustable draft — R23
+  // needs nothing further, since draft CoordinateCards already always render
+  // sliders unconditionally. The entry itself is untouched in `entries`
+  // (R24): nothing here calls updateEntry or mutates the diary — it only
+  // appears to move because derivePreviousCheckIn now excludes it via
+  // draftId.
+  const handleReopen = useCallback((entryId: string) => {
+    if (pins.length > 0) return; // defensive — the UI already disables this via reopenDisabled
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return;
+    setPins(entry.pins);
+    setDraftId(entryId);
+    setSelectedPinId(entry.pins[entry.pins.length - 1]?.id ?? null);
+  }, [entries, pins]);
 
   const handleNewSession = useCallback(() => {
     // Resets the draft, selection, and view. It does not touch the previous
@@ -474,7 +512,8 @@ export default function App() {
                 onAdjustDraft={handleAdjustDraft}
                 dissolve={{ fadeOut: tuning.captionFadeOut, fadeIn: tuning.captionFadeIn, hold: tuning.captionHold }}
                 onDone={handleDone}
-                onClear={() => { setPins([]); }}
+                onClear={() => { setPins([]); setDraftId(null); }}
+                onReopen={handleReopen}
                 selectedPinId={effectiveSelectedPinId}
                 onSelectPin={setSelectedPinId}
                 enteringPinId={enteringPinId}

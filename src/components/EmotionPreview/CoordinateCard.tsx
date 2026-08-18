@@ -28,6 +28,16 @@ interface Props {
   // A previous (recorded) check-in's pin: no adjustment, no naming (R5), and
   // collapsed-by-default with tap-to-inspect (R4) rather than always-expanded.
   readOnly?: boolean;
+  // U7: reopen this recorded check-in into the draft. Only meaningful when
+  // readOnly is true — the sole explicit trigger for reopening (R22),
+  // distinct from the tap-to-inspect the card body itself already does.
+  onReopen?: () => void;
+  // U7: disabled while the draft already holds pins — there is one draft, so
+  // reopening into a non-empty one would either absorb unsaved pins into an
+  // existing record on save or destroy them on abandon (R18/R27). Rendered
+  // disabled rather than hidden, per the plan's "renders disabled until the
+  // draft is recorded or discarded."
+  reopenDisabled?: boolean;
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -155,7 +165,7 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenDisabled = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // Collapsed-by-default inspect state (R4). Local and only meaningful for a
@@ -359,10 +369,31 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           Emotional State
         </span>
         {readOnly ? (
-          // U7 will put a labeled reopen control in this slot. This unit
-          // leaves it empty rather than rendering a placeholder or a
-          // disabled remove button — a recorded card has nothing to remove.
-          null
+          // The reopen control (R22) — the sole explicit trigger for
+          // reopening this recorded check-in into the draft, distinct from
+          // the card body's own tap-to-inspect. Always rendered while
+          // readOnly (never hidden); reopenDisabled only disables it, per
+          // the plan's "renders disabled until the draft is recorded or
+          // discarded."
+          <button
+            onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
+            disabled={reopenDisabled}
+            style={{
+              background: 'none',
+              border: `1px solid ${reopenDisabled ? 'var(--oura-border)' : accentDim}`,
+              borderRadius: 6,
+              padding: '4px 10px',
+              color: reopenDisabled ? 'var(--oura-text-3)' : 'var(--oura-recorded)',
+              fontSize: 9.5,
+              fontWeight: 500,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: reopenDisabled ? 'default' : 'pointer',
+              lineHeight: 1,
+            }}
+          >
+            Reopen
+          </button>
         ) : (
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}

@@ -42,10 +42,11 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
   ];
 
   // Caller passes a "corrected" version of e2 — new pins, and (deliberately,
-  // to prove it gets overridden) a bogus later timestamp.
+  // to prove they get overridden) a bogus later timestamp and a bogus
+  // sessionDurationMs.
   const correction = entry('e2', '2026-08-10T00:00:00.000Z', [
     pin('p1-new', -0.3, 0.4, ['w-content', 'w-relieved']),
-  ]);
+  ], 999999);
 
   const after = updateEntryInList(before, correction);
 
@@ -63,6 +64,14 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
     'original timestamp preserved, not the update\'s',
     after[1].timestamp === '2026-08-01T10:00:00.000Z',
     after[1].timestamp,
+  );
+  check(
+    // U7: a correction is not a new sitting — the original entry's
+    // sessionDurationMs (1000, from the `entry()` helper's default) is kept,
+    // not the update's bogus 999999, mirroring the timestamp assertion above.
+    'original sessionDurationMs preserved, not the update\'s',
+    after[1].sessionDurationMs === 1000,
+    String(after[1].sessionDurationMs),
   );
   check(
     'pins replaced with the update\'s pins',

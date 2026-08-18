@@ -17,7 +17,13 @@ import type { DiaryEntry, PinEntry } from '../types';
 // The original entry's `timestamp` is kept rather than `updated.timestamp`:
 // the timestamp records when the check-in happened, not when it was
 // corrected, and sessionsForDay (src/utils/diaryAggregation.ts) and the CSV
-// row sort (src/utils/diaryCsv.ts) both key on it.
+// row sort (src/utils/diaryCsv.ts) both key on it. `sessionDurationMs` is
+// preserved the same way (U7): a correction is not a new sitting, so the
+// duration recorded stays how long the original check-in took, not how long
+// the edit took. Together this means a caller re-saving a reopened check-in
+// (App.tsx's handleRecord) never needs to look up or compute a "correct"
+// timestamp or duration — it can pass placeholders for both, since this
+// function discards them in favor of the original.
 //
 // A missing id is a no-op — the same entries are returned unchanged rather
 // than `updated` being appended. An update for an entry that was pruned must
@@ -28,7 +34,7 @@ export function updateEntryInList(entries: DiaryEntry[], updated: DiaryEntry): D
 
   const original = entries[index];
   const next = [...entries];
-  next[index] = { ...updated, timestamp: original.timestamp };
+  next[index] = { ...updated, timestamp: original.timestamp, sessionDurationMs: original.sessionDurationMs };
   return next;
 }
 
