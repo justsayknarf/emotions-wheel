@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
@@ -42,6 +42,7 @@ const endLabelStyle = {
 // A single draggable axis. Reports the value live while dragging (onDrag) and
 // once more on release (onCommit) — the card commits on release. The origin tick
 // marks where the pin was first dropped, so travel from the felt drop is visible.
+// A gesture the user never finished (onCancel) reverts instead of committing.
 function AxisSlider({
   labelLow,
   labelHigh,
@@ -50,6 +51,7 @@ function AxisSlider({
   onGrab,
   onDrag,
   onCommit,
+  onCancel,
 }: {
   labelLow: string;
   labelHigh: string;
@@ -58,6 +60,7 @@ function AxisSlider({
   onGrab?: () => void;
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
+  onCancel: () => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -98,7 +101,11 @@ function AxisSlider({
         onPointerCancel={() => {
           if (!draggingRef.current) return;
           draggingRef.current = false;
-          onCommit(value);
+          // The browser took the gesture away — a notification, the OS reading
+          // the drag as a system swipe, a palm on the glass. The user never let
+          // go, so there is nothing to commit: revert rather than record a
+          // coordinate they didn't choose.
+          onCancel();
         }}
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -178,6 +185,32 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
   const dismissed = dismissedAt === coordKey;
 
+  // Which of the three captions is showing. Keyed on the branch itself and not
+  // on the words inside it, so swapping words still dissolves only the slots
+  // while the "Does … fit?" frame holds still — but going quiet (dismissed, or
+  // drifted out of range of every word) dissolves the whole caption instead of
+  // cutting to the quiet line in a single frame.
+  const captionMode = guesses.length === 0 ? 'wordless' : dismissed ? 'dismissed' : 'question';
+
+  // The caption changes height when it swaps kind — three rows of question down
+  // to a single quiet line, and back. Animate the *real* height rather than a
+  // transform, so the card's own box follows in normal flow; framer's `layout`
+  // would scale the box instead, squashing the text and leaving the card border
+  // out of sync with it. The drawer's `layout` spring can't cover this either:
+  // it only re-measures when the drawer re-renders, and the dismissal is local
+  // state in here, so the drawer never hears about it.
+  const captionRef = useRef<HTMLDivElement>(null);
+  const [captionHeight, setCaptionHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = captionRef.current;
+    if (!el) return;
+    // observe() fires once immediately, which supplies the initial measurement —
+    // so no setState in the effect body.
+    const ro = new ResizeObserver(() => setCaptionHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const toggleName = (id: string) => {
     if (recognizedSet.has(id)) onDerecognize(id);
     else onRecognize(id);
@@ -253,6 +286,17 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     draftRef.current = next;
     setDraft(next);
     onAdjustDraft?.(next);
+  };
+  // Abandon an unfinished drag: drop the draft so the thumbs snap back to the
+  // committed coordinate and the field's ghost/travel overlay clears. Cancelling
+  // one axis abandons the whole adjustment rather than just that axis — a
+  // cancel almost always takes every active pointer with it, and a half-kept
+  // draft is harder to reason about than a clean revert to the last committed
+  // position.
+  const cancelAxis = () => {
+    draftRef.current = null;
+    setDraft(null);
+    onAdjustDraft?.(null);
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
@@ -332,6 +376,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onGrab={onSelect}
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
+            onCancel={cancelAxis}
           />
           <AxisSlider
             labelLow="Negative"
@@ -341,19 +386,32 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onGrab={onSelect}
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
+            onCancel={cancelAxis}
           />
         </div>
 
         {/* Honest-question caption — words as an optional, dismissable suggestion.
             Only the guess slots + tags dissolve on a coordinate commit; the
-            "Does … or … fit?" frame holds still. */}
-        {guesses.length === 0 ? (
+            "Does … or … fit?" frame holds still. Swapping between the question
+            and either quiet caption dissolves the whole block on the same
+            tunable timings. `popLayout` pulls the outgoing caption out of flow
+            so the card eases down to its new height once, instead of collapsing
+            into the gap and springing back. */}
+        <motion.div
+          animate={{ height: reduced ? 'auto' : captionHeight ?? 'auto' }}
+          transition={{ duration: reduced ? 0 : fadeOut, ease: 'easeOut' }}
+          style={{ overflow: 'hidden' }}
+        >
+        <div ref={captionRef}>
+        <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div key={captionMode} {...slotAnim}>
+        {captionMode === 'wordless' ? (
           <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
             {pin.regionDescription.relational}
           </p>
-        ) : dismissed ? (
+        ) : captionMode === 'dismissed' ? (
           <p style={{ margin: 0, fontSize: 13, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
-            your spot is enough.
+            where you landed is enough.
           </p>
         ) : (
           <>
@@ -398,6 +456,10 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             </button>
           </>
         )}
+        </motion.div>
+        </AnimatePresence>
+        </div>
+        </motion.div>
 
         {pin.recognizedWords.length > 0 && (
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
