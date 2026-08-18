@@ -172,12 +172,6 @@ export default function App() {
   // recent entry.
   const draftId: string | null = null;
   const previousCheckIn = derivePreviousCheckIn(entries, draftId);
-  // lastCoord now reads through previousCheckIn rather than indexing entries
-  // directly, so the ghost pin below tracks the same derivation U6/U8 will use
-  // for the full previous-check-in card — one source, not two ways to find
-  // "the last entry". U4 generalizes this single coordinate into the previous
-  // check-in's full pin set; not this unit's scope.
-  const lastCoord = previousCheckIn?.pins.at(-1) ?? null;
   const showMirror = view === 'field' && pins.length === 0 && hasHistory;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
 
@@ -384,7 +378,7 @@ export default function App() {
           onFirstInteraction={handleFirstInteraction}
           hasInteracted={hasInteracted}
           axisEmphasis={showDemo || axisPulseOn}
-          ghostPin={showMirror && lastCoord ? { x: lastCoord.x, y: lastCoord.y } : null}
+          recordedPins={previousCheckIn?.pins ?? []}
           emphasizedPinId={effectiveSelectedPinId}
           adjustDraft={adjustDraft}
         />
