@@ -7,11 +7,10 @@ import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
-import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
+import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
-import { MirrorCard, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionMirror/MirrorCard';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
 import { WelcomeOverlay } from './components/Welcome/WelcomeOverlay';
 import { nextCue } from './data/groundingCues';
@@ -81,8 +80,10 @@ export default function App() {
   // preview + travel line. Never persisted; cleared on release (handleAdjustPin).
   const [adjustDraft, setAdjustDraft] = useState<{ x: number; y: number } | null>(null);
   const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
-  // Mobile returning-mirror tray: collapsed by default so the field stays
-  // pinnable on load; the peek handle expands it.
+  // Mobile drawer tray, peeked over the previous check-in: collapsed by
+  // default so the field stays pinnable on load; the peek handle expands it
+  // (EmotionDrawer's sheet variant, since U8 merged the returning mirror into
+  // it).
   const [mirrorExpanded, setMirrorExpanded] = useState(false);
   // Bumped only on a pin drop so the tether re-runs its draw-in; plain card
   // clicks change the pin without a key change, so they reposition instantly.
@@ -159,7 +160,7 @@ export default function App() {
   const fieldCenterLeft = sideBySide ? `calc((100% - ${RAIL_WIDTH}) / 2)` : '50%';
 
   // Empty-state surface selection (all within the 'field' view):
-  //   history + no pins  → returning mirror (rail card + ghost pin)
+  //   history + no pins  → previous check-in's own surface docks peeked
   //   no history + fresh → first-run gesture demo
   //   pins present       → active drawer (existing path)
   const hasHistory = entries.length > 0;
@@ -172,22 +173,36 @@ export default function App() {
   // recent entry.
   const draftId: string | null = null;
   const previousCheckIn = derivePreviousCheckIn(entries, draftId);
-  const showMirror = view === 'field' && pins.length === 0 && hasHistory;
+  // U8: gated on `previousCheckIn` rather than `hasHistory`. The two are
+  // equivalent today (draftId is always null), but they diverge once U7 lands
+  // reopen — a reopened entry stays in `entries` but drops out of
+  // `previousCheckIn` for the duration of the edit. Gating here on
+  // `previousCheckIn` is what keeps this in sync with what's actually shown
+  // (the field inset and the replay entry point both read this same value)
+  // instead of drifting stale against a reopened check-in. The name
+  // `showMirror` predates the U8 merge — its role has shifted from "gate a
+  // separate mirror card" to "the tray is in its peek-eligible, nothing-new
+  // -to-add state" — kept as-is rather than renamed across every call site
+  // for a purely cosmetic reason.
+  const showMirror = view === 'field' && pins.length === 0 && previousCheckIn !== null;
   const showDemo = view === 'field' && pins.length === 0 && !hasHistory && !hasInteracted;
 
-  // On mobile, when the returning mirror is docked, end the field at the top of
-  // the collapsed peek so the peek never overlaps the field. (On desktop the tray
+  // On mobile, when the tray is peek-eligible, end the field at the top of the
+  // collapsed peek so the peek never overlaps the field. (On desktop the tray
   // is a side rail, already handled by fieldWidth.) The field re-layouts into the
   // shorter area, so no words or pins hide behind the peek.
   const fieldBottom = !sideBySide && showMirror
     ? `calc(${PEEK_BAR_HEIGHT}px + ${PEEK_SAFE_PAD})`
     : 0;
 
-  // Every time the mirror re-appears (fresh load, or returning to the field from
-  // history with a previously-expanded tray) start it collapsed, so an expanded
-  // tray never carries over and re-covers the field on a new landing. Done as a
-  // render-phase adjustment (React's store-previous pattern) rather than an
-  // effect, so it settles before paint and never flashes expanded.
+  // Every time the tray re-enters its peek-eligible state (fresh load, or
+  // returning to the field from history with a previously-expanded tray)
+  // start it collapsed, so an expanded tray never carries over and re-covers
+  // the field on a new landing. Done as a render-phase adjustment (React's
+  // store-previous pattern) rather than an effect, so it settles before paint
+  // and never flashes expanded. Kept here (U8) rather than moved into
+  // EmotionDrawer, since App.tsx already owns both the `showMirror`-derived
+  // boolean this keys on and the `mirrorExpanded` state it resets.
   const [mirrorWasShown, setMirrorWasShown] = useState(false);
   if (showMirror !== mirrorWasShown) {
     setMirrorWasShown(showMirror);
@@ -440,18 +455,6 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {showMirror && (
-              <MirrorCard
-                entry={entries[entries.length - 1]}
-                entries={entries}
-                variant={sideBySide ? 'rail' : 'sheet'}
-                expanded={mirrorExpanded}
-                onToggle={() => setMirrorExpanded((v) => !v)}
-              />
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
             {showDemo && (
               <FirstRunDemo fieldWidth={fieldWidth} variant={sideBySide ? 'rail' : 'sheet'} />
             )}
@@ -461,7 +464,8 @@ export default function App() {
             {(pins.length > 0 || previousCheckIn) && (
               <EmotionDrawer
                 pins={pins}
-                previousPins={previousCheckIn?.pins ?? []}
+                previousCheckIn={previousCheckIn}
+                entries={entries}
                 variant={sideBySide ? 'rail' : 'sheet'}
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}
@@ -475,6 +479,8 @@ export default function App() {
                 onSelectPin={setSelectedPinId}
                 enteringPinId={enteringPinId}
                 scrollRef={railScrollRef}
+                expanded={mirrorExpanded}
+                onToggle={() => setMirrorExpanded((v) => !v)}
               />
             )}
           </AnimatePresence>
