@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
+import { findNearbyPin } from '../../data/checkIn';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
@@ -44,6 +45,9 @@ interface Props {
   pins: PinEntry[];
   highlightedIds: Set<string>;
   onPinRelease: (entry: PinEntry) => void;
+  // R15: a release that lands on an existing (draft) pin selects it instead
+  // of minting a new one — see handleRelease's hit-test via findNearbyPin.
+  onPinSelect: (pinId: string) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
   // When true (e.g. the first-run demo), the axes brighten above their
@@ -66,6 +70,7 @@ export function EmotionField({
   pins,
   highlightedIds,
   onPinRelease,
+  onPinSelect,
   onFirstInteraction,
   hasInteracted,
   axisEmphasis = false,
@@ -88,6 +93,18 @@ export function EmotionField({
   }, []);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
+    // R15: before minting a new pin, check whether the release lands close
+    // enough to an existing (draft) pin to select it instead. Pin dots render
+    // with pointerEvents: 'none' — the field is the single pointer target —
+    // so this hit-test at release time is the only mechanism for "clicking" a
+    // pin. Only draft pins are checked: recorded (previous-check-in) pins
+    // aren't on the field until U4 adds a prop carrying them here.
+    const nearby = findNearbyPin(center, pins, size);
+    if (nearby) {
+      onPinSelect(nearby.id);
+      return;
+    }
+
     // The pin carries only its coordinate + narrative. Which emotions it
     // highlights is derived from the pin (in App), so the highlighted set can
     // never drift from the pin — see nearestTagIds / the selected-pin memo.
@@ -99,7 +116,7 @@ export function EmotionField({
       regionDescription: getRegionDescription(center.x, center.y, emotions),
     };
     onPinRelease(entry);
-  }, [onPinRelease]);
+  }, [onPinRelease, onPinSelect, pins, size]);
 
   const { isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,

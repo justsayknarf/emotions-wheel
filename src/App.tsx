@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { emotions } from './data/emotions';
 import { nearestTagIds } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
-import { derivePreviousCheckIn } from './data/checkIn';
+import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH } from './components/EmotionPreview/EmotionDrawer';
@@ -199,10 +199,21 @@ export default function App() {
     setMirrorWasShown(showMirror);
     if (showMirror && mirrorExpanded) setMirrorExpanded(false);
   }
-  // Resolve the stored selection at render, falling back to the newest pin when
-  // the selected card was removed (or none exists) — so the tether never
+  // Resolve the active check-in and its selected pin together, at render,
+  // rather than storing "which check-in is active" as a second piece of
+  // state — which check-in owns the resolved pin is derivable from the pin id
+  // alone (pin ids are globally unique), so this stays one resolved value
+  // rather than two that could drift apart. Falls back to the newest pin
+  // within the active check-in when the selected id was removed or never set
+  // (see resolveActiveSelection for the full cascade) — so the tether never
   // dangles and no effect is needed to reconcile state.
-  const selectedPin = pins.find((p) => p.id === selectedPinId) ?? (pins.length > 0 ? pins[pins.length - 1] : null);
+  const { activeCheckIn, pin: selectedPin } = resolveActiveSelection(pins, previousCheckIn, selectedPinId);
+  // Nothing in the UI can visibly reach activeCheckIn === 'previous' yet — no
+  // card or field pin exists for the previous check-in until U4 (field pins)
+  // and U6 (cards) land. Kept resolved here (not dropped) so those units read
+  // it rather than re-deriving it; `void` only silences noUnusedLocals until
+  // they do.
+  void activeCheckIn;
   const effectiveSelectedPinId = selectedPin?.id ?? null;
 
   // The highlighted emotions are derived from the *selected* pin, not stored on
@@ -234,6 +245,15 @@ export default function App() {
     window.setTimeout(() => {
       setEnteringPinId((cur) => (cur === entry.id ? null : cur));
     }, 620);
+  }, []);
+
+  // A release on the field matched an existing pin (EmotionField's hit-test)
+  // rather than minting a new one — just select it. resolveActiveSelection
+  // derives activeCheckIn from the id on its own (R15): the id belongs to a
+  // draft pin, the only kind reachable on the field before U4 lands recorded
+  // pins there too, so no check-in-activation logic belongs here.
+  const handlePinSelect = useCallback((pinId: string) => {
+    setSelectedPinId(pinId);
   }, []);
 
   const handleRecognize = useCallback((emotionId: string) => {
@@ -360,6 +380,7 @@ export default function App() {
           pins={pins}
           highlightedIds={highlightedIds}
           onPinRelease={handlePinRelease}
+          onPinSelect={handlePinSelect}
           onFirstInteraction={handleFirstInteraction}
           hasInteracted={hasInteracted}
           axisEmphasis={showDemo || axisPulseOn}

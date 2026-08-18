@@ -1,4 +1,4 @@
-import type { DiaryEntry } from '../types';
+import type { DiaryEntry, PinEntry } from '../types';
 
 // Pure logic for the check-in model. This module is the runnable seam for
 // scripts/test-check-in.ts: `npx tsx` has no `localStorage`, so a script that
@@ -50,4 +50,78 @@ export function derivePreviousCheckIn(entries: DiaryEntry[], draftId: string | n
     if (entries[i].id !== draftId) return entries[i];
   }
   return null;
+}
+
+// U3: which check-in is active, and which pin within it is selected — resolved
+// as a pair, at render, rather than stored as two pieces of state. Pin ids are
+// globally unique (uuid v4), so "which check-in is active" is derivable from
+// which array the resolved pin belongs to: this keeps the render-time
+// derivation shape the rest of the app already uses for selection (see
+// App.tsx's old selectedPin/effectiveSelectedPinId), rather than introducing a
+// second piece of state that could drift out of sync with the pin id.
+//
+// Cascade, in order:
+//   1. selectedPinId matches a draft pin        -> draft active, that pin
+//   2. selectedPinId matches a previous-check-in
+//      pin                                       -> previous active, that pin
+//   3. draft is non-empty (no match above)       -> draft active, its newest pin
+//   4. previous check-in exists and has pins
+//      (no match, empty draft)                   -> previous active, its newest pin
+//   5. otherwise                                  -> nothing active
+//
+// This single function is what R12 (exactly one check-in active), R14 (one
+// selected pin within it), R15 (selecting a field pin activates its check-in)
+// and R16 (dropping a pin activates the draft) all fall out of — every caller
+// reads the same resolved pair, so they cannot drift apart.
+export function resolveActiveSelection(
+  draftPins: PinEntry[],
+  previousCheckIn: DiaryEntry | null,
+  selectedPinId: string | null,
+): { activeCheckIn: 'draft' | 'previous' | null; pin: PinEntry | null } {
+  const draftMatch = draftPins.find((p) => p.id === selectedPinId);
+  if (draftMatch) return { activeCheckIn: 'draft', pin: draftMatch };
+
+  const prevMatch = previousCheckIn?.pins.find((p) => p.id === selectedPinId) ?? null;
+  if (prevMatch) return { activeCheckIn: 'previous', pin: prevMatch };
+
+  if (draftPins.length > 0) return { activeCheckIn: 'draft', pin: draftPins[draftPins.length - 1] };
+
+  if (previousCheckIn && previousCheckIn.pins.length > 0) {
+    return { activeCheckIn: 'previous', pin: previousCheckIn.pins[previousCheckIn.pins.length - 1] };
+  }
+
+  return { activeCheckIn: null, pin: null };
+}
+
+// U3: field-pin hit-testing (R15). Pin dots render with pointerEvents: 'none'
+// (the whole field is the single pointer target), so "hit-testing" happens at
+// release — before minting a new pin, EmotionField checks whether the release
+// coordinate lands close enough to an existing pin to select it instead of
+// dropping a new one. Pure math over plain {x,y} coordinates and pin objects,
+// so it lives here rather than in EmotionField.tsx: it's importable and
+// Node-testable the same way as the rest of this module, matching this
+// module's own reason for existing (see the file header).
+//
+// The distance conversion mirrors useFieldGesture's pixelToCoord inverse: one
+// unit of coord-space X is (0.9 * width) / 2 pixels (and symmetrically for Y),
+// since pixelToCoord maps a relX/W fraction through `((relX/W - 0.05)/0.9)*2-1`.
+export const TOUCH_RADIUS_PX = 26; // generous touch/click target, larger than the 4-12px visual dot
+
+export function findNearbyPin(
+  coord: { x: number; y: number },
+  pins: PinEntry[],
+  size: { width: number; height: number },
+): PinEntry | null {
+  let closest: PinEntry | null = null;
+  let closestDist = Infinity;
+  for (const pin of pins) {
+    const dxPx = (coord.x - pin.x) * (0.9 * size.width) / 2;
+    const dyPx = (coord.y - pin.y) * (0.9 * size.height) / 2;
+    const dist = Math.sqrt(dxPx * dxPx + dyPx * dyPx);
+    if (dist <= TOUCH_RADIUS_PX && dist < closestDist) {
+      closest = pin;
+      closestDist = dist;
+    }
+  }
+  return closest;
 }

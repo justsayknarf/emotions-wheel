@@ -7,7 +7,7 @@
 // / pin resolution adds its assertions to this same script as it lands in
 // src/data/checkIn.ts. This repo has no test runner, so this is the only
 // automated exercise of the logic. Exits non-zero on any violation.
-import { updateEntryInList, derivePreviousCheckIn } from '../src/data/checkIn';
+import { updateEntryInList, derivePreviousCheckIn, resolveActiveSelection, findNearbyPin } from '../src/data/checkIn';
 import { updateEntry } from '../src/store/diary';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
@@ -281,6 +281,179 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
     'AE2 (pure-logic half): re-deriving over an unchanged diary still resolves to exactly one entry',
     diary.length === 1 && firstLook?.id === 'e-recorded' && secondLook?.id === 'e-recorded',
     `diary length ${diary.length}, first ${firstLook?.id}, second ${secondLook?.id}`,
+  );
+}
+
+// === U3: resolveActiveSelection ===
+// App.tsx calls this at render (replacing the old flat
+// selectedPin/effectiveSelectedPinId derivation) with the draft pins, the
+// derived previousCheckIn, and the stored selectedPinId. These assertions
+// exercise the cascade directly, including branches (a selectedPinId matching
+// a previousCheckIn pin) that nothing in the UI can reach yet — no card or
+// field pin exists for the previous check-in until U4/U6 land — same pattern
+// U1/U2 used to prove a mechanism ahead of its UI wiring.
+
+// --- Covers AE9: dropping a pin while the previous check-in is active makes
+// the draft active and selects the new pin ---
+{
+  const previousCheckIn = entry('e-prev', '2026-08-10T09:00:00.000Z', [pin('p-prev', 0.1, 0.1)]);
+  // Simulate handlePinRelease: a fresh id was just pushed onto the draft and
+  // immediately passed as selectedPinId (App.tsx's handlePinRelease does both
+  // in the same call).
+  const freshPin = pin('p-fresh', -0.2, 0.6);
+  const draftPins = [freshPin];
+  const resolved = resolveActiveSelection(draftPins, previousCheckIn, 'p-fresh');
+
+  check(
+    'AE9: dropping a pin while the previous check-in is active makes the draft active and selects the new pin',
+    resolved.activeCheckIn === 'draft' && resolved.pin?.id === 'p-fresh',
+    `resolved to ${resolved.activeCheckIn}/${resolved.pin?.id}`,
+  );
+}
+
+// --- selecting a previous check-in's pin activates that check-in and selects
+// that pin ---
+{
+  const previousCheckIn = entry('e-prev', '2026-08-10T09:00:00.000Z', [
+    pin('p-a', 0.1, 0.1),
+    pin('p-b', -0.4, 0.3),
+  ]);
+  const resolved = resolveActiveSelection([], previousCheckIn, 'p-b');
+
+  check(
+    "selecting a previous check-in's pin activates that check-in and selects that pin",
+    resolved.activeCheckIn === 'previous' && resolved.pin?.id === 'p-b',
+    `resolved to ${resolved.activeCheckIn}/${resolved.pin?.id}`,
+  );
+}
+
+// --- removing the selected pin falls back to the newest pin within the same
+// check-in, not across check-ins ---
+{
+  const previousCheckIn = entry('e-prev', '2026-08-10T09:00:00.000Z', [pin('p-old', 0, 0)]);
+  const draftPins = [pin('p1', 0.1, 0.1), pin('p2', 0.2, 0.2)];
+  // selectedPinId matches neither remaining draft pin — as if the pin it
+  // pointed to was just removed.
+  const resolved = resolveActiveSelection(draftPins, previousCheckIn, 'p-removed');
+
+  check(
+    'removing the selected pin falls back to the newest pin within the same (draft) check-in, not across to the previous one',
+    resolved.activeCheckIn === 'draft' && resolved.pin?.id === 'p2',
+    `resolved to ${resolved.activeCheckIn}/${resolved.pin?.id}`,
+  );
+}
+
+// --- at most one check-in is active, and exactly one whenever a draft or a
+// previous check-in exists ---
+{
+  const previousCheckIn = entry('e-prev', '2026-08-10T09:00:00.000Z', [pin('p-prev', 0, 0)]);
+  const draftPins = [pin('p1', 0.1, 0.1)];
+
+  const bothPresent = resolveActiveSelection(draftPins, previousCheckIn, null);
+  const onlyDraft = resolveActiveSelection(draftPins, null, null);
+  const onlyPrevious = resolveActiveSelection([], previousCheckIn, null);
+  const neither = resolveActiveSelection([], null, null);
+
+  check(
+    'both present: exactly one check-in active (draft, since it takes priority)',
+    bothPresent.activeCheckIn === 'draft',
+    `resolved to ${bothPresent.activeCheckIn}`,
+  );
+  check(
+    'only draft present: draft active',
+    onlyDraft.activeCheckIn === 'draft',
+    `resolved to ${onlyDraft.activeCheckIn}`,
+  );
+  check(
+    'only previous check-in present: previous active',
+    onlyPrevious.activeCheckIn === 'previous',
+    `resolved to ${onlyPrevious.activeCheckIn}`,
+  );
+  check(
+    'neither present: no check-in active',
+    neither.activeCheckIn === null && neither.pin === null,
+    `resolved to ${neither.activeCheckIn}/${neither.pin}`,
+  );
+}
+
+// --- recording while the previous check-in is active resolves the active
+// check-in to the newly recorded entry rather than leaving the pair dangling
+// ---
+{
+  // Post-record state: handleRecord clears the draft and selection; the just-
+  // recorded entry is now what derivePreviousCheckIn resolves to.
+  const justRecorded = entry('e-just-recorded', '2026-08-18T09:00:00.000Z', [pin('p-new', 0.3, -0.3)]);
+  const resolved = resolveActiveSelection([], justRecorded, null);
+
+  check(
+    'recording while the previous check-in is active resolves to the newly recorded entry, not null',
+    resolved.activeCheckIn === 'previous' && resolved.pin?.id === 'p-new',
+    `resolved to ${resolved.activeCheckIn}/${resolved.pin?.id}`,
+  );
+}
+
+// --- with an empty draft and a previous check-in present, the previous
+// check-in is the active one (named explicitly, per the plan) ---
+{
+  const previousCheckIn = entry('e-prev', '2026-08-10T09:00:00.000Z', [pin('p-prev', 0, 0)]);
+  const resolved = resolveActiveSelection([], previousCheckIn, null);
+
+  check(
+    'with an empty draft and a previous check-in present, the previous check-in is the active one',
+    resolved.activeCheckIn === 'previous',
+    `resolved to ${resolved.activeCheckIn}`,
+  );
+}
+
+// === U3: findNearbyPin ===
+// Pure hit-testing math over plain {x,y} coordinates — used by
+// EmotionField.tsx's handleRelease before minting a new pin (R15). These
+// assertions exercise the math directly; the actual pointer-release wiring
+// (findNearbyPin called from a real gesture) cannot be scripted — see report.
+
+{
+  const size = { width: 800, height: 600 };
+  const pins = [pin('p1', 0.0, 0.0), pin('p2', 0.5, 0.5)];
+
+  // A release exactly on an existing pin's coordinate is a hit.
+  const exact = findNearbyPin({ x: 0.0, y: 0.0 }, pins, size);
+  check(
+    'a release exactly on an existing pin coordinate hits that pin',
+    exact?.id === 'p1',
+    `resolved to ${exact?.id}`,
+  );
+
+  // A release a few pixels off (well within TOUCH_RADIUS_PX) still hits it.
+  // 1 unit of coord-x = (0.9*800)/2 = 360px, so 10px ≈ 0.0278 coord units.
+  const nearMiss = findNearbyPin({ x: 0.02, y: 0.0 }, pins, size);
+  check(
+    'a release a few pixels from an existing pin still hits it (within touch radius)',
+    nearMiss?.id === 'p1',
+    `resolved to ${nearMiss?.id}`,
+  );
+
+  // A release far from both pins is a miss.
+  const farMiss = findNearbyPin({ x: -0.9, y: -0.9 }, pins, size);
+  check(
+    'a release far from any existing pin is a miss',
+    farMiss === null,
+    `resolved to ${farMiss?.id ?? null}`,
+  );
+
+  // A release equidistant-ish but closer to p2 than p1 picks the closest pin.
+  const closerToP2 = findNearbyPin({ x: 0.48, y: 0.48 }, pins, size);
+  check(
+    'a release near two pins picks the closest one',
+    closerToP2?.id === 'p2',
+    `resolved to ${closerToP2?.id}`,
+  );
+
+  // An empty pin list is always a miss.
+  const noPins = findNearbyPin({ x: 0, y: 0 }, [], size);
+  check(
+    'an empty pin list is always a miss',
+    noPins === null,
+    `resolved to ${noPins}`,
   );
 }
 
