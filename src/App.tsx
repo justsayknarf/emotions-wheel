@@ -252,6 +252,14 @@ export default function App() {
   );
 
   const handlePinRelease = useCallback((entry: PinEntry) => {
+    // Reopening is for correcting an existing check-in's pins, not growing
+    // it with a new one — a fresh drop here would silently join whichever
+    // check-in is currently being edited, appearing as a collapsed sibling
+    // that has nothing to do with the correction in progress. Refuse the
+    // drop outright rather than accept it into the wrong check-in; nothing
+    // reaches `pins` here, so no pin ever appears on the field or the card
+    // list for it.
+    if (draftId !== null) return;
     // Stamp the drop coordinate as the pin's origin (kept for the field anchor +
     // history); x/y stays authoritative and is what later adjustments move.
     setPins((prev) => [...prev, withOrigin(entry)]);
@@ -267,7 +275,7 @@ export default function App() {
     window.setTimeout(() => {
       setEnteringPinId((cur) => (cur === entry.id ? null : cur));
     }, 620);
-  }, []);
+  }, [draftId]);
 
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
