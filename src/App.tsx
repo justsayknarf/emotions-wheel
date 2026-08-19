@@ -518,7 +518,15 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {(pins.length > 0 || previousCheckIn) && (
+            {/* Also mounts while a reopen is active (draftId set) even if the
+                draft has been emptied out mid-edit (every pin removed) — an
+                empty pins array otherwise matches neither of the first two
+                clauses, and previousCheckIn is already null during a reopen
+                (the entry is excluded from it while being edited), so
+                without this the drawer would vanish entirely with no Discard
+                Edit / Update Check-in left to click, leaving a refresh as
+                the only way out. */}
+            {(pins.length > 0 || previousCheckIn || draftId !== null) && (
               <EmotionDrawer
                 pins={pins}
                 previousCheckIn={previousCheckIn}

@@ -166,13 +166,10 @@ export function EmotionDrawer({
         alignItems: 'center',
       }}
     >
-      {/* Discarding an in-progress edit is a different action from
-          discarding a fresh draft — "Discard Draft" while editing a
-          previous check-in would read as deleting recorded history (R28),
-          which this never does; it only reverts the unsaved edit and leaves
-          the record as it was (R26). The wiring is identical either way
-          (onClear resets the draft state), only the label changes to say
-          which one is happening. */}
+      {/* This bar only ever renders in the non-reopened state now (see the
+          rail/sheet returns below) — while editing a previous check-in, its
+          own local action row inside editingSection owns Discard Edit /
+          Update Check-in instead, so this one stays fixed to the draft. */}
       <button
         onClick={onClear}
         style={{
@@ -188,7 +185,7 @@ export function EmotionDrawer({
           cursor: 'pointer',
         }}
       >
-        {isReopened ? 'Discard Edit' : 'Discard Draft'}
+        Discard Draft
       </button>
       <button
         onClick={onDone}
@@ -206,7 +203,7 @@ export function EmotionDrawer({
           cursor: canSave ? 'pointer' : 'default',
         }}
       >
-        {isReopened ? 'Update Check-in' : `Save  ·  ${pins.length}`}
+        {`Save  ·  ${pins.length}`}
       </button>
     </div>
   );
@@ -312,6 +309,96 @@ export function EmotionDrawer({
     </AnimatePresence>
   );
 
+  // The edit's own Discard/Save row, local to editingSection below rather
+  // than the panel-wide actionBar — so both controls read as scoped to this
+  // one check-in, not to the drawer as a whole. Always enabled to discard
+  // (there is always a way back to the unedited check-in); Save disabled at
+  // zero pins, same rule as the draft's Save.
+  const editingActionBar = (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
+        padding: '10px 12px',
+        borderTop: '1px solid var(--oura-gold-dim)',
+      }}
+    >
+      <button
+        onClick={onClear}
+        style={{
+          background: 'none',
+          border: '1px solid var(--oura-border)',
+          borderRadius: 6,
+          padding: '6px 12px',
+          color: 'var(--oura-text-2)',
+          fontSize: 10.5,
+          fontWeight: 500,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        Discard Edit
+      </button>
+      <button
+        onClick={onDone}
+        disabled={!canSave}
+        style={{
+          background: canSave ? 'var(--oura-gold)' : 'var(--oura-border)',
+          border: 'none',
+          borderRadius: 6,
+          padding: '6px 16px',
+          color: canSave ? '#0D0F14' : 'var(--oura-text-3)',
+          fontSize: 10.5,
+          fontWeight: 600,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          cursor: canSave ? 'pointer' : 'default',
+        }}
+      >
+        Update Check-in
+      </button>
+    </div>
+  );
+
+  // Editing lives in its own bordered container, in the position the
+  // previous-check-in group normally occupies, rather than taking over the
+  // whole panel — the border and its own Discard Edit / Update Check-in row
+  // (above) are what make clear the edit is scoped to this one check-in.
+  // Also handles the case where every pin has been removed mid-edit: the
+  // cards area goes empty, but the box (and Discard Edit inside it) keeps
+  // rendering, since App.tsx's mount condition now keeps the drawer around
+  // for as long as a reopen is active, regardless of pin count.
+  const editingSection = (
+    <div
+      style={{
+        border: '1px solid var(--oura-gold-dim)',
+        borderRadius: 12,
+        background: 'rgba(201, 168, 124, 0.03)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {isRail && (
+        <div style={{ ...groupHeaderStyle, padding: '10px 12px 2px' }}>
+          {`Editing check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px' }}>
+        {editingCards}
+        {pins.length === 0 && (
+          <p style={{ margin: 0, padding: '4px 2px', fontSize: 12.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+            No pins left in this check-in. Discard to restore it as it was, or add one back on the field.
+          </p>
+        )}
+      </div>
+      {editingActionBar}
+    </div>
+  );
+
   const cardList = (
     <div
       ref={scrollRef}
@@ -328,21 +415,13 @@ export function EmotionDrawer({
     >
       {isReopened ? (
         // Editing in place: the check-in that was the previous check-in's
-        // group now renders here, in that group's position — but only the
-        // clicked pin (or any sibling explicitly expanded since) shows as an
-        // editable card; the rest stay collapsed. No separate "Draft
-        // check-in" group appears below (there's nothing fresh to put there;
-        // reopening is refused while the draft holds pins), and no collapsed
-        // summary/previous-check-in group renders above it, since this *is*
-        // that check-in.
-        <>
-          {isRail && (
-            <div style={groupHeaderStyle}>
-              {`Editing check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
-            </div>
-          )}
-          {editingCards}
-        </>
+        // group now renders here, in that group's position, inside its own
+        // bordered box (editingSection) rather than spreading across the
+        // whole panel. No separate "Draft check-in" group appears below
+        // (there's nothing fresh to put there; reopening is refused while
+        // the draft holds pins), and no collapsed summary/previous-check-in
+        // group renders above it, since this *is* that check-in.
+        editingSection
       ) : (
         <>
           {returningSummary}
@@ -425,7 +504,9 @@ export function EmotionDrawer({
         onPointerDown={(e) => e.stopPropagation()}
       >
         {cardList}
-        {actionBar}
+        {/* Never renders while isReopened — editingSection above owns its
+            own Discard Edit / Update Check-in row instead. */}
+        {!isReopened && actionBar}
       </motion.div>
     );
   }
@@ -434,10 +515,16 @@ export function EmotionDrawer({
   // expanded, collapse to a peek handle so the field stays pinnable — the
   // geometry MirrorCard's sheet variant used to own, moved here (U8).
   // `previousCheckIn` is guaranteed present whenever this branch is reached:
-  // App.tsx only mounts this drawer when `pins.length > 0 || previousCheckIn`,
-  // and `canSave` is false only when `pins` is empty, so an empty-draft peek
-  // always has a previous check-in to summarize.
-  const isPeeked = !canSave && !expanded;
+  // App.tsx only mounts this drawer when `pins.length > 0 || previousCheckIn
+  // || draftId !== null`, and this branch additionally requires !isReopened
+  // (so draftId is null) and !canSave (pins is empty), leaving previousCheckIn
+  // as the only clause that can be true.
+  //
+  // Never peeks while isReopened, regardless of pin count — peeking is for
+  // "returning, nothing to add," not for an edit in progress. Without this,
+  // removing every pin mid-edit (canSave false) would collapse the sheet to
+  // the peek handle and hide editingSection's Discard Edit along with it.
+  const isPeeked = !isReopened && !canSave && !expanded;
   if (isPeeked) {
     return (
       <motion.div
@@ -512,13 +599,16 @@ export function EmotionDrawer({
     );
   }
 
-  // Draft has pins, or the tray has been manually expanded past its peek —
-  // the full sheet, exactly as before U8, with one addition: when the draft
-  // is empty (canSave false) but the tray is manually expanded, the peek
-  // handle stays visible at the top so there's a discoverable, tappable way
-  // back to peeked — matching MirrorCard's original sheet, where the handle
-  // was always present and toggling, not just a field-press dismiss. Hidden
-  // when the draft has pins, since that state never had a peek concept.
+  // Draft has pins, the tray has been manually expanded past its peek, or a
+  // reopen is active — the full sheet, exactly as before U8, with one
+  // addition: when the draft is empty (canSave false) but the tray is
+  // manually expanded, the peek handle stays visible at the top so there's a
+  // discoverable, tappable way back to peeked — matching MirrorCard's
+  // original sheet, where the handle was always present and toggling, not
+  // just a field-press dismiss. Hidden when the draft has pins (never had a
+  // peek concept) and while isReopened (peeking doesn't apply to an edit in
+  // progress, and there is no previousCheckIn/timeLabel to show in the
+  // handle then anyway — see isPeeked above).
   return (
     <motion.div
       initial={{ y: '100%' }}
@@ -536,7 +626,7 @@ export function EmotionDrawer({
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {!canSave && (
+      {!isReopened && !canSave && (
         <button
           type="button"
           onClick={onToggle}
@@ -585,7 +675,7 @@ export function EmotionDrawer({
           </span>
         </button>
       )}
-      {actionBar}
+      {!isReopened && actionBar}
       {cardList}
     </motion.div>
   );
