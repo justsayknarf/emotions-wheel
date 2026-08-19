@@ -180,6 +180,12 @@ export default function App() {
   // Only meaningful while draftId is set; reset alongside it.
   const [expandedPinIds, setExpandedPinIds] = useState<Set<string>>(new Set());
   const previousCheckIn = derivePreviousCheckIn(entries, draftId);
+  // The most recent entry regardless of any active reopen — unlike
+  // previousCheckIn, never excludes the entry currently being edited. Feeds
+  // only the drawer's returning-summary (time + rhythm), which should stay
+  // visible through an edit so it reads as happening in place, not as a
+  // different view replacing it.
+  const mostRecentEntry = entries.length > 0 ? entries[entries.length - 1] : null;
   // U8: gated on `previousCheckIn` rather than `hasHistory`. The two coincide
   // whenever nothing is reopened, but diverge while a check-in is (U7) — a
   // reopened entry stays in `entries` but drops out of `previousCheckIn` for
@@ -530,6 +536,7 @@ export default function App() {
               <EmotionDrawer
                 pins={pins}
                 previousCheckIn={previousCheckIn}
+                mostRecentEntry={mostRecentEntry}
                 entries={entries}
                 variant={sideBySide ? 'rail' : 'sheet'}
                 onRecognize={handleRecognize}

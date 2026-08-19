@@ -35,6 +35,12 @@ interface Props {
   // time, recent rhythm) is carried into this drawer's returning-summary
   // block above that group (U8/R9). Null when there is no history.
   previousCheckIn: DiaryEntry | null;
+  // The most recent diary entry regardless of any active reopen — unlike
+  // previousCheckIn, this never excludes the entry currently being edited.
+  // Sources the returning-summary's time label so that block stays visible
+  // and correct through an edit, instead of disappearing along with
+  // previousCheckIn the moment editing starts. Null when there is no history.
+  mostRecentEntry: DiaryEntry | null;
   // Full diary history, for the returning-summary's rhythm strip (U8).
   entries: DiaryEntry[];
   variant: Variant;
@@ -87,6 +93,7 @@ interface Props {
 export function EmotionDrawer({
   pins,
   previousCheckIn,
+  mostRecentEntry,
   entries,
   variant,
   onRecognize,
@@ -131,21 +138,30 @@ export function EmotionDrawer({
   // carried forward either — each individual read-only card (U6) already
   // shows its own recognized words, so a second, deduped set here would
   // read as redundant rather than informative.
+  // Drives the sheet's peek/collapse handles only (both gated !isReopened,
+  // where previousCheckIn and mostRecentEntry always agree) — kept separate
+  // from the returning-summary's own time label below, which must stay
+  // correct even while previousCheckIn is excluding the entry being edited.
   const timeLabel = previousCheckIn ? formatRelative(previousCheckIn.timestamp) : null;
-  // Shown in both variants, above the previous-check-in group's header/rows
-  // (not gated by isRail like the pin-count headers below) — this is exactly
-  // what the old mirror's sheet variant showed on mobile, so it needs to
-  // reach mobile too.
-  const returningSummary = previousCheckIn && (
+  const summaryTimeLabel = mostRecentEntry ? formatRelative(mostRecentEntry.timestamp) : null;
+  // On the sheet, a peek-style handle is showing (and already carries the
+  // time) whenever the draft is empty and nothing is being edited — both the
+  // peeked state and the manually-expanded-with-empty-draft state render
+  // one. Skip the summary's own time line only then, to avoid saying it
+  // twice; show it in every other case, including throughout an edit, where
+  // no handle ever renders (see isPeeked below).
+  const handleAlreadyShowsTime = !isRail && !isReopened && !canSave;
+  // Sourced from mostRecentEntry, not previousCheckIn, and rendered
+  // unconditionally in cardList below (not nested inside the isReopened
+  // branch) — so it keeps showing the same "when" and "how often" through
+  // an edit instead of disappearing the moment editing starts, which is
+  // what made editing read as a different view rather than something
+  // happening in place.
+  const returningSummary = mostRecentEntry && (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '6px 0 4px' }}>
-      {/* On the sheet with an empty draft, a peek handle is always showing
-          (peeked, or expanded-with-empty-draft) and already carries the
-          time — skip it here to avoid saying it twice. The rail has no
-          handle, and the sheet-with-a-draft state has no handle either, so
-          both of those keep showing time as their own line. */}
-      {(isRail || canSave) && (
+      {!handleAlreadyShowsTime && (
         <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
-          {timeLabel}
+          {summaryTimeLabel}
         </span>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -419,18 +435,20 @@ export function EmotionDrawer({
         gap: 8,
       }}
     >
+      {/* Renders whether or not a reopen is active — editing happens in
+          place, so the same "when" and "how often" context stays on screen
+          throughout rather than disappearing the moment editing starts. */}
+      {returningSummary}
       {isReopened ? (
         // Editing in place: the check-in that was the previous check-in's
         // group now renders here, in that group's position, inside its own
         // bordered box (editingSection) rather than spreading across the
         // whole panel. No separate "Draft check-in" group appears below
         // (there's nothing fresh to put there; reopening is refused while
-        // the draft holds pins), and no collapsed summary/previous-check-in
-        // group renders above it, since this *is* that check-in.
+        // the draft holds pins).
         editingSection
       ) : (
         <>
-          {returningSummary}
           {isRail && previousPins.length > 0 && (
             <div style={groupHeaderStyle}>
               {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
