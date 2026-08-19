@@ -173,6 +173,12 @@ export default function App() {
   // duration of the edit, as derivePreviousCheckIn was already built (U2) to
   // do the instant a non-null id is passed.
   const [draftId, setDraftId] = useState<string | null>(null);
+  // Which of a reopened check-in's pins are currently expanded/editable —
+  // seeded with just the clicked pin (handleReopen) so reopening a
+  // multi-pin check-in doesn't drop the user into every card's edit state
+  // at once. A sibling can still be brought in individually (handleExpandPin).
+  // Only meaningful while draftId is set; reset alongside it.
+  const [expandedPinIds, setExpandedPinIds] = useState<Set<string>>(new Set());
   const previousCheckIn = derivePreviousCheckIn(entries, draftId);
   // U8: gated on `previousCheckIn` rather than `hasHistory`. The two coincide
   // whenever nothing is reopened, but diverge while a check-in is (U7) — a
@@ -319,6 +325,7 @@ export default function App() {
       setPins([]);
       setSelectedPinId(null);
       setDraftId(null);
+      setExpandedPinIds(new Set());
       // Deliberately no setLastEntry/setView('complete') here — saving a
       // correction returns to the field with the updated check-in active
       // (R25's "updates its existing record" is not a new completion moment),
@@ -343,21 +350,33 @@ export default function App() {
     if (pins.length > 0) handleRecord();
   }, [pins, handleRecord]);
 
-  // Reopen a previous check-in (U7): moves its pins into the draft and
-  // carries its id, so it becomes an ordinary, fully-adjustable draft — R23
-  // needs nothing further, since draft CoordinateCards already always render
+  // Reopen a previous check-in: moves its pins into the draft and carries
+  // its id, so it becomes an ordinary, fully-adjustable draft — R23 needs
+  // nothing further, since draft CoordinateCards already always render
   // sliders unconditionally. The entry itself is untouched in `entries`
   // (R24): nothing here calls updateEntry or mutates the diary — it only
   // appears to move because derivePreviousCheckIn now excludes it via
-  // draftId.
-  const handleReopen = useCallback((entryId: string) => {
+  // draftId. Only `pinId` (the card that was actually clicked) starts out
+  // expanded — its siblings are part of the same draft/save unit but stay
+  // collapsed until individually expanded, so reopening a multi-pin
+  // check-in doesn't drop every one of its cards into edit mode at once.
+  const handleReopen = useCallback((entryId: string, pinId: string) => {
     if (pins.length > 0) return; // defensive — the UI already disables this via reopenDisabled
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;
     setPins(entry.pins);
     setDraftId(entryId);
-    setSelectedPinId(entry.pins[entry.pins.length - 1]?.id ?? null);
+    setSelectedPinId(pinId);
+    setExpandedPinIds(new Set([pinId]));
   }, [entries, pins]);
+
+  // Bring one more sibling pin into edit mode within an already-active
+  // reopen (the check-in is already in the draft — this never starts a new
+  // reopen, just widens which of its cards render editable).
+  const handleExpandPin = useCallback((pinId: string) => {
+    setExpandedPinIds((prev) => (prev.has(pinId) ? prev : new Set(prev).add(pinId)));
+    setSelectedPinId(pinId);
+  }, []);
 
   const handleNewSession = useCallback(() => {
     // Resets the draft, selection, and view. It does not touch the previous
@@ -512,9 +531,11 @@ export default function App() {
                 onAdjustDraft={handleAdjustDraft}
                 dissolve={{ fadeOut: tuning.captionFadeOut, fadeIn: tuning.captionFadeIn, hold: tuning.captionHold }}
                 onDone={handleDone}
-                onClear={() => { setPins([]); setDraftId(null); }}
+                onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
                 isReopened={draftId !== null}
+                expandedPinIds={expandedPinIds}
+                onExpandPin={handleExpandPin}
                 selectedPinId={effectiveSelectedPinId}
                 onSelectPin={setSelectedPinId}
                 enteringPinId={enteringPinId}

@@ -51,15 +51,25 @@ interface Props {
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
   onClear: () => void;
-  // U7: reopen the previous check-in (by its entry id) into the draft.
-  onReopen: (entryId: string) => void;
+  // Reopen the previous check-in (by its entry id) into the draft, expanding
+  // only the specific pin that was clicked — its siblings move into the
+  // draft too (the check-in is still one save unit) but stay collapsed
+  // until individually expanded via onExpandPin.
+  onReopen: (entryId: string, pinId: string) => void;
   // True while a previous check-in is being edited in place (App.tsx's
   // draftId is set). The draft's pins ARE that check-in's pins at this
   // point — this flag only changes how they're presented: in the previous
   // check-in's slot rather than a separate "Draft check-in" group, with
-  // Discard Draft hidden (there is no fresh draft to discard) and Save
-  // relabeled to say what it actually does.
+  // Discard Draft relabeled (there is no fresh draft to discard, but there
+  // is an edit to abandon) and Save relabeled to say what it actually does.
   isReopened: boolean;
+  // Which of the reopened check-in's pins are currently expanded/editable —
+  // seeded with just the clicked pin on reopen (see onReopen). A sibling not
+  // in this set still renders collapsed, with its own control to expand it.
+  expandedPinIds: Set<string>;
+  // Expand one more sibling pin within an already-active reopen, without
+  // starting a new one — the check-in is already in the draft.
+  onExpandPin: (pinId: string) => void;
   selectedPinId: string | null;
   onSelectPin: (pinId: string) => void;
   // The just-dropped pin, still animating in — its card holds off the selected
@@ -90,6 +100,8 @@ export function EmotionDrawer({
   onClear,
   onReopen,
   isReopened,
+  expandedPinIds,
+  onExpandPin,
   selectedPinId,
   onSelectPin,
   enteringPinId,
@@ -153,33 +165,34 @@ export function EmotionDrawer({
         borderBottom: isRail ? 'none' : '1px solid var(--oura-border)',
         borderTop: isRail ? '1px solid var(--oura-border)' : 'none',
         display: 'flex',
-        // While editing a reopened check-in there is no fresh draft to
-        // discard, so Discard Draft doesn't render at all rather than
-        // rendering disabled or renamed — right-align Save on its own
-        // rather than leaving a gap where the other button used to sit.
-        justifyContent: isReopened ? 'flex-end' : 'space-between',
+        justifyContent: 'space-between',
         alignItems: 'center',
       }}
     >
-      {!isReopened && (
-        <button
-          onClick={onClear}
-          style={{
-            background: 'none',
-            border: '1px solid var(--oura-border)',
-            borderRadius: 6,
-            padding: '7px 14px',
-            color: 'var(--oura-text-2)',
-            fontSize: 11,
-            fontWeight: 500,
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-          }}
-        >
-          Discard Draft
-        </button>
-      )}
+      {/* Discarding an in-progress edit is a different action from
+          discarding a fresh draft — "Discard Draft" while editing a
+          previous check-in would read as deleting recorded history (R28),
+          which this never does; it only reverts the unsaved edit and leaves
+          the record as it was (R26). The wiring is identical either way
+          (onClear resets the draft state), only the label changes to say
+          which one is happening. */}
+      <button
+        onClick={onClear}
+        style={{
+          background: 'none',
+          border: '1px solid var(--oura-border)',
+          borderRadius: 6,
+          padding: '7px 14px',
+          color: 'var(--oura-text-2)',
+          fontSize: 11,
+          fontWeight: 500,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        {isReopened ? 'Discard Edit' : 'Discard Draft'}
+      </button>
       <button
         onClick={onDone}
         disabled={!canSave}
@@ -210,11 +223,9 @@ export function EmotionDrawer({
     padding: '6px 0 2px',
   };
 
-  // The draft's cards — fully editable, gold-accented. Shared between two
-  // positions: the ordinary "Draft check-in" group below (a fresh pin was
-  // dropped), and, while isReopened, the "Editing check-in" group that takes
-  // over the previous check-in's own slot instead — same cards, same
-  // handlers, only the surrounding header/position differs.
+  // The draft's cards — fully editable, gold-accented. Used for the ordinary
+  // "Draft check-in" group below (a fresh pin was dropped) — every pin here
+  // is genuinely unsaved, so every card is simply expanded.
   const draftCards = (
     <AnimatePresence initial={false}>
       {reversedPins.map((pin) => (
@@ -244,6 +255,66 @@ export function EmotionDrawer({
     </AnimatePresence>
   );
 
+  // While isReopened, `pins` holds the whole reopened check-in — but only
+  // the pins in expandedPinIds should render editable. A sibling not yet
+  // individually expanded stays collapsed, with its own control to expand
+  // it (readOnly's "Edit" mode) rather than jumping straight to editable —
+  // reopening a check-in with several pins used to expand all of them at
+  // once, which read as several drafts appearing rather than the one card
+  // that was actually clicked.
+  const editingCards = (
+    <AnimatePresence initial={false}>
+      {reversedPins.map((pin) => {
+        const isExpanded = expandedPinIds.has(pin.id);
+        return (
+          <motion.div
+            key={pin.id}
+            layout
+            data-pin-id={pin.id}
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+          >
+            {isExpanded ? (
+              <CoordinateCard
+                pin={pin}
+                isSelected={pin.id === selectedPinId}
+                isEntering={pin.id === enteringPinId}
+                onSelect={() => onSelectPin(pin.id)}
+                onRecognize={onRecognize}
+                onDerecognize={onDerecognize}
+                onRemove={() => onPinRemove(pin.id)}
+                onAdjust={onAdjust}
+                onAdjustDraft={onAdjustDraft}
+                dissolve={dissolve}
+              />
+            ) : (
+              <CoordinateCard
+                pin={pin}
+                isSelected={pin.id === selectedPinId}
+                isEntering={false}
+                onSelect={() => onSelectPin(pin.id)}
+                onRecognize={onRecognize}
+                onDerecognize={onDerecognize}
+                // Not individually expanded, so nothing here can trigger a
+                // remove — same as the unreached-prop note on the genuinely
+                // read-only previous-check-in cards below.
+                onRemove={() => {}}
+                onAdjust={onAdjust}
+                onAdjustDraft={onAdjustDraft}
+                dissolve={dissolve}
+                readOnly
+                onReopen={() => onExpandPin(pin.id)}
+                reopenLabel="Edit"
+              />
+            )}
+          </motion.div>
+        );
+      })}
+    </AnimatePresence>
+  );
+
   const cardList = (
     <div
       ref={scrollRef}
@@ -259,19 +330,21 @@ export function EmotionDrawer({
       }}
     >
       {isReopened ? (
-        // Editing in place: the same pins that were the previous check-in's
-        // collapsed row now render here, in that row's position, as ordinary
-        // editable draft cards — no separate "Draft check-in" group appears
-        // below (there's nothing fresh to put there; reopening is refused
-        // while the draft holds pins), and no collapsed summary/previous-
-        // check-in group renders above it, since this *is* that check-in.
+        // Editing in place: the check-in that was the previous check-in's
+        // group now renders here, in that group's position — but only the
+        // clicked pin (or any sibling explicitly expanded since) shows as an
+        // editable card; the rest stay collapsed. No separate "Draft
+        // check-in" group appears below (there's nothing fresh to put there;
+        // reopening is refused while the draft holds pins), and no collapsed
+        // summary/previous-check-in group renders above it, since this *is*
+        // that check-in.
         <>
           {isRail && (
             <div style={groupHeaderStyle}>
               {`Editing check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
             </div>
           )}
-          {draftCards}
+          {editingCards}
         </>
       ) : (
         <>
@@ -308,7 +381,7 @@ export function EmotionDrawer({
                     onAdjustDraft={onAdjustDraft}
                     dissolve={dissolve}
                     readOnly
-                    onReopen={() => onReopen(previousCheckIn!.id)}
+                    onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
                     reopenDisabled={canSave}
                   />
                 </motion.div>
