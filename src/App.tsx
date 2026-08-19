@@ -230,13 +230,17 @@ export default function App() {
   // (see resolveActiveSelection for the full cascade) — so the tether never
   // dangles and no effect is needed to reconcile state.
   const { activeCheckIn, pin: selectedPin } = resolveActiveSelection(pins, previousCheckIn, selectedPinId);
-  // Nothing in the UI can visibly reach activeCheckIn === 'previous' yet — no
-  // card or field pin exists for the previous check-in until U4 (field pins)
-  // and U6 (cards) land. Kept resolved here (not dropped) so those units read
-  // it rather than re-deriving it; `void` only silences noUnusedLocals until
-  // they do.
-  void activeCheckIn;
   const effectiveSelectedPinId = selectedPin?.id ?? null;
+  // The tether draws a line from a field pin to its card — a strong visual
+  // claim that "this card is what you're looking at." resolveActiveSelection
+  // resolves a pin from the previous check-in via fallback (not an explicit
+  // match on selectedPinId) whenever the draft is empty and nothing has been
+  // picked — on first load, and again right after recording, discarding, or
+  // starting a new session — so the tether would otherwise draw to a card
+  // the user hasn't actually selected. Suppressed only for that fallback
+  // case; a real tap on a card or a field pin sets selectedPinId, which
+  // resolves through the explicit-match branches instead and draws normally.
+  const tetherSuppressed = selectedPinId === null && activeCheckIn === 'previous';
 
   // The highlighted emotions are derived from the *selected* pin, not stored on
   // release — so they track whichever card is active (fresh drop or reselected)
@@ -569,8 +573,11 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Pin-to-card thread — desktop only, follows the selected card */}
-          {sideBySide && selectedPin && (
+          {/* Pin-to-card thread — desktop only, follows the selected card.
+              Not drawn when the active pin is only a fallback resolution
+              (see tetherSuppressed above) — nothing has actually been
+              selected yet. */}
+          {sideBySide && selectedPin && !tetherSuppressed && (
             <Tether
               key={tetherKey}
               pin={selectedPin}
