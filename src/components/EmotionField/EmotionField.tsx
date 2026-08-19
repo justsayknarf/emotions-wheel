@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
+import { findNearbyPin } from '../../data/checkIn';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
@@ -44,15 +45,21 @@ interface Props {
   pins: PinEntry[];
   highlightedIds: Set<string>;
   onPinRelease: (entry: PinEntry) => void;
+  // R15: a release that lands on an existing (draft) pin selects it instead
+  // of minting a new one — see handleRelease's hit-test via findNearbyPin.
+  onPinSelect: (pinId: string) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
   // When true (e.g. the first-run demo), the axes brighten above their
   // resting level and settle back when it clears.
   axisEmphasis?: boolean;
-  // A quiet marker at the user's most recent coordinate, shown in the
-  // returning-mirror state. A single point today; the shared geometry keeps a
-  // future multi-point constellation cheap to add.
-  ghostPin?: { x: number; y: number } | null;
+  // The previous check-in's pins (R10): stay on the field, quieter and in a
+  // distinct hue from the draft (R11). Kept as a separate prop rather than
+  // merged into `pins` deliberately — see U4's design note — so selectedIds,
+  // pairIds, deepOpacityMap and fociPx (all derived from `pins` above) never
+  // pick these up, and the adjust overlay (which searches only `pins`) stays
+  // draft-only for free.
+  recordedPins?: PinEntry[];
   // The pin whose card is currently selected in the tray — rendered larger and
   // brighter so the card↔point link reads both ways.
   emphasizedPinId?: string | null;
@@ -66,10 +73,11 @@ export function EmotionField({
   pins,
   highlightedIds,
   onPinRelease,
+  onPinSelect,
   onFirstInteraction,
   hasInteracted,
   axisEmphasis = false,
-  ghostPin = null,
+  recordedPins = [],
   emphasizedPinId = null,
   adjustDraft = null,
 }: Props) {
@@ -88,6 +96,20 @@ export function EmotionField({
   }, []);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
+    // R15: before minting a new pin, check whether the release lands close
+    // enough to an existing pin — draft or recorded — to select it instead.
+    // Pin dots render with pointerEvents: 'none' — the field is the single
+    // pointer target — so this hit-test at release time is the only
+    // mechanism for "clicking" a pin. Recorded pins remain selectable
+    // throughout (U4): searching both arrays here does not fold recordedPins
+    // into `pins` itself, so selectedIds/pairIds/deepOpacityMap/fociPx above
+    // still derive from draft pins only.
+    const nearby = findNearbyPin(center, [...pins, ...recordedPins], size);
+    if (nearby) {
+      onPinSelect(nearby.id);
+      return;
+    }
+
     // The pin carries only its coordinate + narrative. Which emotions it
     // highlights is derived from the pin (in App), so the highlighted set can
     // never drift from the pin — see nearestTagIds / the selected-pin memo.
@@ -99,7 +121,7 @@ export function EmotionField({
       regionDescription: getRegionDescription(center.x, center.y, emotions),
     };
     onPinRelease(entry);
-  }, [onPinRelease]);
+  }, [onPinRelease, onPinSelect, pins, recordedPins, size]);
 
   const { isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
@@ -580,48 +602,92 @@ export function EmotionField({
             );
           })()}
 
-          {/* Ghost pin — quiet marker at the last recorded coordinate */}
-          {ghostPin && pins.length === 0 && (
-            <div
-              style={{
-                position: 'absolute',
-                left: (toPercent(ghostPin.x) / 100) * size.width,
-                top: (toPercent(-ghostPin.y) / 100) * size.height,
-                pointerEvents: 'none',
-                zIndex: 9,
-                width: 0,
-                height: 0,
-              }}
-            >
-              {/* Soft breathing halo */}
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0.25 }}
-                animate={{ scale: [0.8, 1.25, 0.8], opacity: [0.25, 0.08, 0.25] }}
-                transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
-                style={{
-                  position: 'absolute',
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  border: '1px solid rgba(201, 168, 124, 0.5)',
-                  top: -5,
-                  left: -5,
-                }}
-              />
-              {/* Quiet dot */}
+          {/* Recorded pins — the previous check-in's pins (R10), quieter and
+              in a distinct cool hue from the draft's warm gold (R11), so the
+              two groups read apart without opening a card. Not gated on the
+              draft's state: these persist alongside a live draft, which is
+              the point of this unit. No mount pulse-ring — these were never
+              "just dropped" in this session. The hue survives emphasis: a
+              selected recorded pin brightens within --oura-recorded rather
+              than switching to gold, so the distinction holds through
+              selection too. zIndex 9, one below the draft dots' 10, so a
+              draft pin dropped on top of a recorded one reads as the live
+              one on top. */}
+          {recordedPins.map((pin) => {
+            const px = (toPercent(pin.x) / 100) * size.width;
+            const py = (toPercent(-pin.y) / 100) * size.height;
+            const isEmphasized = pin.id === emphasizedPinId;
+            const dotSize = isEmphasized ? 7 : 4;
+            return (
               <div
+                key={pin.id}
                 style={{
                   position: 'absolute',
-                  width: 4,
-                  height: 4,
-                  borderRadius: '50%',
-                  background: 'rgba(201, 168, 124, 0.4)',
-                  top: -2,
-                  left: -2,
+                  left: px,
+                  top: py,
+                  pointerEvents: 'none',
+                  zIndex: 9,
+                  width: 0,
+                  height: 0,
                 }}
-              />
-            </div>
-          )}
+              >
+                {/* Soft breathing halo — quiet ambient presence, not a
+                    one-shot mount pulse */}
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0.2 }}
+                  animate={{ scale: [0.8, 1.25, 0.8], opacity: [0.2, 0.06, 0.2] }}
+                  transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+                  style={{
+                    position: 'absolute',
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    border: '1px solid var(--oura-recorded-dim)',
+                    top: -5,
+                    left: -5,
+                  }}
+                />
+                {/* Emphasis pulse — same two-ring sonar shape as the draft
+                    block, recolored to the recorded hue so selection reads
+                    without borrowing gold */}
+                {isEmphasized &&
+                  [0, 1.1].map((delay, k) => (
+                    <motion.div
+                      key={k}
+                      initial={{ scale: 0.7, opacity: 0.45 }}
+                      animate={{ scale: 3.4, opacity: 0 }}
+                      transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3, delay }}
+                      style={{
+                        position: 'absolute',
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        border: '1px solid var(--oura-recorded-dim)',
+                        top: -6,
+                        left: -6,
+                      }}
+                    />
+                  ))}
+                {/* Dot — below the draft pins' base opacity at rest;
+                    brightens on emphasis while staying in the recorded hue */}
+                <motion.div
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  style={{
+                    position: 'absolute',
+                    width: dotSize,
+                    height: dotSize,
+                    borderRadius: '50%',
+                    background: isEmphasized ? 'var(--oura-recorded)' : 'var(--oura-recorded-dim)',
+                    boxShadow: isEmphasized ? '0 0 8px 1px var(--oura-recorded-dim)' : 'none',
+                    top: -dotSize / 2,
+                    left: -dotSize / 2,
+                  }}
+                />
+              </div>
+            );
+          })}
         </>
       )}
     </div>

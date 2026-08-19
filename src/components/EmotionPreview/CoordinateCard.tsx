@@ -25,6 +25,29 @@ interface Props {
   onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
   // Tunable timings (seconds) for the word/tag dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
+  // Always a one-line collapsed summary (R4), no adjustment, no naming (R5) —
+  // never expands on its own tap, since a plain tap only selects. Used for
+  // two distinct things that happen to look identical at rest: a genuinely
+  // read-only previous-check-in pin (nothing to reveal), and a sibling pin
+  // within an in-progress edit that simply hasn't been individually expanded
+  // yet (something real to reveal, via the reopen/expand control below).
+  readOnly?: boolean;
+  // The explicit trigger that flips this card from collapsed to editable —
+  // either "reopen this recorded check-in" (R22) or, for a sibling pin
+  // already part of an in-progress edit, "expand this one too." Only
+  // meaningful when readOnly is true.
+  onReopen?: () => void;
+  // The label on that trigger — "Reopen" for a genuinely untouched previous
+  // check-in, "Edit" for a sibling pin within an edit already in progress
+  // (reopening the check-in doesn't need reopening twice).
+  reopenLabel?: string;
+  // Disabled while a DIFFERENT draft already holds pins — there is one
+  // draft, so reopening into a non-empty one would either absorb unsaved
+  // pins into an existing record on save or destroy them on abandon
+  // (R18/R27). Not meaningful for a sibling's own expand trigger, which
+  // never starts a new reopen. Rendered disabled rather than hidden, per the
+  // plan's "renders disabled until the draft is recorded or discarded."
+  reopenDisabled?: boolean;
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -152,8 +175,13 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
+
+  // The accent that marks this card as recorded rather than draft (R6) — the
+  // same cool hue the field already uses for a recorded pin (U4), so the
+  // treatment reads consistently between the two surfaces.
+  const accentDim = readOnly ? 'var(--oura-recorded-dim)' : 'var(--oura-gold-dim)';
 
   // The slot dissolve on a coordinate commit — tunable, and collapsed to an
   // instant swap when the viewer prefers reduced motion.
@@ -311,11 +339,11 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
       onClick={onSelect}
       style={{
         background: 'var(--oura-surface)',
-        border: showSelected ? '1px solid var(--oura-gold-dim)' : '1px solid var(--oura-border)',
+        border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--oura-border)',
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
-        boxShadow: showSelected ? '0 0 0 1px var(--oura-gold-dim), 0 6px 22px rgba(201,168,124,0.12)' : 'none',
+        boxShadow: showSelected ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)` : 'none',
         transition: 'border-color 0.35s ease, box-shadow 0.35s ease',
       }}
     >
@@ -334,34 +362,88 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             fontWeight: 500,
             letterSpacing: '0.14em',
             textTransform: 'uppercase',
-            color: 'var(--oura-gold-dim)',
+            color: accentDim,
           }}
         >
           Emotional State
         </span>
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--oura-text-3)',
-            fontSize: 16,
-            cursor: 'pointer',
-            padding: '0 0 0 8px',
-            lineHeight: 1,
-            display: 'flex',
-            alignItems: 'center',
-            minWidth: 32,
-            minHeight: 32,
-            justifyContent: 'center',
-          }}
-          aria-label="Remove"
-        >
-          ×
-        </button>
+        {readOnly ? (
+          // The reopen/expand control (R22) — see reopenLabel above for what
+          // distinguishes the two uses. Always rendered while readOnly
+          // (never hidden); reopenDisabled only disables it, per the plan's
+          // "renders disabled until the draft is recorded or discarded."
+          <button
+            onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
+            disabled={reopenDisabled}
+            style={{
+              background: 'none',
+              border: `1px solid ${reopenDisabled ? 'var(--oura-border)' : accentDim}`,
+              borderRadius: 6,
+              padding: '4px 10px',
+              color: reopenDisabled ? 'var(--oura-text-3)' : 'var(--oura-recorded)',
+              fontSize: 9.5,
+              fontWeight: 500,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: reopenDisabled ? 'default' : 'pointer',
+              lineHeight: 1,
+            }}
+          >
+            {reopenLabel}
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--oura-text-3)',
+              fontSize: 16,
+              cursor: 'pointer',
+              padding: '0 0 0 8px',
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              minWidth: 32,
+              minHeight: 32,
+              justifyContent: 'center',
+            }}
+            aria-label="Remove"
+          >
+            ×
+          </button>
+        )}
       </div>
 
-      {/* Main metric block — sliders on top, then the (read-only for now) words */}
+      {readOnly ? (
+        /* Read-only body: no sliders (R5), no tap-to-recognize, and never
+           expands — a recorded card is always exactly this one-line summary.
+           It used to reveal a fuller caption on tap, but that caption reused
+           the same nearby-word/tag styling as the draft's tappable question
+           even though nothing here responds to a tap, which read as broken
+           rather than read-only. Collapsed-only removes the ambiguity. */
+        <div style={{ padding: '10px 14px 14px' }}>
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+            {guesses.length === 0
+              ? pin.regionDescription.relational
+              : `near ${guesses[0].label.toLowerCase()}${guesses[1] ? ` or ${guesses[1].label.toLowerCase()}` : ''}`}
+          </p>
+          {pin.recognizedWords.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10.5, color: accentDim, letterSpacing: '0.02em' }}>named:</span>
+              {pin.recognizedWords.map((id) => (
+                <span
+                  key={id}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--oura-recorded)', fontSize: 11 }}
+                >
+                  {labelForId(id)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+      /* Main metric block — sliders on top, then the (read-only for now) words */
       <div style={{ padding: '10px 14px 14px' }}>
         {/* Adjust sliders — nudge the pin after the fact; commit on release */}
         <div
@@ -476,6 +558,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

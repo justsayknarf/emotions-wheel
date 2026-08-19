@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { readDiary, appendEntry, clearDiary } from '../store/diary';
+import { readDiary, appendEntry, updateEntry as updateEntryInStore, clearDiary } from '../store/diary';
 import type { DiaryEntry, PinEntry } from '../types';
 
 export function useDiary() {
@@ -21,10 +21,15 @@ export function useDiary() {
     [],
   );
 
+  const updateEntry = useCallback((entry: DiaryEntry): void => {
+    updateEntryInStore(entry);
+    setEntries(readDiary());
+  }, []);
+
   const clear = useCallback(() => {
     clearDiary();
     setEntries([]);
   }, []);
 
-  return { entries, record, clear };
+  return { entries, record, updateEntry, clear };
 }
