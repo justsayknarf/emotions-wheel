@@ -53,6 +53,13 @@ interface Props {
   onClear: () => void;
   // U7: reopen the previous check-in (by its entry id) into the draft.
   onReopen: (entryId: string) => void;
+  // True while a previous check-in is being edited in place (App.tsx's
+  // draftId is set). The draft's pins ARE that check-in's pins at this
+  // point — this flag only changes how they're presented: in the previous
+  // check-in's slot rather than a separate "Draft check-in" group, with
+  // Discard Draft hidden (there is no fresh draft to discard) and Save
+  // relabeled to say what it actually does.
+  isReopened: boolean;
   selectedPinId: string | null;
   onSelectPin: (pinId: string) => void;
   // The just-dropped pin, still animating in — its card holds off the selected
@@ -82,6 +89,7 @@ export function EmotionDrawer({
   onDone,
   onClear,
   onReopen,
+  isReopened,
   selectedPinId,
   onSelectPin,
   enteringPinId,
@@ -145,27 +153,33 @@ export function EmotionDrawer({
         borderBottom: isRail ? 'none' : '1px solid var(--oura-border)',
         borderTop: isRail ? '1px solid var(--oura-border)' : 'none',
         display: 'flex',
-        justifyContent: 'space-between',
+        // While editing a reopened check-in there is no fresh draft to
+        // discard, so Discard Draft doesn't render at all rather than
+        // rendering disabled or renamed — right-align Save on its own
+        // rather than leaving a gap where the other button used to sit.
+        justifyContent: isReopened ? 'flex-end' : 'space-between',
         alignItems: 'center',
       }}
     >
-      <button
-        onClick={onClear}
-        style={{
-          background: 'none',
-          border: '1px solid var(--oura-border)',
-          borderRadius: 6,
-          padding: '7px 14px',
-          color: 'var(--oura-text-2)',
-          fontSize: 11,
-          fontWeight: 500,
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-        }}
-      >
-        Discard Draft
-      </button>
+      {!isReopened && (
+        <button
+          onClick={onClear}
+          style={{
+            background: 'none',
+            border: '1px solid var(--oura-border)',
+            borderRadius: 6,
+            padding: '7px 14px',
+            color: 'var(--oura-text-2)',
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+          }}
+        >
+          Discard Draft
+        </button>
+      )}
       <button
         onClick={onDone}
         disabled={!canSave}
@@ -182,9 +196,52 @@ export function EmotionDrawer({
           cursor: canSave ? 'pointer' : 'default',
         }}
       >
-        {`Save  ·  ${pins.length}`}
+        {isReopened ? 'Update Check-in' : `Save  ·  ${pins.length}`}
       </button>
     </div>
+  );
+
+  const groupHeaderStyle: React.CSSProperties = {
+    fontSize: 8.5,
+    fontWeight: 500,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: 'var(--oura-text-3)',
+    padding: '6px 0 2px',
+  };
+
+  // The draft's cards — fully editable, gold-accented. Shared between two
+  // positions: the ordinary "Draft check-in" group below (a fresh pin was
+  // dropped), and, while isReopened, the "Editing check-in" group that takes
+  // over the previous check-in's own slot instead — same cards, same
+  // handlers, only the surrounding header/position differs.
+  const draftCards = (
+    <AnimatePresence initial={false}>
+      {reversedPins.map((pin) => (
+        <motion.div
+          key={pin.id}
+          layout
+          data-pin-id={pin.id}
+          initial={{ opacity: 0, y: -10, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+          transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+        >
+          <CoordinateCard
+            pin={pin}
+            isSelected={pin.id === selectedPinId}
+            isEntering={pin.id === enteringPinId}
+            onSelect={() => onSelectPin(pin.id)}
+            onRecognize={onRecognize}
+            onDerecognize={onDerecognize}
+            onRemove={() => onPinRemove(pin.id)}
+            onAdjust={onAdjust}
+            onAdjustDraft={onAdjustDraft}
+            dissolve={dissolve}
+          />
+        </motion.div>
+      ))}
+    </AnimatePresence>
   );
 
   const cardList = (
@@ -201,95 +258,72 @@ export function EmotionDrawer({
         gap: 8,
       }}
     >
-      {returningSummary}
-      {isRail && previousPins.length > 0 && (
-        <div
-          style={{
-            fontSize: 8.5,
-            fontWeight: 500,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: 'var(--oura-text-3)',
-            padding: '6px 0 2px',
-          }}
-        >
-          {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
-        </div>
-      )}
-      {previousPins.length > 0 && (
-        <AnimatePresence initial={false}>
-          {reversedPreviousPins.map((pin) => (
-            <motion.div
-              key={pin.id}
-              layout
-              data-pin-id={pin.id}
-              initial={{ opacity: 0, y: -10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
-              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            >
-              <CoordinateCard
-                pin={pin}
-                isSelected={pin.id === selectedPinId}
-                isEntering={false}
-                onSelect={() => onSelectPin(pin.id)}
-                onRecognize={onRecognize}
-                onDerecognize={onDerecognize}
-                // A read-only card never renders the remove control — this
-                // is unreachable, kept only to satisfy the prop's type.
-                onRemove={() => {}}
-                onAdjust={onAdjust}
-                onAdjustDraft={onAdjustDraft}
-                dissolve={dissolve}
-                readOnly
-                onReopen={() => onReopen(previousCheckIn!.id)}
-                reopenDisabled={canSave}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      )}
+      {isReopened ? (
+        // Editing in place: the same pins that were the previous check-in's
+        // collapsed row now render here, in that row's position, as ordinary
+        // editable draft cards — no separate "Draft check-in" group appears
+        // below (there's nothing fresh to put there; reopening is refused
+        // while the draft holds pins), and no collapsed summary/previous-
+        // check-in group renders above it, since this *is* that check-in.
+        <>
+          {isRail && (
+            <div style={groupHeaderStyle}>
+              {`Editing check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+            </div>
+          )}
+          {draftCards}
+        </>
+      ) : (
+        <>
+          {returningSummary}
+          {isRail && previousPins.length > 0 && (
+            <div style={groupHeaderStyle}>
+              {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
+            </div>
+          )}
+          {previousPins.length > 0 && (
+            <AnimatePresence initial={false}>
+              {reversedPreviousPins.map((pin) => (
+                <motion.div
+                  key={pin.id}
+                  layout
+                  data-pin-id={pin.id}
+                  initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                >
+                  <CoordinateCard
+                    pin={pin}
+                    isSelected={pin.id === selectedPinId}
+                    isEntering={false}
+                    onSelect={() => onSelectPin(pin.id)}
+                    onRecognize={onRecognize}
+                    onDerecognize={onDerecognize}
+                    // A read-only card never renders the remove control —
+                    // this is unreachable, kept only to satisfy the prop's
+                    // type.
+                    onRemove={() => {}}
+                    onAdjust={onAdjust}
+                    onAdjustDraft={onAdjustDraft}
+                    dissolve={dissolve}
+                    readOnly
+                    onReopen={() => onReopen(previousCheckIn!.id)}
+                    reopenDisabled={canSave}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
 
-      {isRail && (
-        <div
-          style={{
-            fontSize: 8.5,
-            fontWeight: 500,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            color: 'var(--oura-text-3)',
-            padding: '6px 0 2px',
-          }}
-        >
-          {`Draft check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
-        </div>
+          {isRail && (
+            <div style={groupHeaderStyle}>
+              {`Draft check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+            </div>
+          )}
+          {draftCards}
+        </>
       )}
-      <AnimatePresence initial={false}>
-        {reversedPins.map((pin) => (
-          <motion.div
-            key={pin.id}
-            layout
-            data-pin-id={pin.id}
-            initial={{ opacity: 0, y: -10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
-            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-          >
-            <CoordinateCard
-              pin={pin}
-              isSelected={pin.id === selectedPinId}
-              isEntering={pin.id === enteringPinId}
-              onSelect={() => onSelectPin(pin.id)}
-              onRecognize={onRecognize}
-              onDerecognize={onDerecognize}
-              onRemove={() => onPinRemove(pin.id)}
-              onAdjust={onAdjust}
-              onAdjustDraft={onAdjustDraft}
-              dissolve={dissolve}
-            />
-          </motion.div>
-        ))}
-      </AnimatePresence>
     </div>
   );
 

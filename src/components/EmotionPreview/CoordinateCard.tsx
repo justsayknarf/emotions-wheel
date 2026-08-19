@@ -26,11 +26,11 @@ interface Props {
   // Tunable timings (seconds) for the word/tag dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   // A previous (recorded) check-in's pin: no adjustment, no naming (R5), and
-  // collapsed-by-default with tap-to-inspect (R4) rather than always-expanded.
+  // always a one-line collapsed summary (R4) — never expands, since there is
+  // nothing interactive underneath to reveal.
   readOnly?: boolean;
   // U7: reopen this recorded check-in into the draft. Only meaningful when
-  // readOnly is true — the sole explicit trigger for reopening (R22),
-  // distinct from the tap-to-inspect the card body itself already does.
+  // readOnly is true — the sole explicit trigger for reopening (R22).
   onReopen?: () => void;
   // U7: disabled while the draft already holds pins — there is one draft, so
   // reopening into a non-empty one would either absorb unsaved pins into an
@@ -167,11 +167,6 @@ function AxisSlider({
 
 export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenDisabled = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
-
-  // Collapsed-by-default inspect state (R4). Local and only meaningful for a
-  // read-only card — a draft card's rendering is unaffected and always shows
-  // its full body, exactly as before this prop existed.
-  const [expanded, setExpanded] = useState(false);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
   // same cool hue the field already uses for a recorded pin (U4), so the
@@ -331,13 +326,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
   return (
     <div
-      onClick={() => {
-        onSelect();
-        // Tapping a read-only card inspects (expands) and selects — it never
-        // reopens the card for editing (R17). A draft card has no expand
-        // state, so this is a no-op there.
-        if (readOnly) setExpanded((v) => !v);
-      }}
+      onClick={onSelect}
       style={{
         background: 'var(--oura-surface)',
         border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--oura-border)',
@@ -370,10 +359,9 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         </span>
         {readOnly ? (
           // The reopen control (R22) — the sole explicit trigger for
-          // reopening this recorded check-in into the draft, distinct from
-          // the card body's own tap-to-inspect. Always rendered while
-          // readOnly (never hidden); reopenDisabled only disables it, per
-          // the plan's "renders disabled until the draft is recorded or
+          // reopening this recorded check-in into the draft. Always rendered
+          // while readOnly (never hidden); reopenDisabled only disables it,
+          // per the plan's "renders disabled until the draft is recorded or
           // discarded."
           <button
             onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
@@ -419,77 +407,30 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
       </div>
 
       {readOnly ? (
-        /* Read-only body: no sliders (R5), collapsed to a one-line summary
-           until tapped, then an inspect-only expanded caption — never the
-           tap-to-recognize affordance, which stays exclusive to the draft. */
+        /* Read-only body: no sliders (R5), no tap-to-recognize, and never
+           expands — a recorded card is always exactly this one-line summary.
+           It used to reveal a fuller caption on tap, but that caption reused
+           the same nearby-word/tag styling as the draft's tappable question
+           even though nothing here responds to a tap, which read as broken
+           rather than read-only. Collapsed-only removes the ambiguity. */
         <div style={{ padding: '10px 14px 14px' }}>
-          {expanded ? (
-            <>
-              {guesses.length === 0 ? (
-                <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
-                  {pin.regionDescription.relational}
-                </p>
-              ) : (
-                <div style={{ fontFamily: FIELD_SERIF, fontSize: 15.5, color: 'var(--oura-text-2)', lineHeight: 1.55 }}>
-                  Does{' '}
-                  <span style={{ color: 'var(--oura-text-1)' }}>{guesses[0].label.toLowerCase()}</span>
-                  {guesses[1] && (
-                    <>
-                      {' '}<span style={{ color: 'var(--oura-text-3)' }}>or</span>{' '}
-                      <span style={{ color: 'var(--oura-text-1)' }}>{guesses[1].label.toLowerCase()}</span>
-                    </>
-                  )}
-                  {' '}fit?
-                </div>
-              )}
-
-              {nearbyTags.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 12 }}>
-                  <span style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginRight: 2 }}>
-                    or nearby
-                  </span>
-                  {nearbyTags.map((e) => (
-                    <span
-                      key={e.id}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '4px 11px',
-                        borderRadius: 6,
-                        border: '1px solid rgba(237,232,223,0.12)',
-                        background: 'rgba(237,232,223,0.04)',
-                        color: 'var(--oura-text-2)',
-                        fontSize: 12,
-                        letterSpacing: '0.01em',
-                      }}
-                    >
-                      {e.label.toLowerCase()}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {pin.recognizedWords.length > 0 && (
-                <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, color: accentDim, letterSpacing: '0.02em' }}>named:</span>
-                  {pin.recognizedWords.map((id) => (
-                    <span
-                      key={id}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--oura-recorded)', fontSize: 11.5 }}
-                    >
-                      {labelForId(id)}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
-              {guesses.length === 0
-                ? pin.regionDescription.relational
-                : `near ${guesses[0].label.toLowerCase()}${guesses[1] ? ` or ${guesses[1].label.toLowerCase()}` : ''}`}
-            </p>
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+            {guesses.length === 0
+              ? pin.regionDescription.relational
+              : `near ${guesses[0].label.toLowerCase()}${guesses[1] ? ` or ${guesses[1].label.toLowerCase()}` : ''}`}
+          </p>
+          {pin.recognizedWords.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10.5, color: accentDim, letterSpacing: '0.02em' }}>named:</span>
+              {pin.recognizedWords.map((id) => (
+                <span
+                  key={id}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--oura-recorded)', fontSize: 11 }}
+                >
+                  {labelForId(id)}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       ) : (

@@ -514,6 +514,7 @@ export default function App() {
                 onDone={handleDone}
                 onClear={() => { setPins([]); setDraftId(null); }}
                 onReopen={handleReopen}
+                isReopened={draftId !== null}
                 selectedPinId={effectiveSelectedPinId}
                 onSelectPin={setSelectedPinId}
                 enteringPinId={enteringPinId}
