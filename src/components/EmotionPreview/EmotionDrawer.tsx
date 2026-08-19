@@ -32,9 +32,8 @@ interface Props {
   // The previous check-in — the most recent diary entry, derived at render in
   // App.tsx (derivePreviousCheckIn). Its pins render as their own collapsed,
   // read-only group above the draft (R4, R5, R6), and its summary (relative
-  // time, relational line, recent rhythm) is carried into this drawer's
-  // returning-summary block above that group (U8/R9). Null when there is no
-  // history.
+  // time, recent rhythm) is carried into this drawer's returning-summary
+  // block above that group (U8/R9). Null when there is no history.
   previousCheckIn: DiaryEntry | null;
   // Full diary history, for the returning-summary's rhythm strip (U8).
   entries: DiaryEntry[];
@@ -120,37 +119,35 @@ export function EmotionDrawer({
   const canSave = pins.length > 0;
 
   // Returning-summary content, carried forward from the retired MirrorCard
-  // (U8/R9): the relative time and relational line of the previous check-in,
-  // plus the recent-rhythm strip. Deduped recognized-word pills from the old
-  // MirrorCard are deliberately not carried forward — each individual
-  // read-only card (U6) already shows its own recognized words, so a second,
-  // deduped set here would read as redundant rather than informative.
-  const relational = previousCheckIn?.pins[0]?.regionDescription.relational.replace(/\*/g, '');
+  // (U8/R9): the relative time and the recent-rhythm strip. The relational
+  // line that used to sit between them is gone — it only ever described
+  // pins[0], sourced from that pin's *stored* regionDescription.relational
+  // rather than the live coordinate-nearest-word computation every
+  // collapsed card below it uses (CoordinateCard's `guesses`/`nearbyTags`),
+  // so it could read as a different, contradicting summary of the same
+  // check-in rather than useful context of its own. This block is now
+  // purely "when" and "how often," never a content preview. Deduped
+  // recognized-word pills from the old MirrorCard are deliberately not
+  // carried forward either — each individual read-only card (U6) already
+  // shows its own recognized words, so a second, deduped set here would
+  // read as redundant rather than informative.
   const timeLabel = previousCheckIn ? formatRelative(previousCheckIn.timestamp) : null;
-  const relationalLine = relational && (
-    <span style={{ fontSize: 15, fontWeight: 300, color: 'var(--oura-text-1)', lineHeight: 1.45 }}>
-      {relational}
-    </span>
-  );
   // Shown in both variants, above the previous-check-in group's header/rows
   // (not gated by isRail like the pin-count headers below) — this is exactly
   // what the old mirror's sheet variant showed on mobile, so it needs to
   // reach mobile too.
   const returningSummary = previousCheckIn && (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '6px 0 4px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {/* On the sheet with an empty draft, a peek handle is always showing
-            (peeked, or expanded-with-empty-draft) and already carries the
-            time — skip it here to avoid saying it twice. The rail has no
-            handle, and the sheet-with-a-draft state has no handle either, so
-            both of those keep showing time as their own line. */}
-        {(isRail || canSave) && (
-          <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
-            {timeLabel}
-          </span>
-        )}
-        {relationalLine}
-      </div>
+      {/* On the sheet with an empty draft, a peek handle is always showing
+          (peeked, or expanded-with-empty-draft) and already carries the
+          time — skip it here to avoid saying it twice. The rail has no
+          handle, and the sheet-with-a-draft state has no handle either, so
+          both of those keep showing time as their own line. */}
+      {(isRail || canSave) && (
+        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
+          {timeLabel}
+        </span>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         <div style={MICRO_LABEL}>Recent rhythm</div>
         <RhythmStrip entries={entries} />
