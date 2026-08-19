@@ -382,9 +382,15 @@ export function EmotionDrawer({
         flexDirection: 'column',
       }}
     >
+      {/* Same label the section carries when it isn't being edited — the
+          section stays "Previous check-in" throughout; editing is a state
+          it enters, not a different section that replaces it. The border,
+          the gold cards, and the local Discard Edit / Update Check-in row
+          already say "you're editing this" without the label itself having
+          to change. */}
       {isRail && (
         <div style={{ ...groupHeaderStyle, padding: '10px 12px 2px' }}>
-          {`Editing check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+          {`Previous check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px' }}>
