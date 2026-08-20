@@ -358,10 +358,35 @@ export default function App() {
     setAdjustDraft(null);
   }, []);
 
+  // U5: the card list's scroll position across a drag's shrink/restore. Capture
+  // happens synchronously here, before the shrink renders (the list is still
+  // full-height at this point) — a ref, not the `wasDragging` derived from
+  // `adjustDraft` state, so a burst of same-tick move events can't re-capture
+  // mid-drag. Restore happens in the effect below, after React has already
+  // re-rendered the full list back in — restoring in this same callback would
+  // set scrollTop against the still-shrunk (smaller) content and get clamped.
+  const scrollRestoreRef = useRef<number | null>(null);
+  const wasDraggingRef = useRef(false);
+
   // The live draft coordinate during a slider drag (field preview only); null ends it.
   const handleAdjustDraft = useCallback((coord: { pinId: string; x: number; y: number } | null) => {
+    if (coord !== null && !wasDraggingRef.current) {
+      wasDraggingRef.current = true;
+      scrollRestoreRef.current = railScrollRef.current?.scrollTop ?? null;
+    } else if (coord === null) {
+      wasDraggingRef.current = false;
+    }
     setAdjustDraft(coord);
   }, []);
+
+  const prevDraggingPinIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (draggingPinId === null && prevDraggingPinIdRef.current !== null && scrollRestoreRef.current !== null) {
+      if (railScrollRef.current) railScrollRef.current.scrollTop = scrollRestoreRef.current;
+      scrollRestoreRef.current = null;
+    }
+    prevDraggingPinIdRef.current = draggingPinId;
+  }, [draggingPinId]);
 
   const handleRecord = useCallback(() => {
     if (draftId) {
@@ -611,6 +636,7 @@ export default function App() {
                 scrollRef={railScrollRef}
                 expanded={mirrorExpanded}
                 onToggle={() => setMirrorExpanded((v) => !v)}
+                draggingPinId={draggingPinId}
               />
             )}
           </AnimatePresence>

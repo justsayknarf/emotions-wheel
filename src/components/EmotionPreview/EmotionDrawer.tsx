@@ -89,6 +89,11 @@ interface Props {
   // Ignored by the rail (never collapsible).
   expanded?: boolean;
   onToggle?: () => void;
+  // U5: the pin whose card slider is currently being dragged, or null. Sheet
+  // variant only (rail never shrinks — it sits beside the field, not over
+  // it) and never applies while isReopened (matching R1-R3's exclusion) —
+  // see dragShrinkActive below.
+  draggingPinId?: string | null;
 }
 
 export function EmotionDrawer({
@@ -115,12 +120,19 @@ export function EmotionDrawer({
   scrollRef,
   expanded = false,
   onToggle,
+  draggingPinId = null,
 }: Props) {
   const previousPins = previousCheckIn?.pins ?? [];
   const reversedPins = [...pins].reverse();
   const reversedPreviousPins = [...previousPins].reverse();
   const isRail = variant === 'rail';
   const reduce = useReducedMotion();
+  // R7-R10: while a slider drag is active on the sheet's ordinary draft-cards
+  // path (never the rail, never isReopened — see the Props comment), hide
+  // everything but the actively-dragged card so more of the field shows
+  // through. Derived at render, not stored state — draggingPinId is already
+  // the single source of truth.
+  const dragShrinkActive = !isRail && !isReopened && draggingPinId !== null;
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
@@ -240,13 +252,24 @@ export function EmotionDrawer({
 
   // The draft's cards — fully editable, gold-accented. Used for the ordinary
   // "Draft check-in" group below (a fresh pin was dropped) — every pin here
-  // is genuinely unsaved, so every card is simply expanded.
+  // is genuinely unsaved, so every card is simply expanded. During
+  // dragShrinkActive, siblings are filtered out of this array entirely (not
+  // CSS-hidden) so AnimatePresence's own exit transition animates them out
+  // and the sheet's rendered height actually shrinks — a hidden-but-mounted
+  // sibling would leave the sheet's stopPropagation footprint unchanged. The
+  // one remaining (active) card gets `layout={false}` instead of the
+  // unconditional `layout` every other card keeps, so removing its siblings
+  // never triggers framer-motion's layout reflow on the card the user's
+  // finger is on mid-drag.
+  const visibleDraftPins = dragShrinkActive
+    ? reversedPins.filter((pin) => pin.id === draggingPinId)
+    : reversedPins;
   const draftCards = (
     <AnimatePresence initial={false}>
-      {reversedPins.map((pin) => (
+      {visibleDraftPins.map((pin) => (
         <motion.div
           key={pin.id}
-          layout
+          layout={!dragShrinkActive}
           data-pin-id={pin.id}
           initial={{ opacity: 0, y: -10, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -442,8 +465,11 @@ export function EmotionDrawer({
     >
       {/* Renders whether or not a reopen is active — editing happens in
           place, so the same "when" and "how often" context stays on screen
-          throughout rather than disappearing the moment editing starts. */}
-      {returningSummary}
+          throughout rather than disappearing the moment editing starts.
+          Hidden during dragShrinkActive (U5): it mounts in this same scroll
+          container as the draft cards, so leaving it up would keep the sheet
+          too tall to reveal much of the field around the dragged card. */}
+      {!dragShrinkActive && returningSummary}
       {isReopened ? (
         // Editing in place: the check-in that was the previous check-in's
         // group now renders here, in that group's position, inside its own
@@ -459,7 +485,7 @@ export function EmotionDrawer({
               {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
             </div>
           )}
-          {previousPins.length > 0 && (
+          {!dragShrinkActive && previousPins.length > 0 && (
             <AnimatePresence initial={false}>
               {reversedPreviousPins.map((pin) => (
                 <motion.div
@@ -665,6 +691,7 @@ export function EmotionDrawer({
         <button
           type="button"
           onClick={onToggle}
+          disabled={dragShrinkActive}
           aria-expanded={true}
           aria-label={`Collapse ${peekAriaSubject}`}
           style={{
@@ -678,7 +705,8 @@ export function EmotionDrawer({
             background: 'transparent',
             border: 'none',
             borderBottom: '1px solid var(--oura-border)',
-            cursor: 'pointer',
+            cursor: dragShrinkActive ? 'default' : 'pointer',
+            opacity: dragShrinkActive ? 0.4 : 1,
             color: 'inherit',
             textAlign: 'left',
             font: 'inherit',
@@ -710,7 +738,7 @@ export function EmotionDrawer({
           </span>
         </button>
       )}
-      {!isReopened && actionBar}
+      {!isReopened && !dragShrinkActive && actionBar}
       {cardList}
     </motion.div>
   );
