@@ -511,16 +511,22 @@ export default function App() {
         ref={fieldPlaneRef}
         style={{ position: 'absolute', top: 0, bottom: fieldBottom, left: 0, width: fieldWidth, zIndex: 2 }}
         onPointerDownCapture={(e) => {
-          // While the passive, nothing-to-add mirror is expanded (showMirror:
-          // empty draft, previous check-in present), a press on the field
-          // dismisses it rather than dropping a pin: consume the event
+          // While the passive, nothing-to-add mirror is EXPANDED (showMirror:
+          // empty draft, previous check-in present — AND mirrorExpanded: it's
+          // actually covering the field, not already peeked), a press on the
+          // field dismisses it rather than dropping a pin: consume the event
           // (capture-phase stop) so it never reaches EmotionField's synthetic
           // pointer handlers, so no gesture starts and no pin is created.
-          // Scoped to showMirror rather than raw mirrorExpanded — once the
-          // draft has pins, the tray is commonly expanded by default (R7/R11),
-          // and this guard must not also intercept an ordinary pin-drop press;
-          // that gesture drives its own peek instead (U3).
-          if (showMirror) {
+          // Both conditions are required, not just showMirror — showMirror
+          // alone doesn't mean the tray is covering anything right now (it
+          // could already be peeked), and firing unconditionally on it eats
+          // every field press for any returning user with an empty draft,
+          // even with nothing expanded to dismiss. Scoped away from raw
+          // mirrorExpanded alone too — once the draft has pins, the tray is
+          // commonly expanded by default (R7/R11), and this guard must not
+          // also intercept an ordinary pin-drop press; that gesture drives
+          // its own peek instead (U3).
+          if (showMirror && mirrorExpanded) {
             setMirrorExpanded(false);
             e.stopPropagation();
           }
