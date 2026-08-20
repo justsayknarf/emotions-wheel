@@ -186,23 +186,27 @@ export function EmotionDrawer({
           rail/sheet returns below) — while editing a previous check-in, its
           own local action row inside editingSection owns Discard Edit /
           Update Check-in instead, so this one stays fixed to the draft. */}
-      <button
-        onClick={onClear}
-        style={{
-          background: 'none',
-          border: '1px solid var(--oura-border)',
-          borderRadius: 6,
-          padding: '7px 14px',
-          color: 'var(--oura-text-2)',
-          fontSize: 11,
-          fontWeight: 500,
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-        }}
-      >
-        Discard Draft
-      </button>
+      {canSave ? (
+        <button
+          onClick={onClear}
+          style={{
+            background: 'none',
+            border: '1px solid var(--oura-border)',
+            borderRadius: 6,
+            padding: '7px 14px',
+            color: 'var(--oura-text-2)',
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+          }}
+        >
+          Discard Draft
+        </button>
+      ) : (
+        <span />
+      )}
       <button
         onClick={onDone}
         disabled={!canSave}
