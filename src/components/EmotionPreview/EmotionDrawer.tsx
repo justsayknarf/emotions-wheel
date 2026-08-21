@@ -136,14 +136,15 @@ export function EmotionDrawer({
   // `motion.div` returns, each replaying its own mount-only enter
   // animation on toggle, so the height change between them snapped
   // instead of animating. This merges them into one persistent container
-  // whose `sheetHeight` is the only JS-driven dimension. It's computed
-  // once per meaningful `sheetBodyVisible` transition (the effect below),
-  // never continuously — a pin add/remove while already expanded must
-  // not retrigger a height animation, and continuous measurement would
-  // also double up with CoordinateCard's own per-card height animation
-  // reacting to the same DOM change. These hooks run on every render
-  // regardless of `isRail`/`isReopened` (hook order can't depend on
-  // props) even though only the sheet's non-reopened toggle uses them.
+  // whose `sheetHeight` is the only JS-driven dimension. It's computed on
+  // each discrete transition that changes what's mounted or how many
+  // cards there are (the effect below) — not on every render — so
+  // per-pixel content wobble (a caption's word list changing at the same
+  // pin count) doesn't retrigger it and double up with CoordinateCard's
+  // own per-card height animation reacting to that same DOM change.
+  // These hooks run on every render regardless of `isRail`/`isReopened`
+  // (hook order can't depend on props) even though only the sheet's
+  // non-reopened toggle uses them.
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
   const sheetHandleRef = useRef<HTMLButtonElement>(null);
   const sheetActionBarRef = useRef<HTMLDivElement>(null);
@@ -190,14 +191,23 @@ export function EmotionDrawer({
     // a JS pixel value doesn't renegotiate itself when the viewport does.
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-    // Deliberately excludes draft/pin content from the dependency list —
-    // see the comment above the state declaration. `dragShrinkActive` IS
-    // included: it changes what's actually mounted (siblings, actionBar,
-    // returningSummary all disappear once a drag starts), so the sheet
-    // must re-measure and shrink to match — this is what U5's chrome-hide
-    // depends on to actually reduce the sheet's footprint, not just what's
-    // visible inside a footprint that stays the same size.
-  }, [isRail, isReopened, sheetBodyVisible, dragShrinkActive, scrollRef]);
+    // `dragShrinkActive` is included: it changes what's actually mounted
+    // (siblings, actionBar, returningSummary all disappear once a drag
+    // starts), so the sheet must re-measure and shrink to match — this is
+    // what U5's chrome-hide depends on to actually reduce the sheet's
+    // footprint, not just what's visible inside a footprint that stays
+    // the same size. `pins.length` is included too: before this container
+    // existed, the expanded sheet's height was CSS content-driven
+    // (`maxHeight: '46vh'`, no explicit height) and grew on its own as
+    // pins were added — an explicit JS height has to be told to do the
+    // same, or a second pin dropped into an already-expanded sheet would
+    // silently sit below the fold instead of growing the sheet to show
+    // it. Deliberately excludes everything else about a pin's content
+    // (coordinate, recognized words, caption state) — those change
+    // continuously during a slider drag or word pick, and retriggering
+    // this measurement for each one would double-animate the same visual
+    // change CoordinateCard already animates internally.
+  }, [isRail, isReopened, sheetBodyVisible, dragShrinkActive, pins.length, scrollRef]);
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
