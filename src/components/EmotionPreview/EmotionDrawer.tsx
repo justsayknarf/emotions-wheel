@@ -21,6 +21,14 @@ export const PEEK_SAFE_PAD = 'max(8px, env(safe-area-inset-bottom))';
 // (isReopened, which never toggles) and the JS clamp used to compute the
 // peek/expand transition's one-shot target height.
 const SHEET_MAX_VH = 0.46;
+// The tray's background/blur while a slider drag is active — low enough to
+// see a pin move on the field underneath, not just the general glow.
+// Tune here.
+const TRAY_DRAG_BACKGROUND = 'rgba(12, 14, 18, 0.08)';
+const TRAY_DRAG_BLUR = 'blur(0px)';
+// Resting (not dragging) values, for reference/tuning alongside the above.
+const TRAY_RESTING_BACKGROUND = 'rgba(12, 14, 18, 0.97)';
+const TRAY_RESTING_BLUR = 'blur(20px)';
 
 const MICRO_LABEL: React.CSSProperties = {
   fontSize: 8.5,
@@ -817,8 +825,8 @@ export function EmotionDrawer({
         // and layering a per-key transition override for these two
         // properties on top of that didn't take reliably; a CSS transition
         // is simpler and independent of the height/y spring.
-        background: dragShrinkActive ? 'rgba(12, 14, 18, 0.3)' : 'rgba(12, 14, 18, 0.97)',
-        backdropFilter: dragShrinkActive ? 'blur(6px)' : 'blur(20px)',
+        background: dragShrinkActive ? TRAY_DRAG_BACKGROUND : TRAY_RESTING_BACKGROUND,
+        backdropFilter: dragShrinkActive ? TRAY_DRAG_BLUR : TRAY_RESTING_BLUR,
         transition: reduce ? 'none' : 'background 0.25s ease-out, backdrop-filter 0.25s ease-out',
       }}
       onPointerDown={(e) => e.stopPropagation()}

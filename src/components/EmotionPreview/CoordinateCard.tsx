@@ -11,6 +11,15 @@ const NEARBY_TAG_COUNT = 5;
 // not reading data — matching the field's own words.
 const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
+// The card's background/border while a slider drag is active — low enough
+// to see a pin move on the field through the card's own body. Tune here.
+const CARD_DRAG_BACKGROUND = 'rgba(22, 24, 32, 0.15)';
+const CARD_DRAG_BORDER_SELECTED = 'rgba(201, 168, 124, 0.15)'; // faded accentDim
+const CARD_DRAG_BORDER_DEFAULT = 'rgba(255, 255, 255, 0.02)'; // faded --ui-border
+// Non-active content (header, the sibling axis slider, caption/tags) fades
+// to this opacity — the axis actually being dragged stays at 1.
+const CARD_DRAG_CONTENT_OPACITY = 0.3;
+
 interface Props {
   pin: PinEntry;
   isSelected: boolean;
@@ -356,20 +365,22 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     <div
       onClick={onSelect}
       style={{
-        // `--ui-surface` (#161820) diluted to the same alpha the tray's own
-        // background fades to during a drag — matching that treatment here
-        // so the field reads through the card's body too, not just around
-        // it. The active slider stays undimmed via its own `opacity` prop
-        // below, since CSS opacity on this outer div would fade it too.
-        background: draggingAxis !== null ? 'rgba(22, 24, 32, 0.35)' : 'var(--ui-surface)',
-        border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--ui-border)',
+        // `--ui-surface` (#161820) diluted to CARD_DRAG_BACKGROUND — matching
+        // the tray's own background-fade treatment so the field reads
+        // through the card's body too, not just around it. The active
+        // slider stays undimmed via its own `opacity` prop below, since CSS
+        // opacity on this outer div would fade it too.
+        background: draggingAxis !== null ? CARD_DRAG_BACKGROUND : 'var(--ui-surface)',
+        border: draggingAxis !== null
+          ? `1px solid ${showSelected ? CARD_DRAG_BORDER_SELECTED : CARD_DRAG_BORDER_DEFAULT}`
+          : `1px solid ${showSelected ? accentDim : 'var(--ui-border)'}`,
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
         boxShadow: showSelected ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)` : 'none',
         transition: reduced
           ? 'none'
-          : 'border-color 0.35s ease, box-shadow 0.35s ease, background 0.25s ease-out',
+          : 'border-color 0.25s ease-out, box-shadow 0.35s ease, background 0.25s ease-out',
       }}
     >
       {/* Header band */}
@@ -379,7 +390,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '10px 14px 0',
-          opacity: draggingAxis !== null ? 0.3 : 1,
+          opacity: draggingAxis !== null ? CARD_DRAG_CONTENT_OPACITY : 1,
           transition: reduced ? 'none' : 'opacity 0.25s ease-out',
         }}
       >
@@ -486,7 +497,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
             onCancel={cancelAxis}
-            opacity={draggingAxis !== null && draggingAxis !== 'x' ? 0.3 : 1}
+            opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
             reducedMotion={!!reduced}
           />
           <AxisSlider
@@ -498,7 +509,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
             onCancel={cancelAxis}
-            opacity={draggingAxis !== null && draggingAxis !== 'y' ? 0.3 : 1}
+            opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
             reducedMotion={!!reduced}
           />
         </div>
@@ -515,7 +526,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           transition={{ duration: reduced ? 0 : fadeOut, ease: 'easeOut' }}
           style={{
             overflow: 'hidden',
-            opacity: draggingAxis !== null ? 0.3 : 1,
+            opacity: draggingAxis !== null ? CARD_DRAG_CONTENT_OPACITY : 1,
             transition: reduced ? 'none' : 'opacity 0.25s ease-out',
           }}
         >
