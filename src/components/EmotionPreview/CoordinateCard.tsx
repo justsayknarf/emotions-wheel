@@ -77,6 +77,8 @@ function AxisSlider({
   onDrag,
   onCommit,
   onCancel,
+  opacity = 1,
+  reducedMotion = false,
 }: {
   labelLow: string;
   labelHigh: string;
@@ -86,6 +88,11 @@ function AxisSlider({
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
   onCancel: () => void;
+  // Faded while a sibling axis on this same card is the one being dragged
+  // (see CoordinateCard's `draggingAxis`) — the axis actually being touched
+  // stays at 1 so the user always has a clear, undimmed target.
+  opacity?: number;
+  reducedMotion?: boolean;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -98,7 +105,7 @@ function AxisSlider({
   const p = pct(value);
 
   return (
-    <div>
+    <div style={{ opacity, transition: reducedMotion ? 'none' : 'opacity 0.25s ease-out' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={endLabelStyle}>{labelLow}</span>
         <span style={endLabelStyle}>{labelHigh}</span>
@@ -306,6 +313,12 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   const curY = draft?.y ?? pin.y;
   const originX = pin.origin?.x ?? pin.x;
   const originY = pin.origin?.y ?? pin.y;
+  // Which axis is actively being dragged, so the card can fade everything
+  // except the one slider actually being touched — set on every drag frame
+  // (not just grab) so it's always correct even if a pointer capture is lost
+  // and re-grabbed. `draft !== null` alone can't answer *which* axis; this
+  // can.
+  const [draggingAxis, setDraggingAxis] = useState<'x' | 'y' | null>(null);
 
   const nextFrom = (axis: 'x' | 'y', v: number) => {
     const base = draftRef.current ?? { x: pin.x, y: pin.y };
@@ -315,6 +328,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     const next = nextFrom(axis, v);
     draftRef.current = next;
     setDraft(next);
+    setDraggingAxis(axis);
     onAdjustDraft?.({ pinId: pin.id, ...next });
   };
   // Abandon an unfinished drag: drop the draft so the thumbs snap back to the
@@ -326,12 +340,14 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   const cancelAxis = () => {
     draftRef.current = null;
     setDraft(null);
+    setDraggingAxis(null);
     onAdjustDraft?.(null);
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
     draftRef.current = null;
     setDraft(null);
+    setDraggingAxis(null);
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
   };
@@ -340,13 +356,20 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     <div
       onClick={onSelect}
       style={{
-        background: 'var(--ui-surface)',
+        // `--ui-surface` (#161820) diluted to the same alpha the tray's own
+        // background fades to during a drag — matching that treatment here
+        // so the field reads through the card's body too, not just around
+        // it. The active slider stays undimmed via its own `opacity` prop
+        // below, since CSS opacity on this outer div would fade it too.
+        background: draggingAxis !== null ? 'rgba(22, 24, 32, 0.35)' : 'var(--ui-surface)',
         border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--ui-border)',
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
         boxShadow: showSelected ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)` : 'none',
-        transition: 'border-color 0.35s ease, box-shadow 0.35s ease',
+        transition: reduced
+          ? 'none'
+          : 'border-color 0.35s ease, box-shadow 0.35s ease, background 0.25s ease-out',
       }}
     >
       {/* Header band */}
@@ -356,6 +379,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '10px 14px 0',
+          opacity: draggingAxis !== null ? 0.3 : 1,
+          transition: reduced ? 'none' : 'opacity 0.25s ease-out',
         }}
       >
         <span
@@ -461,6 +486,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
             onCancel={cancelAxis}
+            opacity={draggingAxis !== null && draggingAxis !== 'x' ? 0.3 : 1}
+            reducedMotion={!!reduced}
           />
           <AxisSlider
             labelLow="Negative"
@@ -471,6 +498,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
             onCancel={cancelAxis}
+            opacity={draggingAxis !== null && draggingAxis !== 'y' ? 0.3 : 1}
+            reducedMotion={!!reduced}
           />
         </div>
 
@@ -484,7 +513,11 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         <motion.div
           animate={{ height: reduced ? 'auto' : captionHeight ?? 'auto' }}
           transition={{ duration: reduced ? 0 : fadeOut, ease: 'easeOut' }}
-          style={{ overflow: 'hidden' }}
+          style={{
+            overflow: 'hidden',
+            opacity: draggingAxis !== null ? 0.3 : 1,
+            transition: reduced ? 'none' : 'opacity 0.25s ease-out',
+          }}
         >
         <div ref={captionRef}>
         <AnimatePresence mode="popLayout" initial={false}>
