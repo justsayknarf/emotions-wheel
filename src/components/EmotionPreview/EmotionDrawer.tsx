@@ -17,6 +17,10 @@ export const RAIL_WIDTH = 'clamp(340px, 32%, 420px)';
 // PEEK_SAFE_PAD (the tray's safe-area bottom padding).
 export const PEEK_BAR_HEIGHT = 52;
 export const PEEK_SAFE_PAD = 'max(8px, env(safe-area-inset-bottom))';
+// The sheet's expanded height cap — shared between the static CSS value
+// (isReopened, which never toggles) and the JS clamp used to compute the
+// peek/expand transition's one-shot target height.
+const SHEET_MAX_VH = 0.46;
 
 const MICRO_LABEL: React.CSSProperties = {
   fontSize: 8.5,
@@ -165,17 +169,20 @@ export function EmotionDrawer({
     // the container currently constrains its visible box.
     const actionBarHeight = sheetActionBarRef.current?.offsetHeight ?? 0;
     const cardListHeight = scrollRef?.current?.scrollHeight ?? 0;
-    const viewportCap = window.innerHeight * 0.46; // mirrors this sheet's 46vh cap at rest
+    const viewportCap = window.innerHeight * SHEET_MAX_VH;
     setSheetHeight(Math.min(handleHeight + actionBarHeight + cardListHeight, viewportCap));
     // Deliberately excludes draft/pin content from the dependency list —
     // see the comment above the state declaration.
   }, [isRail, isReopened, sheetBodyVisible, scrollRef]);
+  // Shared precondition for every sheet-only, non-reopened derivation below
+  // (dragShrinkActive, hideHistory, handleAlreadyShowsTime) — named once
+  // rather than repeated per condition.
+  const isDraftSheet = !isRail && !isReopened;
   // R7-R10: while a slider drag is active on the sheet's ordinary draft-cards
-  // path (never the rail, never isReopened — see the Props comment), hide
-  // everything but the actively-dragged card so more of the field shows
-  // through. Derived at render, not stored state — draggingPinId is already
-  // the single source of truth.
-  const dragShrinkActive = !isRail && !isReopened && draggingPinId !== null;
+  // path, hide everything but the actively-dragged card so more of the
+  // field shows through. Derived at render, not stored state —
+  // draggingPinId is already the single source of truth.
+  const dragShrinkActive = isDraftSheet && draggingPinId !== null;
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
@@ -184,14 +191,14 @@ export function EmotionDrawer({
   // (the returning-summary block and the previous check-in's read-only
   // cards) hides so the draft renders as the top and only content —
   // requiring a scroll to see a just-dropped pin was the bug this fixes.
-  // Excludes isReopened: `pins` there holds the whole reopened check-in,
-  // not a fresh draft, and the returning-summary block is deliberately
-  // kept visible throughout an edit (see its own comment below) — this
-  // condition must not undo that. Subsumes dragShrinkActive, which only
-  // ever hides this same content under a narrower, drag-only condition —
-  // a drag can only be active on a card already in the draft, so
-  // dragShrinkActive being true always implies hideHistory is too.
-  const hideHistory = !isRail && !isReopened && canSave;
+  // isDraftSheet already excludes isReopened: `pins` there holds the whole
+  // reopened check-in, not a fresh draft, and the returning-summary block
+  // is deliberately kept visible throughout an edit (see its own comment
+  // below) — this condition must not undo that. Subsumes dragShrinkActive,
+  // which only ever hides this same content under a narrower, drag-only
+  // condition — a drag can only be active on a card already in the draft,
+  // so dragShrinkActive being true always implies hideHistory is too.
+  const hideHistory = isDraftSheet && canSave;
 
   // Returning-summary content, carried forward from the retired MirrorCard
   // (U8/R9): the relative time and the recent-rhythm strip. The relational
@@ -218,7 +225,7 @@ export function EmotionDrawer({
   // one. Skip the summary's own time line only then, to avoid saying it
   // twice; show it in every other case, including throughout an edit, where
   // no handle ever renders (see handleButton below).
-  const handleAlreadyShowsTime = !isRail && !isReopened && !canSave;
+  const handleAlreadyShowsTime = isDraftSheet && !canSave;
   // Sourced from mostRecentEntry, not previousCheckIn, and rendered
   // unconditionally in cardList below (not nested inside the isReopened
   // branch) — so it keeps showing the same "when" and "how often" through
@@ -756,7 +763,7 @@ export function EmotionDrawer({
         // border above.
         borderRadius: sheetBodyVisible ? undefined : '16px 16px 0 0',
         paddingBottom: sheetBodyVisible ? undefined : PEEK_SAFE_PAD,
-        maxHeight: isReopened ? '46vh' : undefined,
+        maxHeight: isReopened ? `${SHEET_MAX_VH * 100}vh` : undefined,
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
