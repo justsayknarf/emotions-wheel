@@ -145,6 +145,23 @@ export function EmotionDrawer({
   // These hooks run on every render regardless of `isRail`/`isReopened`
   // (hook order can't depend on props) even though only the sheet's
   // non-reopened toggle uses them.
+  //
+  // This is a deliberate exception to AGENTS.md's "derive at render rather
+  // than reconciling in an effect" — that guidance targets values
+  // *computable* from existing props/state (like the selected-pin
+  // resolution it cites), not a real DOM pixel size, which isn't knowable
+  // until the browser has laid out the content. `CoordinateCard.tsx:232-242`
+  // already measures+reconciles for the same reason (`captionHeight`); this
+  // follows the same precedent. A continuously-observing `ResizeObserver`
+  // (as `CoordinateCard` uses) was considered and rejected here: the body
+  // this container measures is itself a flex item whose *own* size is a
+  // result of the JS height being set, so observing it directly risks a
+  // feedback loop — the discrete triggers below (isPeeked toggle, a drag
+  // starting/ending, the pin count changing, a viewport resize) cover the
+  // transitions that matter in practice without that risk. A content-size
+  // change from something outside that list (e.g. a webfont finishing load
+  // mid-session) won't retrigger a remeasure — accepted as a narrow,
+  // low-impact gap rather than reworked into a `ResizeObserver`.
   const [sheetHeight, setSheetHeight] = useState<number | null>(null);
   const sheetHandleRef = useRef<HTMLButtonElement>(null);
   const sheetActionBarRef = useRef<HTMLDivElement>(null);
