@@ -12,10 +12,10 @@ interface Props {
 
 function cell(extra: CSSProperties = {}): CSSProperties {
   return {
-    background: 'var(--oura-bg)',
-    border: '1px solid var(--oura-border)',
+    background: 'var(--ui-bg)',
+    border: '1px solid var(--ui-border)',
     borderRadius: 4,
-    color: 'var(--oura-text-1)',
+    color: 'var(--ui-text-1)',
     fontSize: 11,
     padding: '3px 6px',
     outline: 'none',
@@ -40,14 +40,14 @@ export function AdminRow({ emotion, selected, onSelect, onUpdate, onRemove }: Pr
       onClick={onSelect}
       style={{
         background: selected ? 'rgba(201,168,124,0.14)' : 'transparent',
-        borderBottom: '1px solid var(--oura-border)',
+        borderBottom: '1px solid var(--ui-border)',
         cursor: 'default',
       }}
     >
       {/* Compact row */}
       <div style={{ display: 'flex', alignItems: 'center', height: 34, padding: '0 8px', gap: 5, fontSize: 11 }}>
         {/* ID — read-only */}
-        <div style={{ width: 90, flexShrink: 0, color: 'var(--oura-text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10 }}>
+        <div style={{ width: 90, flexShrink: 0, color: 'var(--ui-text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 10 }}>
           {emotion.id}
         </div>
         {/* Label */}
@@ -106,7 +106,7 @@ export function AdminRow({ emotion, selected, onSelect, onUpdate, onRemove }: Pr
             flexShrink: 0,
             background: 'transparent',
             border: 'none',
-            color: 'var(--oura-text-3)',
+            color: 'var(--ui-text-3)',
             cursor: 'pointer',
             fontSize: 16,
             lineHeight: 1,
@@ -133,10 +133,10 @@ export function AdminRow({ emotion, selected, onSelect, onUpdate, onRemove }: Pr
             style={{
               width: '100%',
               boxSizing: 'border-box',
-              background: 'var(--oura-bg)',
-              border: '1px solid var(--oura-border)',
+              background: 'var(--ui-bg)',
+              border: '1px solid var(--ui-border)',
               borderRadius: 4,
-              color: 'var(--oura-text-1)',
+              color: 'var(--ui-text-1)',
               fontSize: 11,
               padding: '6px 8px',
               resize: 'vertical',

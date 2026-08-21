@@ -61,7 +61,7 @@ const endLabelStyle = {
   fontWeight: 500,
   letterSpacing: '0.12em',
   textTransform: 'uppercase' as const,
-  color: 'var(--oura-text-3)',
+  color: 'var(--ui-text-3)',
 };
 
 // A single draggable axis. Reports the value live while dragging (onDrag) and
@@ -155,7 +155,7 @@ function AxisSlider({
           }}
         />
         {/* origin tick — where this pin was dropped */}
-        <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--oura-text-3)', left: `${pct(origin)}%` }} />
+        <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--ui-text-3)', left: `${pct(origin)}%` }} />
         {/* thumb */}
         <div
           style={{
@@ -166,7 +166,7 @@ function AxisSlider({
             marginTop: -7.5,
             marginLeft: -7.5,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--oura-gold) 62%)',
+            background: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
             boxShadow: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
             left: `${p}%`,
             touchAction: 'none',
@@ -183,7 +183,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // The accent that marks this card as recorded rather than draft (R6) — the
   // same cool hue the field already uses for a recorded pin (U4), so the
   // treatment reads consistently between the two surfaces.
-  const accentDim = readOnly ? 'var(--oura-recorded-dim)' : 'var(--oura-gold-dim)';
+  const accentDim = readOnly ? 'var(--ui-recorded-dim)' : 'var(--ui-gold-dim)';
 
   // The slot dissolve on a coordinate commit — tunable, and collapsed to an
   // instant swap when the viewer prefers reduced motion.
@@ -259,8 +259,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           fontFamily: FIELD_SERIF,
           fontSize: 15.5,
           letterSpacing: '0.01em',
-          color: named ? 'var(--oura-gold)' : 'var(--oura-text-1)',
-          borderBottom: named ? '1px solid var(--oura-gold-dim)' : '1px dotted var(--oura-gold-dim)',
+          color: named ? 'var(--ui-gold)' : 'var(--ui-text-1)',
+          borderBottom: named ? '1px solid var(--ui-gold-dim)' : '1px dotted var(--ui-gold-dim)',
           padding: '0 1px 1px',
         }}
       >
@@ -283,9 +283,9 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           padding: '4px 11px',
           borderRadius: 6,
           cursor: 'pointer',
-          border: named ? '1px solid var(--oura-gold-dim)' : '1px solid rgba(237,232,223,0.12)',
+          border: named ? '1px solid var(--ui-gold-dim)' : '1px solid rgba(237,232,223,0.12)',
           background: named ? 'rgba(201,168,124,0.16)' : 'rgba(237,232,223,0.04)',
-          color: named ? 'var(--oura-gold)' : 'var(--oura-text-2)',
+          color: named ? 'var(--ui-gold)' : 'var(--ui-text-2)',
           fontSize: 12,
           letterSpacing: '0.01em',
         }}
@@ -340,8 +340,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     <div
       onClick={onSelect}
       style={{
-        background: 'var(--oura-surface)',
-        border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--oura-border)',
+        background: 'var(--ui-surface)',
+        border: showSelected ? `1px solid ${accentDim}` : '1px solid var(--ui-border)',
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
@@ -379,10 +379,10 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             disabled={reopenDisabled}
             style={{
               background: 'none',
-              border: `1px solid ${reopenDisabled ? 'var(--oura-border)' : accentDim}`,
+              border: `1px solid ${reopenDisabled ? 'var(--ui-border)' : accentDim}`,
               borderRadius: 6,
               padding: '4px 10px',
-              color: reopenDisabled ? 'var(--oura-text-3)' : 'var(--oura-recorded)',
+              color: reopenDisabled ? 'var(--ui-text-3)' : 'var(--ui-recorded)',
               fontSize: 9.5,
               fontWeight: 500,
               letterSpacing: '0.06em',
@@ -399,7 +399,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             style={{
               background: 'none',
               border: 'none',
-              color: 'var(--oura-text-3)',
+              color: 'var(--ui-text-3)',
               fontSize: 16,
               cursor: 'pointer',
               padding: '0 0 0 8px',
@@ -425,7 +425,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
            even though nothing here responds to a tap, which read as broken
            rather than read-only. Collapsed-only removes the ambiguity. */
         <div style={{ padding: '10px 14px 14px' }}>
-          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
             {guesses.length === 0
               ? pin.regionDescription.relational
               : `near ${guesses[0].label.toLowerCase()}${guesses[1] ? ` or ${guesses[1].label.toLowerCase()}` : ''}`}
@@ -436,7 +436,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
               {pin.recognizedWords.map((id) => (
                 <span
                   key={id}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--oura-recorded)', fontSize: 11 }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--ui-recorded)', fontSize: 11 }}
                 >
                   {labelForId(id)}
                 </span>
@@ -490,16 +490,16 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         <AnimatePresence mode="popLayout" initial={false}>
         <motion.div key={captionMode} {...slotAnim}>
         {captionMode === 'wordless' ? (
-          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 14, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
             {pin.regionDescription.relational}
           </p>
         ) : captionMode === 'dismissed' ? (
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
             where you landed is enough.
           </p>
         ) : (
           <>
-            <div style={{ fontFamily: FIELD_SERIF, fontSize: 15.5, color: 'var(--oura-text-2)', lineHeight: 1.55 }}>
+            <div style={{ fontFamily: FIELD_SERIF, fontSize: 15.5, color: 'var(--ui-text-2)', lineHeight: 1.55 }}>
               Does{' '}
               <AnimatePresence mode="wait" initial={false}>
                 <motion.span key={guesses[0].id} {...slotAnim} style={{ display: 'inline-block' }}>
@@ -508,7 +508,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
               </AnimatePresence>
               {guesses[1] && (
                 <>
-                  {' '}<span style={{ color: 'var(--oura-text-3)' }}>or</span>{' '}
+                  {' '}<span style={{ color: 'var(--ui-text-3)' }}>or</span>{' '}
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span key={guesses[1].id} {...slotAnim} style={{ display: 'inline-block' }}>
                       {renderGuess(guesses[1])}
@@ -521,7 +521,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
             {nearbyTags.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 12 }}>
-                <span style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--oura-text-3)', marginRight: 2 }}>
+                <span style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--ui-text-3)', marginRight: 2 }}>
                   or nearby
                 </span>
                 <AnimatePresence mode="wait" initial={false}>
@@ -534,7 +534,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
             <button
               onClick={(e) => { e.stopPropagation(); setDismissedAt(coordKey); }}
-              style={{ display: 'inline-block', marginTop: 13, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 10.5, letterSpacing: '0.06em', color: 'var(--oura-text-3)', padding: '3px 0' }}
+              style={{ display: 'inline-block', marginTop: 13, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 10.5, letterSpacing: '0.06em', color: 'var(--ui-text-3)', padding: '3px 0' }}
             >
               none of these
             </button>
@@ -547,12 +547,12 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
         {pin.recognizedWords.length > 0 && (
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, color: 'var(--oura-gold-dim)', letterSpacing: '0.02em' }}>your words:</span>
+            <span style={{ fontSize: 11, color: 'var(--ui-gold-dim)', letterSpacing: '0.02em' }}>your words:</span>
             {pin.recognizedWords.map((id) => (
               <button
                 key={id}
                 onClick={(e) => { e.stopPropagation(); onDerecognize(id); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, cursor: 'pointer', border: '1px solid var(--oura-gold-dim)', background: 'rgba(201,168,124,0.14)', color: 'var(--oura-gold)', fontSize: 11.5 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, cursor: 'pointer', border: '1px solid var(--ui-gold-dim)', background: 'rgba(201,168,124,0.14)', color: 'var(--ui-gold)', fontSize: 11.5 }}
               >
                 {labelForId(id)}<span style={{ opacity: 0.5, fontSize: 13 }}>×</span>
               </button>

@@ -22,7 +22,7 @@ const MICRO_LABEL: React.CSSProperties = {
   fontWeight: 500,
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
-  color: 'var(--oura-text-3)',
+  color: 'var(--ui-text-3)',
 };
 
 type Variant = 'sheet' | 'rail';
@@ -173,7 +173,7 @@ export function EmotionDrawer({
   const returningSummary = mostRecentEntry && (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '6px 0 4px' }}>
       {!handleAlreadyShowsTime && (
-        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
+        <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
           {summaryTimeLabel}
         </span>
       )}
@@ -188,8 +188,8 @@ export function EmotionDrawer({
     <div
       style={{
         padding: '11px 16px',
-        borderBottom: isRail ? 'none' : '1px solid var(--oura-border)',
-        borderTop: isRail ? '1px solid var(--oura-border)' : 'none',
+        borderBottom: isRail ? 'none' : '1px solid var(--ui-border)',
+        borderTop: isRail ? '1px solid var(--ui-border)' : 'none',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -204,10 +204,10 @@ export function EmotionDrawer({
           onClick={onClear}
           style={{
             background: 'none',
-            border: '1px solid var(--oura-border)',
+            border: '1px solid var(--ui-border)',
             borderRadius: 6,
             padding: '7px 14px',
-            color: 'var(--oura-text-2)',
+            color: 'var(--ui-text-2)',
             fontSize: 11,
             fontWeight: 500,
             letterSpacing: '0.05em',
@@ -224,11 +224,11 @@ export function EmotionDrawer({
         onClick={onDone}
         disabled={!canSave}
         style={{
-          background: canSave ? 'var(--oura-gold)' : 'var(--oura-border)',
+          background: canSave ? 'var(--ui-gold)' : 'var(--ui-border)',
           border: 'none',
           borderRadius: 6,
           padding: '7px 18px',
-          color: canSave ? '#0D0F14' : 'var(--oura-text-3)',
+          color: canSave ? '#0D0F14' : 'var(--ui-text-3)',
           fontSize: 11,
           fontWeight: 600,
           letterSpacing: '0.06em',
@@ -246,7 +246,7 @@ export function EmotionDrawer({
     fontWeight: 500,
     letterSpacing: '0.14em',
     textTransform: 'uppercase',
-    color: 'var(--oura-text-3)',
+    color: 'var(--ui-text-3)',
     padding: '6px 0 2px',
   };
 
@@ -366,17 +366,17 @@ export function EmotionDrawer({
         alignItems: 'center',
         gap: 8,
         padding: '10px 12px',
-        borderTop: '1px solid var(--oura-gold-dim)',
+        borderTop: '1px solid var(--ui-gold-dim)',
       }}
     >
       <button
         onClick={onClear}
         style={{
           background: 'none',
-          border: '1px solid var(--oura-border)',
+          border: '1px solid var(--ui-border)',
           borderRadius: 6,
           padding: '6px 12px',
-          color: 'var(--oura-text-2)',
+          color: 'var(--ui-text-2)',
           fontSize: 10.5,
           fontWeight: 500,
           letterSpacing: '0.05em',
@@ -390,11 +390,11 @@ export function EmotionDrawer({
         onClick={onDone}
         disabled={!canSave}
         style={{
-          background: canSave ? 'var(--oura-gold)' : 'var(--oura-border)',
+          background: canSave ? 'var(--ui-gold)' : 'var(--ui-border)',
           border: 'none',
           borderRadius: 6,
           padding: '6px 16px',
-          color: canSave ? '#0D0F14' : 'var(--oura-text-3)',
+          color: canSave ? '#0D0F14' : 'var(--ui-text-3)',
           fontSize: 10.5,
           fontWeight: 600,
           letterSpacing: '0.06em',
@@ -418,7 +418,7 @@ export function EmotionDrawer({
   const editingSection = (
     <div
       style={{
-        border: '1px solid var(--oura-gold-dim)',
+        border: '1px solid var(--ui-gold-dim)',
         borderRadius: 12,
         background: 'rgba(201, 168, 124, 0.03)',
         overflow: 'hidden',
@@ -440,7 +440,7 @@ export function EmotionDrawer({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px' }}>
         {editingCards}
         {pins.length === 0 && (
-          <p style={{ margin: 0, padding: '4px 2px', fontSize: 12.5, color: 'var(--oura-text-3)', fontStyle: 'italic' }}>
+          <p style={{ margin: 0, padding: '4px 2px', fontSize: 12.5, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
             No pins left in this check-in. Discard to restore it as it was, or add one back on the field.
           </p>
         )}
@@ -553,7 +553,7 @@ export function EmotionDrawer({
           right: 0,
           bottom: 0,
           width: RAIL_WIDTH,
-          borderLeft: '1px solid var(--oura-border)',
+          borderLeft: '1px solid var(--ui-border)',
           touchAction: 'pan-y',
         }}
         onPointerDown={(e) => e.stopPropagation()}
@@ -599,7 +599,7 @@ export function EmotionDrawer({
           bottom: 0,
           left: 0,
           right: 0,
-          borderTop: '1px solid var(--oura-border)',
+          borderTop: '1px solid var(--ui-border)',
           borderRadius: '16px 16px 0 0',
           paddingBottom: PEEK_SAFE_PAD,
         }}
@@ -634,13 +634,13 @@ export function EmotionDrawer({
               width: 34,
               height: 4,
               borderRadius: 2,
-              background: 'var(--oura-border)',
+              background: 'var(--ui-border)',
             }}
           />
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <span style={MICRO_LABEL}>{peekMicroLabel}</span>
-              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
+              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
                 {peekDetailLabel}
               </span>
             </span>
@@ -649,7 +649,7 @@ export function EmotionDrawer({
               aria-hidden
               animate={{ rotate: 180 }}
               transition={reduce ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
-              style={{ display: 'inline-flex', color: 'var(--oura-text-3)' }}
+              style={{ display: 'inline-flex', color: 'var(--ui-text-3)' }}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M3.5 8.5L7 5l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -682,7 +682,7 @@ export function EmotionDrawer({
         left: 0,
         right: 0,
         maxHeight: '46vh',
-        borderTop: '1px solid var(--oura-border)',
+        borderTop: '1px solid var(--ui-border)',
         touchAction: 'pan-y',
       }}
       onPointerDown={(e) => e.stopPropagation()}
@@ -704,7 +704,7 @@ export function EmotionDrawer({
             padding: '0 18px',
             background: 'transparent',
             border: 'none',
-            borderBottom: '1px solid var(--oura-border)',
+            borderBottom: '1px solid var(--ui-border)',
             cursor: dragShrinkActive ? 'default' : 'pointer',
             opacity: dragShrinkActive ? 0.4 : 1,
             color: 'inherit',
@@ -715,12 +715,12 @@ export function EmotionDrawer({
         >
           <span
             aria-hidden
-            style={{ alignSelf: 'center', width: 34, height: 4, borderRadius: 2, background: 'var(--oura-border)' }}
+            style={{ alignSelf: 'center', width: 34, height: 4, borderRadius: 2, background: 'var(--ui-border)' }}
           />
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <span style={MICRO_LABEL}>{peekMicroLabel}</span>
-              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
+              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
                 {peekDetailLabel}
               </span>
             </span>
@@ -729,7 +729,7 @@ export function EmotionDrawer({
               aria-hidden
               animate={{ rotate: 0 }}
               transition={reduce ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
-              style={{ display: 'inline-flex', color: 'var(--oura-text-3)' }}
+              style={{ display: 'inline-flex', color: 'var(--ui-text-3)' }}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M3.5 8.5L7 5l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />

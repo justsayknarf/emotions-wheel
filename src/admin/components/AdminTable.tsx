@@ -22,7 +22,7 @@ const COL: CSSProperties = {
   fontSize: 9,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  color: 'var(--oura-text-3)',
+  color: 'var(--ui-text-3)',
 };
 
 function Pill({ label, active, onToggle }: { label: string; active: boolean; onToggle: () => void }) {
@@ -32,9 +32,9 @@ function Pill({ label, active, onToggle }: { label: string; active: boolean; onT
       style={{
         padding: '2px 9px',
         borderRadius: 10,
-        border: active ? '1px solid var(--oura-gold)' : '1px solid var(--oura-border)',
+        border: active ? '1px solid var(--ui-gold)' : '1px solid var(--ui-border)',
         background: active ? 'rgba(201,168,124,0.18)' : 'transparent',
-        color: active ? 'var(--oura-gold)' : 'var(--oura-text-3)',
+        color: active ? 'var(--ui-gold)' : 'var(--ui-text-3)',
         fontSize: 10,
         cursor: 'pointer',
         letterSpacing: '0.03em',
@@ -73,8 +73,8 @@ export function AdminTable({
       {/* Filter bar */}
       <div style={{
         padding: '8px 10px',
-        borderBottom: '1px solid var(--oura-border)',
-        background: 'var(--oura-surface)',
+        borderBottom: '1px solid var(--ui-border)',
+        background: 'var(--ui-surface)',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -82,13 +82,13 @@ export function AdminTable({
       }}>
         {/* Depth row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--oura-text-3)', width: 40, flexShrink: 0 }}>Depth</div>
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ui-text-3)', width: 40, flexShrink: 0 }}>Depth</div>
           <Pill label="surface" active={depthFilter.has('surface')} onToggle={() => onToggleDepth('surface')} />
           <Pill label="deep" active={depthFilter.has('deep')} onToggle={() => onToggleDepth('deep')} />
         </div>
         {/* Cluster row */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--oura-text-3)', width: 40, flexShrink: 0, paddingTop: 3 }}>Cluster</div>
+          <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ui-text-3)', width: 40, flexShrink: 0, paddingTop: 3 }}>Cluster</div>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {clusters.map(c => (
               <Pill key={c} label={c} active={clusterFilter.has(c)} onToggle={() => onToggleCluster(c)} />
@@ -102,8 +102,8 @@ export function AdminTable({
         display: 'flex',
         alignItems: 'center',
         padding: '6px 8px',
-        borderBottom: '1px solid var(--oura-border)',
-        background: 'var(--oura-surface)',
+        borderBottom: '1px solid var(--ui-border)',
+        background: 'var(--ui-surface)',
         gap: 5,
         flexShrink: 0,
       }}>
@@ -133,8 +133,8 @@ export function AdminTable({
       {/* Footer toolbar */}
       <div style={{
         padding: '8px 10px',
-        borderTop: '1px solid var(--oura-border)',
-        background: 'var(--oura-surface)',
+        borderTop: '1px solid var(--ui-border)',
+        background: 'var(--ui-surface)',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
@@ -144,9 +144,9 @@ export function AdminTable({
           onClick={() => onAdd('New Emotion')}
           style={{
             background: 'transparent',
-            border: '1px solid var(--oura-border)',
+            border: '1px solid var(--ui-border)',
             borderRadius: 6,
-            color: 'var(--oura-gold-dim)',
+            color: 'var(--ui-gold-dim)',
             fontSize: 11,
             padding: '5px 14px',
             textTransform: 'uppercase',
@@ -156,7 +156,7 @@ export function AdminTable({
         >
           + Add Emotion
         </button>
-        <div style={{ fontSize: 10, color: 'var(--oura-text-3)' }}>
+        <div style={{ fontSize: 10, color: 'var(--ui-text-3)' }}>
           {visibleIds === null ? emotions.length : `${visibleEmotions.length} / ${emotions.length}`} emotions
         </div>
       </div>

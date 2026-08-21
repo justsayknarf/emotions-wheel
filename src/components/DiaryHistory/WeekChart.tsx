@@ -68,7 +68,7 @@ export function WeekChart({ entries, onDayTap }: Props) {
           <line
             x1={0} y1={yForValue(0)}
             x2={SVG_W} y2={yForValue(0)}
-            stroke="var(--oura-border)"
+            stroke="var(--ui-border)"
             strokeWidth={1}
           />
 
@@ -78,7 +78,7 @@ export function WeekChart({ entries, onDayTap }: Props) {
               key={`vs-${i}`}
               points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.valence)}`).join(' ')}
               fill="none"
-              stroke="var(--oura-gold)"
+              stroke="var(--ui-gold)"
               strokeWidth={1.5}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -92,7 +92,7 @@ export function WeekChart({ entries, onDayTap }: Props) {
               key={`as-${i}`}
               points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.arousal)}`).join(' ')}
               fill="none"
-              stroke="var(--oura-gold-dim)"
+              stroke="var(--ui-gold-dim)"
               strokeWidth={1.5}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -102,8 +102,8 @@ export function WeekChart({ entries, onDayTap }: Props) {
           {/* Dots */}
           {data.map((d, i) => d === null ? null : (
             <g key={`dots-${i}`}>
-              <circle cx={colCenterX(i)} cy={yForValue(d.valence)} r={3.5} fill="var(--oura-gold)" />
-              <circle cx={colCenterX(i)} cy={yForValue(d.arousal)} r={3.5} fill="var(--oura-gold-dim)" />
+              <circle cx={colCenterX(i)} cy={yForValue(d.valence)} r={3.5} fill="var(--ui-gold)" />
+              <circle cx={colCenterX(i)} cy={yForValue(d.arousal)} r={3.5} fill="var(--ui-gold-dim)" />
             </g>
           ))}
 
@@ -115,7 +115,7 @@ export function WeekChart({ entries, onDayTap }: Props) {
               y={SVG_H - 3}
               textAnchor="middle"
               fontSize={7}
-              fill="var(--oura-text-3)"
+              fill="var(--ui-text-3)"
               fontFamily="inherit"
             >
               {day.getDate()}

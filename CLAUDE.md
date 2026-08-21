@@ -31,7 +31,7 @@ Note that the specs predate much of what shipped; where they disagree with the c
 - A pin's coordinate is adjustable after planting, via sliders on its card
 - Words are *recognized* against a pin as optional annotation, never required to complete a check-in
 
-**Aesthetic:** Warm but grounded. Soft animations. Z-axis transitions. No chart aesthetics, no clinical grids, no urgency colors. Oura-inspired dark palette; design tokens are CSS custom properties in `src/index.css`.
+**Aesthetic:** Warm but grounded. Soft animations. Z-axis transitions. No chart aesthetics, no clinical grids, no urgency colors. Sleep/wellness-tracker-inspired dark palette; design tokens are CSS custom properties in `src/index.css`.
 
 **Data model:** Coordinate (x, y) is the primary datum, not the label. Labels are optional annotation. A recorded entry holds a set of pins. The diary is `localStorage`-backed and append-only today, pruned at a ceiling.
 

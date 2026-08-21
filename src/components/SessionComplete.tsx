@@ -31,7 +31,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,
-        background: 'var(--oura-bg)',
+        background: 'var(--ui-bg)',
       }}
     >
       <motion.div
@@ -55,7 +55,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
             alignItems: 'center',
             justifyContent: 'center',
             margin: '0 auto 28px',
-            color: 'var(--oura-gold)',
+            color: 'var(--ui-gold)',
             fontSize: 20,
             fontWeight: 300,
           }}
@@ -69,7 +69,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
           fontWeight: 500,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
-          color: 'var(--oura-gold-dim)',
+          color: 'var(--ui-gold-dim)',
           marginBottom: 10,
         }}>
           Saved
@@ -79,7 +79,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
         <p style={{
           fontSize: 22,
           fontWeight: 300,
-          color: 'var(--oura-text-1)',
+          color: 'var(--ui-text-1)',
           margin: '0 0 8px',
           letterSpacing: '-0.01em',
         }}>
@@ -87,7 +87,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
         </p>
         <p style={{
           fontSize: 12,
-          color: 'var(--oura-text-3)',
+          color: 'var(--ui-text-3)',
           margin: '0 0 44px',
           letterSpacing: '0.03em',
         }}>
@@ -102,7 +102,7 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
               padding: '12px 32px',
               borderRadius: 6,
               border: 'none',
-              background: 'var(--oura-gold)',
+              background: 'var(--ui-gold)',
               color: '#0D0F14',
               fontSize: 11,
               fontWeight: 600,
@@ -119,9 +119,9 @@ export function SessionComplete({ entry, onNewSession, onViewHistory }: Props) {
             style={{
               padding: '12px 32px',
               borderRadius: 6,
-              border: '1px solid var(--oura-border)',
+              border: '1px solid var(--ui-border)',
               background: 'transparent',
-              color: 'var(--oura-text-2)',
+              color: 'var(--ui-text-2)',
               fontSize: 11,
               fontWeight: 500,
               letterSpacing: '0.06em',

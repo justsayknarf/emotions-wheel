@@ -66,8 +66,8 @@ export function AdminDot({ emotion, selected, dimmed, mapRef, onUpdate, onSelect
         width: selected ? 10 : 7,
         height: selected ? 10 : 7,
         borderRadius: '50%',
-        background: selected ? 'var(--oura-gold)' : 'rgba(201,168,124,0.45)',
-        border: selected ? '2px solid var(--oura-gold)' : '1px solid rgba(201,168,124,0.3)',
+        background: selected ? 'var(--ui-gold)' : 'rgba(201,168,124,0.45)',
+        border: selected ? '2px solid var(--ui-gold)' : '1px solid rgba(201,168,124,0.3)',
         transition: 'width 0.1s, height 0.1s, background 0.1s',
       }} />
       {selected && (
@@ -78,7 +78,7 @@ export function AdminDot({ emotion, selected, dimmed, mapRef, onUpdate, onSelect
           transform: 'translateX(-50%)',
           fontSize: 9,
           whiteSpace: 'nowrap',
-          color: 'var(--oura-gold)',
+          color: 'var(--ui-gold)',
           fontWeight: 500,
           pointerEvents: 'none',
         }}>

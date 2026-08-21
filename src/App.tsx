@@ -36,10 +36,10 @@ const HEADER_PILL: CSSProperties = {
   position: 'absolute',
   top: 20,
   background: 'rgba(22, 24, 32, 0.8)',
-  border: '1px solid var(--oura-border)',
+  border: '1px solid var(--ui-border)',
   borderRadius: 8,
   padding: '7px 13px',
-  color: 'var(--oura-text-2)',
+  color: 'var(--ui-text-2)',
   fontSize: 11,
   fontWeight: 500,
   cursor: 'pointer',
@@ -476,7 +476,7 @@ export default function App() {
 
   return (
     <div
-      style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--oura-bg)' }}
+      style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--ui-bg)' }}
       onPointerDownCapture={() => {
         // Any touch in the field view skips the welcome (snappy exit); the
         // overlay is pointerEvents:none, so the touch still reaches the field.
@@ -497,7 +497,7 @@ export default function App() {
             right: 0,
             bottom: 0,
             width: RAIL_WIDTH,
-            borderLeft: '1px solid var(--oura-border)',
+            borderLeft: '1px solid var(--ui-border)',
             background: 'linear-gradient(180deg, #0A0B0F, #0C0D12)',
             pointerEvents: 'none',
             zIndex: 1,
@@ -585,16 +585,16 @@ export default function App() {
                   style={{
                     background: 'rgba(13, 15, 20, 0.82)',
                     backdropFilter: 'blur(20px)',
-                    border: '1px solid var(--oura-border)',
+                    border: '1px solid var(--ui-border)',
                     borderRadius: 10,
                     padding: '16px 28px',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  <p style={{ margin: '0 0 5px', fontSize: 18, fontWeight: 300, color: 'var(--oura-text-1)', letterSpacing: '-0.01em' }}>
+                  <p style={{ margin: '0 0 5px', fontSize: 18, fontWeight: 300, color: 'var(--ui-text-1)', letterSpacing: '-0.01em' }}>
                     How are you feeling?
                   </p>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 500, color: 'var(--oura-text-3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  <p style={{ margin: 0, fontSize: 10, fontWeight: 500, color: 'var(--ui-text-3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                     Touch anywhere to explore
                   </p>
                 </motion.div>

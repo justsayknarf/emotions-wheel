@@ -47,7 +47,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
       style={{
         position: 'absolute',
         inset: 0,
-        background: 'var(--oura-bg)',
+        background: 'var(--ui-bg)',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -77,14 +77,14 @@ export function DiaryHistory({ entries, onBack }: Props) {
         display: 'flex',
         alignItems: 'center',
         padding: '20px 20px 12px',
-        borderBottom: '1px solid var(--oura-border)',
+        borderBottom: '1px solid var(--ui-border)',
       }}>
         <button
           onClick={onBack}
           style={{
             background: 'none',
             border: 'none',
-            color: 'var(--oura-text-2)',
+            color: 'var(--ui-text-2)',
             fontSize: 13,
             cursor: 'pointer',
             padding: '6px 0',
@@ -99,7 +99,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
           fontWeight: 500,
           letterSpacing: '0.14em',
           textTransform: 'uppercase',
-          color: 'var(--oura-gold-dim)',
+          color: 'var(--ui-gold-dim)',
           margin: 0,
         }}>
           Check-in history
@@ -111,9 +111,9 @@ export function DiaryHistory({ entries, onBack }: Props) {
             style={{
               marginLeft: 'auto',
               background: 'none',
-              border: '1px solid var(--oura-border)',
+              border: '1px solid var(--ui-border)',
               borderRadius: 6,
-              color: 'var(--oura-gold-dim)',
+              color: 'var(--ui-gold-dim)',
               fontSize: 9,
               fontWeight: 500,
               letterSpacing: '0.14em',
@@ -191,16 +191,16 @@ function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenE
               textAlign: 'center',
             }}
           >
-            <p style={{ fontSize: 15, color: 'var(--oura-text-3)', margin: 0, fontWeight: 300 }}>
+            <p style={{ fontSize: 15, color: 'var(--ui-text-3)', margin: 0, fontWeight: 300 }}>
               No check-ins on this day.
             </p>
             <button
               onClick={onBack}
               style={{
                 background: 'none',
-                border: '1px solid var(--oura-border)',
+                border: '1px solid var(--ui-border)',
                 borderRadius: 6,
-                color: 'var(--oura-gold)',
+                color: 'var(--ui-gold)',
                 fontSize: 11,
                 fontWeight: 500,
                 letterSpacing: '0.06em',

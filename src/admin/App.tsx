@@ -113,8 +113,8 @@ export function AdminApp() {
       display: 'flex',
       flexDirection: 'column',
       height: '100dvh',
-      background: 'var(--oura-bg)',
-      color: 'var(--oura-text-1)',
+      background: 'var(--ui-bg)',
+      color: 'var(--ui-text-1)',
       fontFamily: 'Inter, sans-serif',
       overflow: 'hidden',
     }}>

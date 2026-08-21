@@ -30,7 +30,7 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'var(--oura-bg)', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--ui-bg)', overflow: 'hidden' }}>
       {/* Faint crosshairs + axes for spatial context */}
       <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(201,168,124,0.1)' }} />
       <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(201,168,124,0.1)' }} />
@@ -55,10 +55,10 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
           onClick={onDismiss}
           style={{
             background: 'rgba(22,24,32,0.8)',
-            border: '1px solid var(--oura-border)',
+            border: '1px solid var(--ui-border)',
             borderRadius: 8,
             padding: '7px 13px',
-            color: 'var(--oura-text-2)',
+            color: 'var(--ui-text-2)',
             fontSize: 11,
             fontWeight: 500,
             cursor: 'pointer',
@@ -68,7 +68,7 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
         >
           ← Back
         </button>
-        <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--oura-gold-dim)' }}>
+        <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ui-gold-dim)' }}>
           Recent journey
         </span>
       </div>
