@@ -806,6 +806,20 @@ export function EmotionDrawer({
         borderRadius: sheetBodyVisible ? undefined : '16px 16px 0 0',
         paddingBottom: sheetBodyVisible ? undefined : PEEK_SAFE_PAD,
         maxHeight: isReopened ? `${SHEET_MAX_VH * 100}vh` : undefined,
+        // While a slider drag is active, the tray's own background fades
+        // toward transparent (independent of U5's sibling/actionBar/history
+        // hide above) so the field is visible even behind the active card,
+        // not just in the area siblings used to occupy. The card and its
+        // slider keep their own styling untouched, so they stay legible
+        // against whatever the field shows through underneath. Plain CSS
+        // transition rather than framer's `animate` — this container's
+        // `animate` prop already drives `height`/`y` via spring physics,
+        // and layering a per-key transition override for these two
+        // properties on top of that didn't take reliably; a CSS transition
+        // is simpler and independent of the height/y spring.
+        background: dragShrinkActive ? 'rgba(12, 14, 18, 0.3)' : 'rgba(12, 14, 18, 0.97)',
+        backdropFilter: dragShrinkActive ? 'blur(6px)' : 'blur(20px)',
+        transition: reduce ? 'none' : 'background 0.25s ease-out, backdrop-filter 0.25s ease-out',
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
