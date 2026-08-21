@@ -200,6 +200,11 @@ export function EmotionDrawer({
     <div
       style={{
         padding: '11px 16px',
+        // On the sheet, this is now the sheet's bottom-most element (U2) —
+        // it needs the safe-area-bottom accommodation cardList used to
+        // provide when it was last. The rail has no safe-area inset to
+        // account for.
+        paddingBottom: isRail ? '11px' : 'max(11px, env(safe-area-inset-bottom))',
         // Both variants now render this after `cardList` (U2), so a top
         // border separates it from the scrollable content above rather
         // than a bottom border that would sit at the sheet's own edge.
@@ -471,7 +476,14 @@ export function EmotionDrawer({
         WebkitOverflowScrolling: 'touch',
         flex: 1,
         padding: '8px 16px',
-        paddingBottom: isRail ? 8 : 'max(16px, env(safe-area-inset-bottom))',
+        // Both variants now render actionBar after this list for the
+        // ordinary draft/previous-check-in content (U2), so actionBar
+        // carries the safe-area-bottom accommodation there and this only
+        // needs a small gap before it. isReopened is the exception: its
+        // own editingActionBar (inside editingSection, rendered in this
+        // same slot) has no safe-area padding of its own, so this list
+        // still needs to provide it when reopened.
+        paddingBottom: !isRail && isReopened ? 'max(16px, env(safe-area-inset-bottom))' : 8,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
