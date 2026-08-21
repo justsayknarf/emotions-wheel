@@ -151,29 +151,6 @@ export function EmotionDrawer({
   // list, or editingSection while isReopened) is showing. Never true for
   // the rail, which has no peek/collapse concept.
   const sheetBodyVisible = !isRail && (isReopened || expanded);
-  useLayoutEffect(() => {
-    // isReopened renders at a static height (see the sheet return below)
-    // — it never toggles isPeeked, so it never needs this measurement.
-    if (isRail || isReopened) return;
-    const handleHeight = sheetHandleRef.current?.offsetHeight ?? PEEK_BAR_HEIGHT;
-    if (!sheetBodyVisible) {
-      setSheetHeight(handleHeight);
-      return;
-    }
-    // `actionBar`'s offsetHeight is accurate even while the container is
-    // still small mid-transition: a flex item with `overflow: visible`
-    // (the default, which actionBar has) won't shrink below its content
-    // size. `cardList` sets `overflow-y: auto`, which lets it shrink
-    // below content size — so its `scrollHeight` is used instead, which
-    // reports the full, unclipped content height regardless of how much
-    // the container currently constrains its visible box.
-    const actionBarHeight = sheetActionBarRef.current?.offsetHeight ?? 0;
-    const cardListHeight = scrollRef?.current?.scrollHeight ?? 0;
-    const viewportCap = window.innerHeight * SHEET_MAX_VH;
-    setSheetHeight(Math.min(handleHeight + actionBarHeight + cardListHeight, viewportCap));
-    // Deliberately excludes draft/pin content from the dependency list —
-    // see the comment above the state declaration.
-  }, [isRail, isReopened, sheetBodyVisible, scrollRef]);
   // Shared precondition for every sheet-only, non-reopened derivation below
   // (dragShrinkActive, hideHistory, handleAlreadyShowsTime) — named once
   // rather than repeated per condition.
@@ -183,6 +160,44 @@ export function EmotionDrawer({
   // field shows through. Derived at render, not stored state —
   // draggingPinId is already the single source of truth.
   const dragShrinkActive = isDraftSheet && draggingPinId !== null;
+  useLayoutEffect(() => {
+    // isReopened renders at a static height (see the sheet return below)
+    // — it never toggles isPeeked, so it never needs this measurement.
+    if (isRail || isReopened) return;
+    const measure = () => {
+      const handleHeight = sheetHandleRef.current?.offsetHeight ?? PEEK_BAR_HEIGHT;
+      if (!sheetBodyVisible) {
+        setSheetHeight(handleHeight);
+        return;
+      }
+      // `actionBar`'s offsetHeight is accurate even while the container is
+      // still small mid-transition: a flex item with `overflow: visible`
+      // (the default, which actionBar has) won't shrink below its content
+      // size. `cardList` sets `overflow-y: auto`, which lets it shrink
+      // below content size — so its `scrollHeight` is used instead, which
+      // reports the full, unclipped content height regardless of how much
+      // the container currently constrains its visible box.
+      const actionBarHeight = sheetActionBarRef.current?.offsetHeight ?? 0;
+      const cardListHeight = scrollRef?.current?.scrollHeight ?? 0;
+      const viewportCap = window.innerHeight * SHEET_MAX_VH;
+      setSheetHeight(Math.min(handleHeight + actionBarHeight + cardListHeight, viewportCap));
+    };
+    measure();
+    // Re-measure on a real viewport size change (orientation flip, browser
+    // chrome showing/hiding, on-screen keyboard) — the target height was
+    // clamped against `window.innerHeight` at measurement time, and unlike
+    // the static `maxHeight: '46vh'` this replaces for the expanded case,
+    // a JS pixel value doesn't renegotiate itself when the viewport does.
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+    // Deliberately excludes draft/pin content from the dependency list —
+    // see the comment above the state declaration. `dragShrinkActive` IS
+    // included: it changes what's actually mounted (siblings, actionBar,
+    // returningSummary all disappear once a drag starts), so the sheet
+    // must re-measure and shrink to match — this is what U5's chrome-hide
+    // depends on to actually reduce the sheet's footprint, not just what's
+    // visible inside a footprint that stays the same size.
+  }, [isRail, isReopened, sheetBodyVisible, dragShrinkActive, scrollRef]);
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
