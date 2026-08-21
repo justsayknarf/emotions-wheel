@@ -200,8 +200,10 @@ export function EmotionDrawer({
     <div
       style={{
         padding: '11px 16px',
-        borderBottom: isRail ? 'none' : '1px solid var(--ui-border)',
-        borderTop: isRail ? '1px solid var(--ui-border)' : 'none',
+        // Both variants now render this after `cardList` (U2), so a top
+        // border separates it from the scrollable content above rather
+        // than a bottom border that would sit at the sheet's own edge.
+        borderTop: '1px solid var(--ui-border)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -752,8 +754,8 @@ export function EmotionDrawer({
           </span>
         </button>
       )}
-      {!isReopened && !dragShrinkActive && actionBar}
       {cardList}
+      {!isReopened && !dragShrinkActive && actionBar}
     </motion.div>
   );
 }
