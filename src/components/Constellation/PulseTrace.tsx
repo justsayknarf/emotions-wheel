@@ -176,7 +176,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
               fontSize: 12,
               fontWeight: 400,
               letterSpacing: '0.02em',
-              color: 'var(--oura-gold)',
+              color: 'var(--ui-gold)',
               textShadow: '0 0 10px rgba(201,168,124,0.55)',
               whiteSpace: 'nowrap',
             }}

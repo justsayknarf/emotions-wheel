@@ -5,7 +5,7 @@ interface Props {
 
 export function TabBar({ active, onChange }: Props) {
   return (
-    <div style={{ display: 'flex', borderBottom: '1px solid var(--oura-border)', padding: '0 20px' }}>
+    <div style={{ display: 'flex', borderBottom: '1px solid var(--ui-border)', padding: '0 20px' }}>
       {(['day', 'week'] as const).map((tab) => (
         <button
           key={tab}
@@ -13,8 +13,8 @@ export function TabBar({ active, onChange }: Props) {
           style={{
             background: 'none',
             border: 'none',
-            borderBottom: active === tab ? '1px solid var(--oura-gold)' : '1px solid transparent',
-            color: active === tab ? 'var(--oura-gold)' : 'var(--oura-text-3)',
+            borderBottom: active === tab ? '1px solid var(--ui-gold)' : '1px solid transparent',
+            color: active === tab ? 'var(--ui-gold)' : 'var(--ui-text-3)',
             fontSize: 9,
             fontWeight: 500,
             letterSpacing: '0.14em',

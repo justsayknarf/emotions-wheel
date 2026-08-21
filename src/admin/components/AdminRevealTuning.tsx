@@ -51,7 +51,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: 9,
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
-  color: 'var(--oura-text-3)',
+  color: 'var(--ui-text-3)',
 };
 
 const rowStyle: React.CSSProperties = {
@@ -64,10 +64,10 @@ const rowStyle: React.CSSProperties = {
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginRight: 4, minWidth: 96 }}>
-      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--oura-gold-dim)' }}>
+      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ui-gold-dim)' }}>
         {title}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--oura-text-3)' }}>{subtitle}</div>
+      <div style={{ fontSize: 10, color: 'var(--ui-text-3)' }}>{subtitle}</div>
     </div>
   );
 }
@@ -90,7 +90,7 @@ export function AdminRevealTuning() {
       <label key={k.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
           <span style={labelStyle}>{k.label}</span>
-          <span style={{ fontSize: 10, color: 'var(--oura-text-1)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: 10, color: 'var(--ui-text-1)', fontVariantNumeric: 'tabular-nums' }}>
             {k.fmt ? k.fmt(value) : String(value)}
           </span>
         </div>
@@ -101,7 +101,7 @@ export function AdminRevealTuning() {
           step={k.step}
           value={value}
           onChange={(e) => set({ [k.key]: Number(e.target.value) } as Partial<RevealTuning>)}
-          style={{ width: 118, accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
+          style={{ width: 118, accentColor: 'var(--ui-gold)', cursor: 'pointer' }}
         />
       </label>
     );
@@ -114,8 +114,8 @@ export function AdminRevealTuning() {
         flexDirection: 'column',
         gap: 12,
         padding: '10px 16px',
-        borderBottom: '1px solid var(--oura-border)',
-        background: 'var(--oura-bg)',
+        borderBottom: '1px solid var(--ui-border)',
+        background: 'var(--ui-bg)',
         flexShrink: 0,
       }}
     >
@@ -130,7 +130,7 @@ export function AdminRevealTuning() {
             type="checkbox"
             checked={tuning.showTethers}
             onChange={(e) => set({ showTethers: e.target.checked })}
-            style={{ accentColor: 'var(--oura-gold)', cursor: 'pointer' }}
+            style={{ accentColor: 'var(--ui-gold)', cursor: 'pointer' }}
           />
           <span style={labelStyle}>Show tethers</span>
         </label>
@@ -141,7 +141,7 @@ export function AdminRevealTuning() {
             checked={tuning.keepTethers}
             disabled={!tuning.showTethers}
             onChange={(e) => set({ keepTethers: e.target.checked })}
-            style={{ accentColor: 'var(--oura-gold)', cursor: tuning.showTethers ? 'pointer' : 'default' }}
+            style={{ accentColor: 'var(--ui-gold)', cursor: tuning.showTethers ? 'pointer' : 'default' }}
           />
           <span style={labelStyle}>Keep tethers</span>
         </label>
@@ -156,9 +156,9 @@ export function AdminRevealTuning() {
             letterSpacing: '0.06em',
             padding: '5px 12px',
             borderRadius: 5,
-            border: '1px solid var(--oura-border)',
+            border: '1px solid var(--ui-border)',
             background: 'transparent',
-            color: isDefault ? 'var(--oura-text-3)' : 'var(--oura-text-1)',
+            color: isDefault ? 'var(--ui-text-3)' : 'var(--ui-text-1)',
             cursor: isDefault ? 'default' : 'pointer',
             marginLeft: 'auto',
           }}
@@ -168,14 +168,14 @@ export function AdminRevealTuning() {
       </div>
 
       {/* Welcome */}
-      <div style={{ ...rowStyle, borderTop: '1px solid var(--oura-border)', paddingTop: 12 }}>
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--ui-border)', paddingTop: 12 }}>
         <SectionHeader title="Welcome" subtitle="grounding cue + axis pulse on load" />
 
         {WELCOME_KNOBS.map(renderKnob)}
       </div>
 
       {/* Check-in card */}
-      <div style={{ ...rowStyle, borderTop: '1px solid var(--oura-border)', paddingTop: 12 }}>
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--ui-border)', paddingTop: 12 }}>
         <SectionHeader title="Check-in card" subtitle="word dissolve when a slider is released" />
 
         {CARD_KNOBS.map(renderKnob)}

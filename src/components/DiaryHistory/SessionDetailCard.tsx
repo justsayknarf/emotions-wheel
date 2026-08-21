@@ -41,7 +41,7 @@ export function SessionDetailCard({ entry, onDismiss }: Props) {
               bottom: 0,
               left: 0,
               right: 0,
-              background: 'var(--oura-surface)',
+              background: 'var(--ui-surface)',
               borderRadius: '16px 16px 0 0',
               padding: '20px 20px 32px',
               zIndex: 11,
@@ -52,7 +52,7 @@ export function SessionDetailCard({ entry, onDismiss }: Props) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <span style={{
                 fontSize: 10,
-                color: 'var(--oura-text-3)',
+                color: 'var(--ui-text-3)',
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 fontWeight: 500,
@@ -64,7 +64,7 @@ export function SessionDetailCard({ entry, onDismiss }: Props) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'var(--oura-text-2)',
+                  color: 'var(--ui-text-2)',
                   fontSize: 18,
                   lineHeight: 1,
                   cursor: 'pointer',
@@ -87,7 +87,7 @@ export function SessionDetailCard({ entry, onDismiss }: Props) {
                 {entry.pins.length > 0 && (
                   <p style={{
                     fontSize: 13,
-                    color: 'var(--oura-text-2)',
+                    color: 'var(--ui-text-2)',
                     margin: 0,
                     lineHeight: 1.5,
                     fontWeight: 300,
@@ -116,7 +116,7 @@ function WordRow({ entry }: { entry: DiaryEntry }) {
           key={label}
           style={{
             fontSize: 11,
-            color: 'var(--oura-text-1)',
+            color: 'var(--ui-text-1)',
             background: 'rgba(201,168,124,0.12)',
             border: '1px solid rgba(201,168,124,0.25)',
             borderRadius: 5,

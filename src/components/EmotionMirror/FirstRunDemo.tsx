@@ -19,12 +19,12 @@ const REPEAT_DELAY = 1.4;
 export function FirstRunDemo({ fieldWidth, variant }: Props) {
   const skeleton = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px' }}>
-      <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--oura-text-3)' }}>
+      <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ui-text-3)' }}>
         Your check-in
       </div>
       <div style={{ height: 12, width: '60%', borderRadius: 4, background: 'rgba(237,232,223,0.07)' }} />
       <div style={{ height: 12, width: '85%', borderRadius: 4, background: 'rgba(237,232,223,0.05)' }} />
-      <span style={{ fontSize: 12, fontWeight: 300, color: 'var(--oura-text-3)', marginTop: 2 }}>
+      <span style={{ fontSize: 12, fontWeight: 300, color: 'var(--ui-text-3)', marginTop: 2 }}>
         Your check-in will appear here
       </span>
     </div>
@@ -95,8 +95,8 @@ export function FirstRunDemo({ fieldWidth, variant }: Props) {
         transition={{ duration: 0.5, ease: 'easeOut' }}
         style={
           variant === 'rail'
-            ? { position: 'absolute', top: 0, right: 0, bottom: 0, width: RAIL_WIDTH, borderLeft: '1px solid var(--oura-border)', background: 'rgba(12,14,18,0.6)', zIndex: 15, pointerEvents: 'none' }
-            : { position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid var(--oura-border)', borderRadius: '16px 16px 0 0', background: 'rgba(12,14,18,0.75)', zIndex: 15, pointerEvents: 'none', paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }
+            ? { position: 'absolute', top: 0, right: 0, bottom: 0, width: RAIL_WIDTH, borderLeft: '1px solid var(--ui-border)', background: 'rgba(12,14,18,0.6)', zIndex: 15, pointerEvents: 'none' }
+            : { position: 'absolute', bottom: 0, left: 0, right: 0, borderTop: '1px solid var(--ui-border)', borderRadius: '16px 16px 0 0', background: 'rgba(12,14,18,0.75)', zIndex: 15, pointerEvents: 'none', paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }
         }
       >
         {skeleton}

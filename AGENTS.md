@@ -27,7 +27,7 @@ Work happens on a branch named for it (`feat/…`, `fix/…`, `docs/…`), lands
 
 ## Conventions
 
-- Design tokens are CSS custom properties in `src/index.css`. Reach for an existing `--oura-*` token before introducing a color.
+- Design tokens are CSS custom properties in `src/index.css`. Reach for an existing `--ui-*` token before introducing a color.
 - Derive at render rather than reconciling in an effect. `src/App.tsx` resolves the selected pin and its dependents this way on purpose — several visual systems read from one resolved value so they cannot drift apart.
 - Motion is framer-motion throughout and most of it honors `useReducedMotion` — but not all: the canvas `requestAnimationFrame` loops (`AxisRadiance.tsx`) do not, so adding reduced-motion support there is new work rather than reuse.
 - One-shot animations key on a counter and measure at play time, not on geometry — see `AxisRadiance.tsx`, which had a resize-restart bug precisely because it did otherwise.

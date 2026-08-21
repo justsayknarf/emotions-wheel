@@ -5,20 +5,20 @@
 }
 
 :root {
-  --oura-bg:        #0D0F14;
-  --oura-surface:   #161820;
-  --oura-border:    rgba(255, 255, 255, 0.06);
-  --oura-gold:      #C9A87C;
-  --oura-gold-dim:  rgba(201, 168, 124, 0.5);
+  --ui-bg:        #0D0F14;
+  --ui-surface:   #161820;
+  --ui-border:    rgba(255, 255, 255, 0.06);
+  --ui-gold:      #C9A87C;
+  --ui-gold-dim:  rgba(201, 168, 124, 0.5);
   /* Gold rotated cool at roughly the same luminance, for recorded (read-only)
      pins on the field — distinguishes them from the draft's warm gold without
      needing a badge. Unvalidated: Frank has not seen this in the app yet
      (U4, plan open question). */
-  --oura-recorded:      #7C93A8;
-  --oura-recorded-dim:  rgba(124, 147, 168, 0.5);
-  --oura-text-1:    #EDE8DF;
-  --oura-text-2:    rgba(237, 232, 223, 0.5);
-  --oura-text-3:    rgba(237, 232, 223, 0.22);
+  --ui-recorded:      #7C93A8;
+  --ui-recorded-dim:  rgba(124, 147, 168, 0.5);
+  --ui-text-1:    #EDE8DF;
+  --ui-text-2:    rgba(237, 232, 223, 0.5);
+  --ui-text-3:    rgba(237, 232, 223, 0.22);
 }
 
 html, body, #root {
@@ -27,8 +27,8 @@ html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: var(--oura-bg);
-  color: var(--oura-text-1);
+  background: var(--ui-bg);
+  color: var(--ui-text-1);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   touch-action: none;

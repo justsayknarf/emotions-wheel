@@ -40,13 +40,13 @@ export function DiaryEntryRow({ entry, onClick }: Props) {
       onClick={onClick}
       style={{
         padding: '16px 0',
-        borderBottom: '1px solid var(--oura-border)',
+        borderBottom: '1px solid var(--ui-border)',
         cursor: onClick ? 'pointer' : undefined,
       }}
     >
       <div style={{
         fontSize: 10,
-        color: 'var(--oura-text-3)',
+        color: 'var(--ui-text-3)',
         marginBottom: 6,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
@@ -56,7 +56,7 @@ export function DiaryEntryRow({ entry, onClick }: Props) {
       </div>
       <div style={{
         fontSize: 15,
-        color: 'var(--oura-text-1)',
+        color: 'var(--ui-text-1)',
         lineHeight: 1.5,
         fontWeight: 300,
         letterSpacing: '0.01em',

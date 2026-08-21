@@ -615,7 +615,7 @@ export function EmotionField({
               draft's state: these persist alongside a live draft, which is
               the point of this unit. No mount pulse-ring — these were never
               "just dropped" in this session. The hue survives emphasis: a
-              selected recorded pin brightens within --oura-recorded rather
+              selected recorded pin brightens within --ui-recorded rather
               than switching to gold, so the distinction holds through
               selection too. zIndex 9, one below the draft dots' 10, so a
               draft pin dropped on top of a recorded one reads as the live
@@ -649,7 +649,7 @@ export function EmotionField({
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
-                    border: '1px solid var(--oura-recorded-dim)',
+                    border: '1px solid var(--ui-recorded-dim)',
                     top: -5,
                     left: -5,
                   }}
@@ -669,7 +669,7 @@ export function EmotionField({
                         width: 12,
                         height: 12,
                         borderRadius: '50%',
-                        border: '1px solid var(--oura-recorded-dim)',
+                        border: '1px solid var(--ui-recorded-dim)',
                         top: -6,
                         left: -6,
                       }}
@@ -686,8 +686,8 @@ export function EmotionField({
                     width: dotSize,
                     height: dotSize,
                     borderRadius: '50%',
-                    background: isEmphasized ? 'var(--oura-recorded)' : 'var(--oura-recorded-dim)',
-                    boxShadow: isEmphasized ? '0 0 8px 1px var(--oura-recorded-dim)' : 'none',
+                    background: isEmphasized ? 'var(--ui-recorded)' : 'var(--ui-recorded-dim)',
+                    boxShadow: isEmphasized ? '0 0 8px 1px var(--ui-recorded-dim)' : 'none',
                     top: -dotSize / 2,
                     left: -dotSize / 2,
                   }}

@@ -48,7 +48,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
   return (
     <div style={{
       margin: '0 16px 4px',
-      background: 'var(--oura-surface)',
+      background: 'var(--ui-surface)',
       borderRadius: 12,
       padding: '8px 0 0',
       overflow: 'hidden',
@@ -66,7 +66,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
             y={SVG_H - 4}
             textAnchor="middle"
             fontSize={8}
-            fill="var(--oura-text-3)"
+            fill="var(--ui-text-3)"
             fontFamily="inherit"
             letterSpacing="0.06em"
           >
@@ -78,7 +78,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
         <line
           x1={MARGIN_X} y1={yForValue(0)}
           x2={SVG_W - MARGIN_X} y2={yForValue(0)}
-          stroke="var(--oura-border)"
+          stroke="var(--ui-border)"
           strokeWidth={1}
         />
 
@@ -87,7 +87,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
           <polyline
             points={valencePoints}
             fill="none"
-            stroke="var(--oura-gold)"
+            stroke="var(--ui-gold)"
             strokeWidth={1.5}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -100,7 +100,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
           <polyline
             points={arousalPoints}
             fill="none"
-            stroke="var(--oura-gold-dim)"
+            stroke="var(--ui-gold-dim)"
             strokeWidth={1.5}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -114,7 +114,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
               cx={xForHour(p.hour)}
               cy={yForValue(p.valence)}
               r={4}
-              fill="var(--oura-gold)"
+              fill="var(--ui-gold)"
             />
             {/* Transparent hit target */}
             <circle
@@ -135,7 +135,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
               cx={xForHour(p.hour)}
               cy={yForValue(p.arousal)}
               r={4}
-              fill="var(--oura-gold-dim)"
+              fill="var(--ui-gold-dim)"
             />
             <circle
               cx={xForHour(p.hour)}

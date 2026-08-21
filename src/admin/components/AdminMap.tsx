@@ -30,7 +30,7 @@ export function AdminMap({ emotions, selectedId, visibleIds, onSelect, onUpdate 
       alignItems: 'center',
       justifyContent: 'center',
       padding: 16,
-      borderRight: '1px solid var(--oura-border)',
+      borderRight: '1px solid var(--ui-border)',
       overflow: 'hidden',
     }}>
       <div
@@ -40,9 +40,9 @@ export function AdminMap({ emotions, selectedId, visibleIds, onSelect, onUpdate 
           aspectRatio: '1 / 1',
           maxWidth: '100%',
           position: 'relative',
-          background: 'var(--oura-surface)',
+          background: 'var(--ui-surface)',
           borderRadius: 8,
-          border: '1px solid var(--oura-border)',
+          border: '1px solid var(--ui-border)',
           overflow: 'hidden',
         }}
       >

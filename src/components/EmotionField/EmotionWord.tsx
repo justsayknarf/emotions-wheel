@@ -41,10 +41,10 @@ function toPercent(v: number): number {
 // same gesture rather than a relocation. (KTD4)
 export const LABEL_STANDOFF = 11;
 
-// The field words are set in Palatino — a warm humanist serif. Oura uses a
-// neutral sans for reading data; this surface is for *recording* a feeling, so
-// it wants a softer, more human voice. Falls back through the common Palatino
-// aliases to a generic serif.
+// The field words are set in Palatino — a warm humanist serif. Wellness-tracker
+// apps tend toward a neutral sans for reading data; this surface is for
+// *recording* a feeling, so it wants a softer, more human voice. Falls back
+// through the common Palatino aliases to a generic serif.
 export const FIELD_FONT = "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
 export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0 }: Props) {

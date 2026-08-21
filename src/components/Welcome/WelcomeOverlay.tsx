@@ -47,7 +47,7 @@ export function WelcomeOverlay({ cue, fieldCenterLeft, exitDuration }: Props) {
           fontWeight: 300,
           lineHeight: 1.35,
           letterSpacing: '0.01em',
-          color: 'var(--oura-text-1)',
+          color: 'var(--ui-text-1)',
         }}
       >
         {cue}
