@@ -67,6 +67,10 @@ interface Props {
   // shown as a ghost preview + a dashed line from the pin, so a card-driven
   // adjustment reads on the field before it commits.
   adjustDraft?: { x: number; y: number } | null;
+  // Fires once a field press-and-drag (placing or selecting a pin) crosses
+  // the tap/drag movement threshold, and again with `false` on release or
+  // cancel — drives the tray's peek during pin placement (U3). Optional.
+  onGestureActiveChange?: (active: boolean) => void;
 }
 
 export function EmotionField({
@@ -80,6 +84,7 @@ export function EmotionField({
   recordedPins = [],
   emphasizedPinId = null,
   adjustDraft = null,
+  onGestureActiveChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -129,6 +134,7 @@ export function EmotionField({
     onRelease: handleRelease,
     onFirstInteraction,
     hasInteracted,
+    onGestureActiveChange,
   });
 
   const selectedIds = useMemo(
@@ -348,6 +354,7 @@ export function EmotionField({
       onPointerDown={handlers.onPointerDown}
       onPointerMove={handlers.onPointerMove}
       onPointerUp={handlers.onPointerUp}
+      onPointerCancel={handlers.onPointerCancel}
       className="relative w-full h-full overflow-hidden"
       style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
     >

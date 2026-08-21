@@ -77,8 +77,15 @@ export default function App() {
   const railScrollRef = useRef<HTMLDivElement>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   // The live coordinate while a card slider is dragged — drives the field's ghost
-  // preview + travel line. Never persisted; cleared on release (handleAdjustPin).
-  const [adjustDraft, setAdjustDraft] = useState<{ x: number; y: number } | null>(null);
+  // preview + travel line, and (via pinId) which card's chrome to shrink around
+  // (EmotionDrawer's draggingPinId derivation below). Never persisted; cleared
+  // on release or cancel (handleAdjustPin / CoordinateCard's cancelAxis).
+  const [adjustDraft, setAdjustDraft] = useState<{ pinId: string; x: number; y: number } | null>(null);
+  // Derived at render, not a separate state — the single source for "which
+  // card's slider is currently being dragged," read by EmotionDrawer to hide
+  // sibling chrome (U5) and by the field-press gesture (U3) to skip peeking
+  // while a drag is already in progress (R15).
+  const draggingPinId = adjustDraft?.pinId ?? null;
   const [enteringPinId, setEnteringPinId] = useState<string | null>(null);
   // Mobile drawer tray, peeked over the previous check-in: collapsed by
   // default so the field stays pinnable on load; the peek handle expands it
@@ -264,6 +271,11 @@ export default function App() {
     // reaches `pins` here, so no pin ever appears on the field or the card
     // list for it.
     if (draftId !== null) return;
+    // R5/R11: every new-pin drop re-expands the tray, whether it had been
+    // peeked by U3's field-press gesture or by the manual toggle (R1) — a
+    // fresh card should always be visible right after it lands. Selecting an
+    // existing pin instead (handlePinSelect below) does not do this (R6).
+    setMirrorExpanded(true);
     // Stamp the drop coordinate as the pin's origin (kept for the field anchor +
     // history); x/y stays authoritative and is what later adjustments move.
     setPins((prev) => [...prev, withOrigin(entry)]);
@@ -289,6 +301,30 @@ export default function App() {
   const handlePinSelect = useCallback((pinId: string) => {
     setSelectedPinId(pinId);
   }, []);
+
+  // U3: the field's own press-and-drag pin-placement gesture peeks the tray
+  // for its duration (R4). `active: true` fires once the gesture crosses the
+  // tap/drag movement threshold (R14 — a plain tap never reaches this).
+  // Skipped entirely while a slider drag is already in progress (R15) — a
+  // second finger on the field must never flip the tray state out from under
+  // an in-progress card drag, which is what unmounts it (see U5). `active:
+  // false` only fires on a cancelled gesture (useFieldGesture never fires it
+  // on an ordinary release — see the hook's own comment); restore to
+  // expanded, since nothing committed.
+  const handleFieldGestureActiveChange = useCallback((active: boolean) => {
+    if (active) {
+      // Also skip while a reopen is active (draftId set): the gesture's own
+      // drop would be refused anyway (handlePinRelease's own draftId guard,
+      // a783e7b), and isPeeked already ignores `expanded` whenever isReopened
+      // is true — so collapsing here would be invisible now but could leave
+      // mirrorExpanded false, snapping the tray to peeked the moment the
+      // reopen ends and isReopened stops overriding it.
+      if (draggingPinId !== null || draftId !== null) return;
+      setMirrorExpanded(false);
+    } else {
+      setMirrorExpanded(true);
+    }
+  }, [draggingPinId, draftId]);
 
   const handleRecognize = useCallback((emotionId: string) => {
     setPins((prev) => {
@@ -322,10 +358,35 @@ export default function App() {
     setAdjustDraft(null);
   }, []);
 
+  // U5: the card list's scroll position across a drag's shrink/restore. Capture
+  // happens synchronously here, before the shrink renders (the list is still
+  // full-height at this point) — a ref, not the `wasDragging` derived from
+  // `adjustDraft` state, so a burst of same-tick move events can't re-capture
+  // mid-drag. Restore happens in the effect below, after React has already
+  // re-rendered the full list back in — restoring in this same callback would
+  // set scrollTop against the still-shrunk (smaller) content and get clamped.
+  const scrollRestoreRef = useRef<number | null>(null);
+  const wasDraggingRef = useRef(false);
+
   // The live draft coordinate during a slider drag (field preview only); null ends it.
-  const handleAdjustDraft = useCallback((coord: { x: number; y: number } | null) => {
+  const handleAdjustDraft = useCallback((coord: { pinId: string; x: number; y: number } | null) => {
+    if (coord !== null && !wasDraggingRef.current) {
+      wasDraggingRef.current = true;
+      scrollRestoreRef.current = railScrollRef.current?.scrollTop ?? null;
+    } else if (coord === null) {
+      wasDraggingRef.current = false;
+    }
     setAdjustDraft(coord);
   }, []);
+
+  const prevDraggingPinIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (draggingPinId === null && prevDraggingPinIdRef.current !== null && scrollRestoreRef.current !== null) {
+      if (railScrollRef.current) railScrollRef.current.scrollTop = scrollRestoreRef.current;
+      scrollRestoreRef.current = null;
+    }
+    prevDraggingPinIdRef.current = draggingPinId;
+  }, [draggingPinId]);
 
   const handleRecord = useCallback(() => {
     if (draftId) {
@@ -450,11 +511,22 @@ export default function App() {
         ref={fieldPlaneRef}
         style={{ position: 'absolute', top: 0, bottom: fieldBottom, left: 0, width: fieldWidth, zIndex: 2 }}
         onPointerDownCapture={(e) => {
-          // While the mirror tray is expanded, a press on the field dismisses it
-          // rather than dropping a pin: consume the event (capture-phase stop) so
-          // it never reaches EmotionField's synthetic pointer handlers, so no
-          // gesture starts and no pin is created. Inert while collapsed.
-          if (mirrorExpanded) {
+          // While the passive, nothing-to-add mirror is EXPANDED (showMirror:
+          // empty draft, previous check-in present — AND mirrorExpanded: it's
+          // actually covering the field, not already peeked), a press on the
+          // field dismisses it rather than dropping a pin: consume the event
+          // (capture-phase stop) so it never reaches EmotionField's synthetic
+          // pointer handlers, so no gesture starts and no pin is created.
+          // Both conditions are required, not just showMirror — showMirror
+          // alone doesn't mean the tray is covering anything right now (it
+          // could already be peeked), and firing unconditionally on it eats
+          // every field press for any returning user with an empty draft,
+          // even with nothing expanded to dismiss. Scoped away from raw
+          // mirrorExpanded alone too — once the draft has pins, the tray is
+          // commonly expanded by default (R7/R11), and this guard must not
+          // also intercept an ordinary pin-drop press; that gesture drives
+          // its own peek instead (U3).
+          if (showMirror && mirrorExpanded) {
             setMirrorExpanded(false);
             e.stopPropagation();
           }
@@ -470,7 +542,8 @@ export default function App() {
           axisEmphasis={showDemo || axisPulseOn}
           recordedPins={previousCheckIn?.pins ?? []}
           emphasizedPinId={effectiveSelectedPinId}
-          adjustDraft={adjustDraft}
+          adjustDraft={adjustDraft ? { x: adjustDraft.x, y: adjustDraft.y } : null}
+          onGestureActiveChange={handleFieldGestureActiveChange}
         />
       </div>
 
@@ -569,6 +642,7 @@ export default function App() {
                 scrollRef={railScrollRef}
                 expanded={mirrorExpanded}
                 onToggle={() => setMirrorExpanded((v) => !v)}
+                draggingPinId={draggingPinId}
               />
             )}
           </AnimatePresence>

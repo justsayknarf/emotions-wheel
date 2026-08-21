@@ -21,8 +21,10 @@ interface Props {
   onRemove: () => void;
   // Commit an adjusted coordinate for this pin (a slider was released).
   onAdjust: (pinId: string, x: number, y: number) => void;
-  // Live draft coordinate during a slider drag (field preview only). Optional.
-  onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
+  // Live draft coordinate during a slider drag (field preview only), carrying
+  // the pin id so a shared handler (App.tsx) can tell which card is dragging.
+  // Optional.
+  onAdjustDraft?: (coord: { pinId: string; x: number; y: number } | null) => void;
   // Tunable timings (seconds) for the word/tag dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   // Always a one-line collapsed summary (R4), no adjustment, no naming (R5) —
@@ -313,7 +315,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     const next = nextFrom(axis, v);
     draftRef.current = next;
     setDraft(next);
-    onAdjustDraft?.(next);
+    onAdjustDraft?.({ pinId: pin.id, ...next });
   };
   // Abandon an unfinished drag: drop the draft so the thumbs snap back to the
   // committed coordinate and the field's ghost/travel overlay clears. Cancelling

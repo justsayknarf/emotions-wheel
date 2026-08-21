@@ -3,6 +3,9 @@ import { VISIBILITY_RADIUS } from './useProximity';
 
 const DWELL_DELAY_MS = 1200;
 const DWELL_RESET_THRESHOLD = 0.04;
+// Mirrors useGesturePin.ts's TAP_MAX_MOVEMENT — below this, a press-release is
+// a tap (place/select a pin, no drag), not a drag worth peeking the tray for.
+const GESTURE_MOVEMENT_THRESHOLD = 0.015; // in coordinate space (≈ 8px at typical screen)
 
 interface Options {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -10,6 +13,10 @@ interface Options {
   onRelease: (center: { x: number; y: number }) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
+  // Fires once a press crosses the movement threshold (a real drag, not a
+  // tap), and again with `false` on release or cancel. Optional — callers
+  // that don't care about the tap/drag distinction can omit it.
+  onGestureActiveChange?: (active: boolean) => void;
 }
 
 function pixelToCoord(
@@ -32,6 +39,7 @@ export function useFieldGesture({
   onRelease,
   onFirstInteraction,
   hasInteracted,
+  onGestureActiveChange,
 }: Options) {
   const [isPressed, setIsPressed] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -43,6 +51,20 @@ export function useFieldGesture({
   const revealCenterRef = useRef<{ x: number; y: number } | null>(null);
   const hasInteractedRef = useRef(hasInteracted);
   hasInteractedRef.current = hasInteracted;
+  // Press-start coordinate, held steady (unlike revealCenterRef, which tracks
+  // the live position) so movement since press-start can be measured.
+  const pressStartCoordRef = useRef<{ x: number; y: number } | null>(null);
+  // Whether this press has already crossed the movement threshold and fired
+  // onGestureActiveChange(true) — guards against firing it more than once per
+  // press, and tells release/cancel whether a matching `false` is owed.
+  const gestureActiveRef = useRef(false);
+
+  function endGestureActive() {
+    if (gestureActiveRef.current) {
+      gestureActiveRef.current = false;
+      onGestureActiveChange?.(false);
+    }
+  }
 
   const dwellTimerRef = useRef<number | null>(null);
   const lastStablePosRef = useRef<{ x: number; y: number } | null>(null);
@@ -118,6 +140,8 @@ export function useFieldGesture({
 
       isPressedRef.current = true;
       revealCenterRef.current = coord;
+      pressStartCoordRef.current = coord;
+      gestureActiveRef.current = false;
       setIsPressed(true);
       setRevealCenter(coord);
       clearDwell();
@@ -134,6 +158,18 @@ export function useFieldGesture({
 
       revealCenterRef.current = coord;
       setRevealCenter(coord);
+
+      // Once a press moves past the tap threshold, it's a real drag — fire
+      // onGestureActiveChange(true) exactly once per press (R14: a plain tap
+      // never triggers this, so it never visibly peeks-then-restores).
+      if (isPressedRef.current && !gestureActiveRef.current && pressStartCoordRef.current) {
+        const start = pressStartCoordRef.current;
+        const moved = Math.sqrt((coord.x - start.x) ** 2 + (coord.y - start.y) ** 2);
+        if (moved >= GESTURE_MOVEMENT_THRESHOLD) {
+          gestureActiveRef.current = true;
+          onGestureActiveChange?.(true);
+        }
+      }
 
       // Dwell tracking — only during hover, not during drag
       if (!isPressedRef.current) {
@@ -164,6 +200,16 @@ export function useFieldGesture({
       if (!isPressedRef.current) return;
       onRelease(revealCenterRef.current!);
       isPressedRef.current = false;
+      pressStartCoordRef.current = null;
+      // Deliberately does NOT call onGestureActiveChange(false) here — the
+      // caller's onRelease (above) already decides the post-release tray
+      // state itself (R5: re-expand on a new pin; R6: stay peeked on
+      // selecting an existing one), and firing it here would run after and
+      // clobber a same-tick re-expand. Just reset the internal flag so the
+      // next press starts clean; onPointerCancel (below) is the only path
+      // that restores the tray on this hook's own initiative, since a
+      // cancelled gesture never reaches onRelease at all.
+      gestureActiveRef.current = false;
       setIsPressed(false);
       // Keep revealCenter alive if mouse is still hovering over the field
       if (!isHoveringRef.current) {
@@ -173,6 +219,23 @@ export function useFieldGesture({
         // Restart dwell timer from current position after drag ends
         const pos = revealCenterRef.current;
         if (pos) startDwellTimer(pos);
+      }
+    },
+
+    onPointerCancel: () => {
+      if (!isPressedRef.current) return;
+      // The browser took the gesture away mid-press (OS gesture, notification,
+      // palm on glass) — the same interruption class AxisSlider already
+      // handles. No release ever fires, so nothing commits/selects; just
+      // reset press state and let endGestureActive() restore the tray if it
+      // had been peeked for this gesture.
+      isPressedRef.current = false;
+      pressStartCoordRef.current = null;
+      endGestureActive();
+      setIsPressed(false);
+      if (!isHoveringRef.current) {
+        revealCenterRef.current = null;
+        setRevealCenter(null);
       }
     },
   };

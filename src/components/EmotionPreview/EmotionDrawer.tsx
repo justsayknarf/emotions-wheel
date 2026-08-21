@@ -49,9 +49,10 @@ interface Props {
   onPinRemove: (pinId: string) => void;
   // Commit an adjusted coordinate for a pin (a card slider was released).
   onAdjust: (pinId: string, x: number, y: number) => void;
-  // Live draft coordinate while a card slider is dragged (field preview only).
+  // Live draft coordinate while a card slider is dragged (field preview only),
+  // carrying the pin id so App.tsx can derive which card is dragging.
   // Optional: wired once the field overlay consumes it.
-  onAdjustDraft?: (coord: { x: number; y: number } | null) => void;
+  onAdjustDraft?: (coord: { pinId: string; x: number; y: number } | null) => void;
   // Tunable timings (seconds) for the card's word dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
@@ -88,6 +89,11 @@ interface Props {
   // Ignored by the rail (never collapsible).
   expanded?: boolean;
   onToggle?: () => void;
+  // U5: the pin whose card slider is currently being dragged, or null. Sheet
+  // variant only (rail never shrinks — it sits beside the field, not over
+  // it) and never applies while isReopened (matching R1-R3's exclusion) —
+  // see dragShrinkActive below.
+  draggingPinId?: string | null;
 }
 
 export function EmotionDrawer({
@@ -114,12 +120,19 @@ export function EmotionDrawer({
   scrollRef,
   expanded = false,
   onToggle,
+  draggingPinId = null,
 }: Props) {
   const previousPins = previousCheckIn?.pins ?? [];
   const reversedPins = [...pins].reverse();
   const reversedPreviousPins = [...previousPins].reverse();
   const isRail = variant === 'rail';
   const reduce = useReducedMotion();
+  // R7-R10: while a slider drag is active on the sheet's ordinary draft-cards
+  // path (never the rail, never isReopened — see the Props comment), hide
+  // everything but the actively-dragged card so more of the field shows
+  // through. Derived at render, not stored state — draggingPinId is already
+  // the single source of truth.
+  const dragShrinkActive = !isRail && !isReopened && draggingPinId !== null;
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
@@ -239,13 +252,24 @@ export function EmotionDrawer({
 
   // The draft's cards — fully editable, gold-accented. Used for the ordinary
   // "Draft check-in" group below (a fresh pin was dropped) — every pin here
-  // is genuinely unsaved, so every card is simply expanded.
+  // is genuinely unsaved, so every card is simply expanded. During
+  // dragShrinkActive, siblings are filtered out of this array entirely (not
+  // CSS-hidden) so AnimatePresence's own exit transition animates them out
+  // and the sheet's rendered height actually shrinks — a hidden-but-mounted
+  // sibling would leave the sheet's stopPropagation footprint unchanged. The
+  // one remaining (active) card gets `layout={false}` instead of the
+  // unconditional `layout` every other card keeps, so removing its siblings
+  // never triggers framer-motion's layout reflow on the card the user's
+  // finger is on mid-drag.
+  const visibleDraftPins = dragShrinkActive
+    ? reversedPins.filter((pin) => pin.id === draggingPinId)
+    : reversedPins;
   const draftCards = (
     <AnimatePresence initial={false}>
-      {reversedPins.map((pin) => (
+      {visibleDraftPins.map((pin) => (
         <motion.div
           key={pin.id}
-          layout
+          layout={!dragShrinkActive}
           data-pin-id={pin.id}
           initial={{ opacity: 0, y: -10, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -441,8 +465,11 @@ export function EmotionDrawer({
     >
       {/* Renders whether or not a reopen is active — editing happens in
           place, so the same "when" and "how often" context stays on screen
-          throughout rather than disappearing the moment editing starts. */}
-      {returningSummary}
+          throughout rather than disappearing the moment editing starts.
+          Hidden during dragShrinkActive (U5): it mounts in this same scroll
+          container as the draft cards, so leaving it up would keep the sheet
+          too tall to reveal much of the field around the dragged card. */}
+      {!dragShrinkActive && returningSummary}
       {isReopened ? (
         // Editing in place: the check-in that was the previous check-in's
         // group now renders here, in that group's position, inside its own
@@ -458,7 +485,7 @@ export function EmotionDrawer({
               {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
             </div>
           )}
-          {previousPins.length > 0 && (
+          {!dragShrinkActive && previousPins.length > 0 && (
             <AnimatePresence initial={false}>
               {reversedPreviousPins.map((pin) => (
                 <motion.div
@@ -539,20 +566,27 @@ export function EmotionDrawer({
     );
   }
 
-  // Sheet (mobile). When the draft is empty and the tray hasn't been manually
-  // expanded, collapse to a peek handle so the field stays pinnable — the
-  // geometry MirrorCard's sheet variant used to own, moved here (U8).
-  // `previousCheckIn` is guaranteed present whenever this branch is reached:
-  // App.tsx only mounts this drawer when `pins.length > 0 || previousCheckIn
-  // || draftId !== null`, and this branch additionally requires !isReopened
-  // (so draftId is null) and !canSave (pins is empty), leaving previousCheckIn
-  // as the only clause that can be true.
+  // Sheet (mobile). Peek is reachable any time the draft isn't mid-reopen —
+  // both the empty-draft "returning mirror" state and an active draft with
+  // pins can collapse to the handle. `previousCheckIn` is no longer
+  // guaranteed present here (a peeked draft can have no prior check-in at
+  // all), so the bar content below branches on `canSave` and falls back
+  // gracefully when `previousCheckIn`/`timeLabel` are null.
   //
   // Never peeks while isReopened, regardless of pin count — peeking is for
-  // "returning, nothing to add," not for an edit in progress. Without this,
-  // removing every pin mid-edit (canSave false) would collapse the sheet to
-  // the peek handle and hide editingSection's Discard Edit along with it.
-  const isPeeked = !isReopened && !canSave && !expanded;
+  // "returning, nothing to add" or "stepping back from a draft," not for an
+  // edit in progress. Without this, removing every pin mid-edit (canSave
+  // false) would collapse the sheet to the peek handle and hide
+  // editingSection's Discard Edit along with it.
+  const isPeeked = !isReopened && !expanded;
+  // Bar content (both the peeked handle and the in-sheet toggle below) shows
+  // "Last check-in" + timeLabel when there's nothing new to add, or a
+  // draft-in-progress label once the draft has pins — so a peeked/toggled
+  // bar never misdescribes an active edit as history, for sighted and
+  // screen-reader users alike (aria-label mirrors the visible text).
+  const peekMicroLabel = canSave ? 'Draft' : 'Last check-in';
+  const peekDetailLabel = canSave ? `${pins.length} pin${pins.length === 1 ? '' : 's'}` : timeLabel;
+  const peekAriaSubject = canSave ? `draft, ${peekDetailLabel}` : 'last check-in';
   if (isPeeked) {
     return (
       <motion.div
@@ -575,7 +609,7 @@ export function EmotionDrawer({
           type="button"
           onClick={onToggle}
           aria-expanded={false}
-          aria-label="Expand last check-in"
+          aria-label={`Expand ${peekAriaSubject}`}
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -605,9 +639,9 @@ export function EmotionDrawer({
           />
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={MICRO_LABEL}>Last check-in</span>
+              <span style={MICRO_LABEL}>{peekMicroLabel}</span>
               <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
-                {timeLabel}
+                {peekDetailLabel}
               </span>
             </span>
             {/* Chevron — points up while peeked, inviting expand */}
@@ -627,16 +661,15 @@ export function EmotionDrawer({
     );
   }
 
-  // Draft has pins, the tray has been manually expanded past its peek, or a
-  // reopen is active — the full sheet, exactly as before U8, with one
-  // addition: when the draft is empty (canSave false) but the tray is
-  // manually expanded, the peek handle stays visible at the top so there's a
-  // discoverable, tappable way back to peeked — matching MirrorCard's
-  // original sheet, where the handle was always present and toggling, not
-  // just a field-press dismiss. Hidden when the draft has pins (never had a
-  // peek concept) and while isReopened (peeking doesn't apply to an edit in
-  // progress, and there is no previousCheckIn/timeLabel to show in the
-  // handle then anyway — see isPeeked above).
+  // The tray has been manually expanded past its peek, or a reopen is
+  // active — the full sheet. The in-sheet toggle handle stays visible at the
+  // top whenever peeking is available at all (any non-isReopened state, with
+  // or without pins) so there's always a discoverable, tappable way back to
+  // peeked — matching MirrorCard's original sheet, where the handle was
+  // always present and toggling, not just a field-press dismiss. Hidden only
+  // while isReopened (peeking doesn't apply to an edit in progress) or while
+  // a slider drag is active (U5 disables it separately, to avoid unmounting
+  // the dragged card via this door).
   return (
     <motion.div
       initial={{ y: '100%' }}
@@ -654,12 +687,13 @@ export function EmotionDrawer({
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {!isReopened && !canSave && (
+      {!isReopened && (
         <button
           type="button"
           onClick={onToggle}
+          disabled={dragShrinkActive}
           aria-expanded={true}
-          aria-label="Collapse last check-in"
+          aria-label={`Collapse ${peekAriaSubject}`}
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -671,7 +705,8 @@ export function EmotionDrawer({
             background: 'transparent',
             border: 'none',
             borderBottom: '1px solid var(--oura-border)',
-            cursor: 'pointer',
+            cursor: dragShrinkActive ? 'default' : 'pointer',
+            opacity: dragShrinkActive ? 0.4 : 1,
             color: 'inherit',
             textAlign: 'left',
             font: 'inherit',
@@ -684,9 +719,9 @@ export function EmotionDrawer({
           />
           <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={MICRO_LABEL}>Last check-in</span>
+              <span style={MICRO_LABEL}>{peekMicroLabel}</span>
               <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--oura-text-2)', letterSpacing: '0.01em' }}>
-                {timeLabel}
+                {peekDetailLabel}
               </span>
             </span>
             {/* Chevron — points down while expanded, inviting collapse */}
@@ -703,7 +738,7 @@ export function EmotionDrawer({
           </span>
         </button>
       )}
-      {!isReopened && actionBar}
+      {!isReopened && !dragShrinkActive && actionBar}
       {cardList}
     </motion.div>
   );
