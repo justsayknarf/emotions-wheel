@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
@@ -127,6 +128,48 @@ export function EmotionDrawer({
   const reversedPreviousPins = [...previousPins].reverse();
   const isRail = variant === 'rail';
   const reduce = useReducedMotion();
+  // U3: the sheet's peek <-> expand toggle used to be two separate
+  // `motion.div` returns, each replaying its own mount-only enter
+  // animation on toggle, so the height change between them snapped
+  // instead of animating. This merges them into one persistent container
+  // whose `sheetHeight` is the only JS-driven dimension. It's computed
+  // once per meaningful `sheetBodyVisible` transition (the effect below),
+  // never continuously — a pin add/remove while already expanded must
+  // not retrigger a height animation, and continuous measurement would
+  // also double up with CoordinateCard's own per-card height animation
+  // reacting to the same DOM change. These hooks run on every render
+  // regardless of `isRail`/`isReopened` (hook order can't depend on
+  // props) even though only the sheet's non-reopened toggle uses them.
+  const [sheetHeight, setSheetHeight] = useState<number | null>(null);
+  const sheetHandleRef = useRef<HTMLButtonElement>(null);
+  const sheetActionBarRef = useRef<HTMLDivElement>(null);
+  // Mirrors the old isPeeked=false condition: body (action bar + card
+  // list, or editingSection while isReopened) is showing. Never true for
+  // the rail, which has no peek/collapse concept.
+  const sheetBodyVisible = !isRail && (isReopened || expanded);
+  useLayoutEffect(() => {
+    // isReopened renders at a static height (see the sheet return below)
+    // — it never toggles isPeeked, so it never needs this measurement.
+    if (isRail || isReopened) return;
+    const handleHeight = sheetHandleRef.current?.offsetHeight ?? PEEK_BAR_HEIGHT;
+    if (!sheetBodyVisible) {
+      setSheetHeight(handleHeight);
+      return;
+    }
+    // `actionBar`'s offsetHeight is accurate even while the container is
+    // still small mid-transition: a flex item with `overflow: visible`
+    // (the default, which actionBar has) won't shrink below its content
+    // size. `cardList` sets `overflow-y: auto`, which lets it shrink
+    // below content size — so its `scrollHeight` is used instead, which
+    // reports the full, unclipped content height regardless of how much
+    // the container currently constrains its visible box.
+    const actionBarHeight = sheetActionBarRef.current?.offsetHeight ?? 0;
+    const cardListHeight = scrollRef?.current?.scrollHeight ?? 0;
+    const viewportCap = window.innerHeight * 0.46; // mirrors this sheet's 46vh cap at rest
+    setSheetHeight(Math.min(handleHeight + actionBarHeight + cardListHeight, viewportCap));
+    // Deliberately excludes draft/pin content from the dependency list —
+    // see the comment above the state declaration.
+  }, [isRail, isReopened, sheetBodyVisible, scrollRef]);
   // R7-R10: while a slider drag is active on the sheet's ordinary draft-cards
   // path (never the rail, never isReopened — see the Props comment), hide
   // everything but the actively-dragged card so more of the field shows
@@ -174,7 +217,7 @@ export function EmotionDrawer({
   // peeked state and the manually-expanded-with-empty-draft state render
   // one. Skip the summary's own time line only then, to avoid saying it
   // twice; show it in every other case, including throughout an edit, where
-  // no handle ever renders (see isPeeked below).
+  // no handle ever renders (see handleButton below).
   const handleAlreadyShowsTime = !isRail && !isReopened && !canSave;
   // Sourced from mostRecentEntry, not previousCheckIn, and rendered
   // unconditionally in cardList below (not nested inside the isReopened
@@ -198,6 +241,10 @@ export function EmotionDrawer({
 
   const actionBar = (
     <div
+      // U3: measures this bar's natural height once per sheet peek/expand
+      // transition (see the effect near the top of the component). Also
+      // renders on the rail, where the ref is simply unused.
+      ref={sheetActionBarRef}
       style={{
         padding: '11px 16px',
         // On the sheet, this is now the sheet's bottom-most element (U2) —
@@ -606,168 +653,139 @@ export function EmotionDrawer({
   // edit in progress. Without this, removing every pin mid-edit (canSave
   // false) would collapse the sheet to the peek handle and hide
   // editingSection's Discard Edit along with it.
-  const isPeeked = !isReopened && !expanded;
-  // Bar content (both the peeked handle and the in-sheet toggle below) shows
-  // "Last check-in" + timeLabel when there's nothing new to add, or a
-  // draft-in-progress label once the draft has pins — so a peeked/toggled
-  // bar never misdescribes an active edit as history, for sighted and
-  // screen-reader users alike (aria-label mirrors the visible text).
+  //
+  // U3: peeked and expanded used to be two separate `motion.div` returns
+  // here — this is now one persistent container (`sheetBodyVisible`
+  // computed near the top of the component, alongside the hooks driving
+  // `sheetHeight`) so the height change between them animates instead of
+  // snapping. The handle button is a persistent element inside it, never
+  // unmounted by the toggle — dropping it would drop keyboard/screen-reader
+  // focus from the control just activated — and never rendered at all
+  // while isReopened, matching the guard it already had. isReopened
+  // renders at the same static `maxHeight: 46vh` every expanded case used
+  // to use: it never toggles `sheetBodyVisible`, so it never needs the
+  // animated height.
+  //
+  // Bar content (both the collapsed and toggled handle) shows "Last
+  // check-in" + timeLabel when there's nothing new to add, or a
+  // draft-in-progress label once the draft has pins — so the handle never
+  // misdescribes an active edit as history, for sighted and screen-reader
+  // users alike (aria-label mirrors the visible text).
   const peekMicroLabel = canSave ? 'Draft' : 'Last check-in';
   const peekDetailLabel = canSave ? `${pins.length} pin${pins.length === 1 ? '' : 's'}` : timeLabel;
   const peekAriaSubject = canSave ? `draft, ${peekDetailLabel}` : 'last check-in';
-  if (isPeeked) {
-    return (
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        transition={{ type: 'spring', stiffness: 300, damping: 35 }}
-        style={{
-          ...shared,
-          bottom: 0,
-          left: 0,
-          right: 0,
-          borderTop: '1px solid var(--ui-border)',
-          borderRadius: '16px 16px 0 0',
-          paddingBottom: PEEK_SAFE_PAD,
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={false}
-          aria-label={`Expand ${peekAriaSubject}`}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 7,
-            width: '100%',
-            height: PEEK_BAR_HEIGHT,
-            padding: '0 18px',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'inherit',
-            textAlign: 'left',
-            font: 'inherit',
-          }}
-        >
-          {/* Grabber */}
-          <span
-            aria-hidden
-            style={{
-              alignSelf: 'center',
-              width: 34,
-              height: 4,
-              borderRadius: 2,
-              background: 'var(--ui-border)',
-            }}
-          />
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={MICRO_LABEL}>{peekMicroLabel}</span>
-              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
-                {peekDetailLabel}
-              </span>
-            </span>
-            {/* Chevron — points up while peeked, inviting expand */}
-            <motion.span
-              aria-hidden
-              animate={{ rotate: 180 }}
-              transition={reduce ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
-              style={{ display: 'inline-flex', color: 'var(--ui-text-3)' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M3.5 8.5L7 5l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </motion.span>
+  const handleButton = !isReopened && (
+    <button
+      ref={sheetHandleRef}
+      type="button"
+      onClick={onToggle}
+      disabled={dragShrinkActive}
+      aria-expanded={sheetBodyVisible}
+      aria-label={`${sheetBodyVisible ? 'Collapse' : 'Expand'} ${peekAriaSubject}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: 7,
+        width: '100%',
+        height: PEEK_BAR_HEIGHT,
+        padding: '0 18px',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: sheetBodyVisible ? '1px solid var(--ui-border)' : 'none',
+        cursor: dragShrinkActive ? 'default' : 'pointer',
+        opacity: dragShrinkActive ? 0.4 : 1,
+        color: 'inherit',
+        textAlign: 'left',
+        font: 'inherit',
+        flexShrink: 0,
+      }}
+    >
+      {/* Grabber */}
+      <span
+        aria-hidden
+        style={{ alignSelf: 'center', width: 34, height: 4, borderRadius: 2, background: 'var(--ui-border)' }}
+      />
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={MICRO_LABEL}>{peekMicroLabel}</span>
+          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
+            {peekDetailLabel}
           </span>
-        </button>
-      </motion.div>
-    );
-  }
+        </span>
+        {/* Points up while peeked (inviting expand), down while expanded (inviting collapse) */}
+        <motion.span
+          aria-hidden
+          animate={{ rotate: sheetBodyVisible ? 0 : 180 }}
+          transition={reduce ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
+          style={{ display: 'inline-flex', color: 'var(--ui-text-3)' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3.5 8.5L7 5l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </motion.span>
+      </span>
+    </button>
+  );
 
-  // The tray has been manually expanded past its peek, or a reopen is
-  // active — the full sheet. The in-sheet toggle handle stays visible at the
-  // top whenever peeking is available at all (any non-isReopened state, with
-  // or without pins) so there's always a discoverable, tappable way back to
-  // peeked — matching MirrorCard's original sheet, where the handle was
-  // always present and toggling, not just a field-press dismiss. Hidden only
-  // while isReopened (peeking doesn't apply to an edit in progress) or while
-  // a slider drag is active (U5 disables it separately, to avoid unmounting
-  // the dragged card via this door).
   return (
     <motion.div
       initial={{ y: '100%' }}
-      animate={{ y: 0 }}
+      animate={{
+        y: 0,
+        // Always set explicitly, never omitted: framer-motion leaves a
+        // previously-animated inline style in place when a later `animate`
+        // call drops that key, rather than clearing it — so switching to
+        // isReopened right after a small peeked height would otherwise
+        // freeze the container at that stale pixel value instead of
+        // sizing to the static `maxHeight: '46vh'` below.
+        height: isReopened ? 'auto' : sheetHeight ?? (sheetBodyVisible ? undefined : PEEK_BAR_HEIGHT),
+      }}
       exit={{ y: '100%' }}
-      transition={{ type: 'spring', stiffness: 300, damping: 35 }}
+      transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
       style={{
         ...shared,
         bottom: 0,
         left: 0,
         right: 0,
-        maxHeight: '46vh',
-        borderTop: '1px solid var(--ui-border)',
+        overflow: 'hidden',
         touchAction: 'pan-y',
+        borderTop: '1px solid var(--ui-border)',
+        // Peeked keeps the rounded top corners MirrorCard originally used;
+        // expanded/reopened has always been square-top with just the
+        // border above.
+        borderRadius: sheetBodyVisible ? undefined : '16px 16px 0 0',
+        paddingBottom: sheetBodyVisible ? undefined : PEEK_SAFE_PAD,
+        maxHeight: isReopened ? '46vh' : undefined,
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {!isReopened && (
-        <button
-          type="button"
-          onClick={onToggle}
-          disabled={dragShrinkActive}
-          aria-expanded={true}
-          aria-label={`Collapse ${peekAriaSubject}`}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 7,
-            width: '100%',
-            height: PEEK_BAR_HEIGHT,
-            padding: '0 18px',
-            background: 'transparent',
-            border: 'none',
-            borderBottom: '1px solid var(--ui-border)',
-            cursor: dragShrinkActive ? 'default' : 'pointer',
-            opacity: dragShrinkActive ? 0.4 : 1,
-            color: 'inherit',
-            textAlign: 'left',
-            font: 'inherit',
-            flexShrink: 0,
-          }}
-        >
-          <span
-            aria-hidden
-            style={{ alignSelf: 'center', width: 34, height: 4, borderRadius: 2, background: 'var(--ui-border)' }}
-          />
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span style={MICRO_LABEL}>{peekMicroLabel}</span>
-              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
-                {peekDetailLabel}
-              </span>
-            </span>
-            {/* Chevron — points down while expanded, inviting collapse */}
-            <motion.span
-              aria-hidden
-              animate={{ rotate: 0 }}
-              transition={reduce ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
-              style={{ display: 'inline-flex', color: 'var(--ui-text-3)' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M3.5 8.5L7 5l3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </motion.span>
-          </span>
-        </button>
-      )}
-      {cardList}
-      {!isReopened && !dragShrinkActive && actionBar}
+      {handleButton}
+      <AnimatePresence>
+        {sheetBodyVisible && (
+          <motion.div
+            key="body"
+            // minHeight: 0 is load-bearing: without it, this wrapper's
+            // automatic minimum size is its own min-content height (its
+            // `overflow` is visible, so it doesn't get the same "shrink
+            // below content size" exemption cardList's `overflow-y: auto`
+            // gives it) — that block propagates down through this extra
+            // level of nesting, so cardList never actually gets squeezed
+            // enough to engage its own internal scroll.
+            style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
+            exit={{ opacity: 0, transition: { duration: reduce ? 0 : 0.15 } }}
+          >
+            {/* cardList already branches on isReopened internally (to
+                render editingSection in place of the draft/previous
+                groups) while staying the one scrollable div that also
+                carries returningSummary above it — render it
+                unconditionally here rather than re-deciding isReopened at
+                this level, which would bypass both. */}
+            {cardList}
+            {!isReopened && !dragShrinkActive && actionBar}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
