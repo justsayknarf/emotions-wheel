@@ -11,11 +11,12 @@ const NEARBY_TAG_COUNT = 5;
 // not reading data — matching the field's own words.
 const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
-// The card's background/border while a slider drag is active — low enough
-// to see a pin move on the field through the card's own body. Tune here.
+// The card's background while a slider drag is active — low enough to see
+// a pin move on the field through the card's own body. Tune here. The
+// border is dropped entirely during a drag (see CARD_DRAG_BORDER below)
+// rather than faded, so it doesn't outline a box around that same view.
 const CARD_DRAG_BACKGROUND = 'rgba(22, 24, 32, 0.15)';
-const CARD_DRAG_BORDER_SELECTED = 'rgba(201, 168, 124, 0.15)'; // faded accentDim
-const CARD_DRAG_BORDER_DEFAULT = 'rgba(255, 255, 255, 0.02)'; // faded --ui-border
+const CARD_DRAG_BORDER = 'none';
 // Non-active content (header, the sibling axis slider, caption/tags) fades
 // to this opacity — the axis actually being dragged stays at 1.
 const CARD_DRAG_CONTENT_OPACITY = 0.3;
@@ -372,15 +373,20 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         // opacity on this outer div would fade it too.
         background: draggingAxis !== null ? CARD_DRAG_BACKGROUND : 'var(--ui-surface)',
         border: draggingAxis !== null
-          ? `1px solid ${showSelected ? CARD_DRAG_BORDER_SELECTED : CARD_DRAG_BORDER_DEFAULT}`
+          ? CARD_DRAG_BORDER
           : `1px solid ${showSelected ? accentDim : 'var(--ui-border)'}`,
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
-        boxShadow: showSelected ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)` : 'none',
-        transition: reduced
+        // showSelected's own ring (`0 0 0 1px accentDim`) would otherwise
+        // outline the card the same way the border did — drop it too while
+        // dragging, since the card is almost always selected at that point.
+        boxShadow: draggingAxis !== null
           ? 'none'
-          : 'border-color 0.25s ease-out, box-shadow 0.35s ease, background 0.25s ease-out',
+          : showSelected
+            ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)`
+            : 'none',
+        transition: reduced ? 'none' : 'box-shadow 0.35s ease, background 0.25s ease-out',
       }}
     >
       {/* Header band */}
