@@ -137,6 +137,18 @@ export function EmotionDrawer({
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
   const canSave = pins.length > 0;
+  // Once a fresh draft has pins on the sheet, previous-check-in content
+  // (the returning-summary block and the previous check-in's read-only
+  // cards) hides so the draft renders as the top and only content —
+  // requiring a scroll to see a just-dropped pin was the bug this fixes.
+  // Excludes isReopened: `pins` there holds the whole reopened check-in,
+  // not a fresh draft, and the returning-summary block is deliberately
+  // kept visible throughout an edit (see its own comment below) — this
+  // condition must not undo that. Subsumes dragShrinkActive, which only
+  // ever hides this same content under a narrower, drag-only condition —
+  // a drag can only be active on a card already in the draft, so
+  // dragShrinkActive being true always implies hideHistory is too.
+  const hideHistory = !isRail && !isReopened && canSave;
 
   // Returning-summary content, carried forward from the retired MirrorCard
   // (U8/R9): the relative time and the recent-rhythm strip. The relational
@@ -466,10 +478,12 @@ export function EmotionDrawer({
       {/* Renders whether or not a reopen is active — editing happens in
           place, so the same "when" and "how often" context stays on screen
           throughout rather than disappearing the moment editing starts.
-          Hidden during dragShrinkActive (U5): it mounts in this same scroll
-          container as the draft cards, so leaving it up would keep the sheet
-          too tall to reveal much of the field around the dragged card. */}
-      {!dragShrinkActive && returningSummary}
+          Hidden once a fresh draft has pins (hideHistory, which also covers
+          the old drag-only case): it mounts in this same scroll container
+          as the draft cards, so leaving it up would keep the sheet too tall
+          to reveal much of the field, and would bury a just-dropped pin's
+          card below it. */}
+      {!hideHistory && returningSummary}
       {isReopened ? (
         // Editing in place: the check-in that was the previous check-in's
         // group now renders here, in that group's position, inside its own
@@ -485,7 +499,7 @@ export function EmotionDrawer({
               {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
             </div>
           )}
-          {!dragShrinkActive && previousPins.length > 0 && (
+          {!hideHistory && previousPins.length > 0 && (
             <AnimatePresence initial={false}>
               {reversedPreviousPins.map((pin) => (
                 <motion.div
