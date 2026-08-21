@@ -676,7 +676,17 @@ export function EmotionDrawer({
     return (
       <motion.div
         initial={{ x: '100%' }}
-        animate={{ x: 0 }}
+        // `height: 'auto'` is required, not decorative: React reconciles
+        // this motion.div as the SAME DOM node across an isRail toggle
+        // (same element type, same position in the tree, regardless of
+        // which `return` produced it) — resizing the window from sheet to
+        // rail mid-session left this panel frozen at the sheet's last
+        // JS-driven pixel height (framer leaves a stale inline height in
+        // place when a later `animate` call omits that key, same as the
+        // isReopened case above). Explicit 'auto' lets `top`/`bottom` (in
+        // `style` below) govern the height again, as they always did
+        // before the sheet's animated height existed.
+        animate={{ x: 0, height: 'auto' }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
         style={{
