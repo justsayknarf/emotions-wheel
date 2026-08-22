@@ -254,12 +254,20 @@ export default function App() {
   // and reset to nothing when the last pin is removed. This is the single source
   // of truth behind the field's lit words, the fan, and the card's tag pills;
   // it unifies with the pin emphasis (both key off the selected pin).
+  //
+  // Also suppressed for the same fallback case as the tether (see
+  // tetherSuppressed above): without this, the previous check-in's pin lights
+  // up its whole neighborhood of deep words the instant it's on the field —
+  // no hover, no dwell, and it never fades as the cursor moves away — because
+  // resolveActiveSelection's fallback makes it read as "selected" before the
+  // user has done anything. That reads as an oversized, stuck reveal radius
+  // rather than the proximity-driven one the rest of the field uses.
   const highlightedIds = useMemo(
     () =>
-      selectedPin
+      selectedPin && !tetherSuppressed
         ? new Set(nearestTagIds(selectedPin.x, selectedPin.y, emotions, tuning.tagCount))
         : new Set<string>(),
-    [selectedPin, tuning.tagCount],
+    [selectedPin, tetherSuppressed, tuning.tagCount],
   );
 
   const handlePinRelease = useCallback((entry: PinEntry) => {
