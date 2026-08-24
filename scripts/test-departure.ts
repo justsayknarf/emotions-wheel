@@ -5,7 +5,7 @@
 // departure-mode predicate assertions to this same script as it lands. This
 // repo has no test runner, so this is the only automated exercise of the
 // logic. Exits non-zero on any violation.
-import { departureAnchor, relativeDayLabel, describeDelta } from '../src/data/departure';
+import { departureAnchor, relativeDayLabel, describeDelta, isDepartureEligible } from '../src/data/departure';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
 let failures = 0;
@@ -165,6 +165,32 @@ const entry = (id: string, timestamp: string, pins: PinEntry[]): DiaryEntry => (
   check('TODAY reads as "today" in the neutral tail', today === 'About where you were today.', today);
   const yesterday = describeDelta({ x: 0.5, y: 0 }, { x: 0, y: 0 }, 'YESTERDAY');
   check('YESTERDAY reads as "yesterday" in a qualified tail', yesterday.endsWith('than yesterday.'), yesterday);
+}
+
+// --- isDepartureEligible (U2) ---
+{
+  const prev = entry('e1', '2026-08-20T09:00:00.000Z', [pin('p1', 0.1, 0.2)]);
+
+  check(
+    'empty draft + previous check-in: eligible',
+    isDepartureEligible(false, 0, prev) === true,
+    String(isDepartureEligible(false, 0, prev)),
+  );
+  check(
+    'non-empty draft: not eligible',
+    isDepartureEligible(false, 1, prev) === false,
+    String(isDepartureEligible(false, 1, prev)),
+  );
+  check(
+    'no previous check-in: not eligible (first-run path unaffected)',
+    isDepartureEligible(false, 0, null) === false,
+    String(isDepartureEligible(false, 0, null)),
+  );
+  check(
+    'mid-reopen: not eligible even with an empty draft and a previous check-in',
+    isDepartureEligible(true, 0, prev) === false,
+    String(isDepartureEligible(true, 0, prev)),
+  );
 }
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);

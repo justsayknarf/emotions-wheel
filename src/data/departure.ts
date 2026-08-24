@@ -15,6 +15,22 @@ export function departureAnchor(previousCheckIn: DiaryEntry | null): PinEntry | 
   return previousCheckIn.pins[previousCheckIn.pins.length - 1];
 }
 
+/**
+ * U2/KTD1: the landing state — draft empty, previous check-in exists, not
+ * mid-reopen. Matches App's `showMirror` exactly (the departure card only
+ * ever renders inside that same view). Exported so this predicate is
+ * Node-testable and EmotionDrawer.tsx can import it rather than re-deriving
+ * the same three conditions locally, where they could drift apart from this
+ * definition.
+ */
+export function isDepartureEligible(
+  isReopened: boolean,
+  draftPinCount: number,
+  previousCheckIn: DiaryEntry | null,
+): boolean {
+  return !isReopened && draftPinCount === 0 && previousCheckIn !== null;
+}
+
 const WEEKDAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 /**

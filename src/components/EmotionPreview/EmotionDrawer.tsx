@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
+import { isDepartureEligible } from '../../data/departure';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
 import { formatRelative } from '../../utils/formatDate';
 import type { DiaryEntry, PinEntry } from '../../types';
@@ -75,6 +76,10 @@ interface Props {
   // draft too (the check-in is still one save unit) but stay collapsed
   // until individually expanded via onExpandPin.
   onReopen: (entryId: string, pinId: string) => void;
+  // U2: mints a new draft pin departing from the previous check-in's anchor
+  // (its newest pin) — fired by that one card's pre-positioned sliders when
+  // the draft is empty. Never touches the anchor itself (R2/R3).
+  onDepart: (x: number, y: number) => void;
   // True while a previous check-in is being edited in place (App.tsx's
   // draftId is set). The draft's pins ARE that check-in's pins at this
   // point — this flag only changes how they're presented: in the previous
@@ -124,6 +129,7 @@ export function EmotionDrawer({
   onDone,
   onClear,
   onReopen,
+  onDepart,
   isReopened,
   expandedPinIds,
   onExpandPin,
@@ -237,6 +243,15 @@ export function EmotionDrawer({
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
   const canSave = pins.length > 0;
+  // U2/KTD1: the landing state. Matches App's `showMirror` exactly (this
+  // component only ever mounts within that same view); derived locally via
+  // the shared predicate rather than threaded as its own prop, since every
+  // piece it needs is already here.
+  const departureEligible = isDepartureEligible(isReopened, pins.length, previousCheckIn);
+  // The pin departure sliders apply to (LC2) — the check-in's newest pin,
+  // matching departureAnchor's own fallback (src/data/departure.ts) so this
+  // card and the field's anchor ring can't disagree about which pin it is.
+  const anchorPinId = previousPins.length > 0 ? previousPins[previousPins.length - 1].id : null;
   // Once a fresh draft has pins on the sheet, previous-check-in content
   // (the returning-summary block and the previous check-in's read-only
   // cards) hides so the draft renders as the top and only content —
@@ -646,6 +661,13 @@ export function EmotionDrawer({
                     readOnly
                     onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
                     reopenDisabled={canSave}
+                    // U2: only the anchor gets the departure presentation,
+                    // and only while the landing state applies — a sibling
+                    // pin in a multi-pin check-in, or this same anchor while
+                    // the rail keeps history visible alongside an active
+                    // draft, stays the plain read-only summary above.
+                    departure={departureEligible && pin.id === anchorPinId}
+                    onDepart={onDepart}
                   />
                 </motion.div>
               ))}

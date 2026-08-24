@@ -55,11 +55,23 @@ interface Props {
   reopenLabel?: string;
   // Disabled while a DIFFERENT draft already holds pins — there is one
   // draft, so reopening into a non-empty one would either absorb unsaved
-  // pins into an existing record on save or destroy them on abandon
+  // pins into an existing record on save or discard them on abandon
   // (R18/R27). Not meaningful for a sibling's own expand trigger, which
   // never starts a new reopen. Rendered disabled rather than hidden, per the
   // plan's "renders disabled until the draft is recorded or discarded."
   reopenDisabled?: boolean;
+  // U2/R1-R4: the landing state for the previous check-in's anchor pin only
+  // (readOnly && showMirror, resolved by the caller) — pre-positioned,
+  // interactive sliders that mint a *new* draft pin rather than editing this
+  // one. Only meaningful alongside readOnly; ignored otherwise. LC1: Reopen
+  // relocates to a plain link below the sliders in this mode, and the
+  // header's top-right corner renders nothing — nothing button-shaped
+  // competes with the continuous control.
+  departure?: boolean;
+  // Fires once, on release of the first departure slider drag (or omitted
+  // entirely if the user reopens instead) — mints the new draft pin at the
+  // committed coordinate. Only meaningful alongside `departure`.
+  onDepart?: (x: number, y: number) => void;
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -78,11 +90,29 @@ const endLabelStyle = {
 // once more on release (onCommit) — the card commits on release. The origin tick
 // marks where the pin was first dropped, so travel from the felt drop is visible.
 // A gesture the user never finished (onCancel) reverts instead of committing.
+// Thumb/fill tones per accent — gold for an editable draft pin, recorded for
+// the departure card's pre-mint sliders (U2): this coordinate isn't yours
+// yet, so it borrows the same cool hue the field already uses for a
+// recorded pin (R11) rather than the warm gold every other slider gets.
+const ACCENT = {
+  gold: {
+    fill: 'rgba(201,168,124,0.12)',
+    thumb: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
+    ring: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+  },
+  recorded: {
+    fill: 'rgba(124,147,168,0.12)',
+    thumb: 'radial-gradient(circle at 40% 35%, #c3ceda, var(--ui-recorded) 62%)',
+    ring: '0 0 0 4px rgba(124,147,168,0.12), 0 2px 8px rgba(124,147,168,0.35)',
+  },
+} as const;
+
 function AxisSlider({
   labelLow,
   labelHigh,
   value,
   origin,
+  accent = 'gold',
   onGrab,
   onDrag,
   onCommit,
@@ -94,6 +124,7 @@ function AxisSlider({
   labelHigh: string;
   value: number;
   origin: number;
+  accent?: 'gold' | 'recorded';
   onGrab?: () => void;
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
@@ -104,6 +135,7 @@ function AxisSlider({
   opacity?: number;
   reducedMotion?: boolean;
 }) {
+  const tone = ACCENT[accent];
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
@@ -166,7 +198,7 @@ function AxisSlider({
             top: 0,
             bottom: 0,
             borderRadius: 3,
-            background: 'rgba(201,168,124,0.12)',
+            background: tone.fill,
             left: value >= 0 ? '50%' : `${p}%`,
             right: value >= 0 ? `${100 - p}%` : '50%',
           }}
@@ -183,8 +215,8 @@ function AxisSlider({
             marginTop: -7.5,
             marginLeft: -7.5,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
-            boxShadow: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+            background: tone.thumb,
+            boxShadow: tone.ring,
             left: `${p}%`,
             touchAction: 'none',
           }}
@@ -194,7 +226,7 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -362,6 +394,27 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     onAdjust(pin.id, next.x, next.y);
   };
 
+  // U2: departure mode's own drag/commit pair — reuses the same local
+  // draft/draggingAxis state as dragAxis/commitAxis (so the thumb still
+  // follows the pointer smoothly) but never calls onAdjust or onAdjustDraft:
+  // `pin` here is the anchor, a recorded pin outside the draft array, and
+  // there is no draft pin yet for the field's live ghost to key on. The
+  // card's own thumb is the only live feedback until release, when
+  // onDepart mints the real pin — see App's handleDepart.
+  const dragDeparture = (axis: 'x' | 'y', v: number) => {
+    const next = nextFrom(axis, v);
+    draftRef.current = next;
+    setDraft(next);
+    setDraggingAxis(axis);
+  };
+  const commitDeparture = (axis: 'x' | 'y', v: number) => {
+    const next = nextFrom(axis, v);
+    draftRef.current = null;
+    setDraft(null);
+    setDraggingAxis(null);
+    onDepart?.(next.x, next.y);
+  };
+
   return (
     <div
       onClick={onSelect}
@@ -411,7 +464,12 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         >
           Emotional State
         </span>
-        {readOnly ? (
+        {readOnly && departure ? (
+          // LC1: departure mode's corner carries no control at all — Reopen
+          // lives below the sliders instead (see the departure body below).
+          // Nothing button-shaped sits next to the continuous control.
+          null
+        ) : readOnly ? (
           // The reopen/expand control (R22) — see reopenLabel above for what
           // distinguishes the two uses. Always rendered while readOnly
           // (never hidden); reopenDisabled only disables it, per the plan's
@@ -459,7 +517,69 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         )}
       </div>
 
-      {readOnly ? (
+      {readOnly && departure ? (
+        /* Departure body (U2/R1-R4): pre-positioned sliders, live and
+           interactive, in the recorded hue — touching one mints a *new*
+           draft pin (onDepart) rather than editing this one. No Save, no
+           Remove, no recognize/derecognize; the caption stays the same
+           plain relational line the ordinary read-only card shows. Reopen
+           relocates below as a plain link (LC1) — still the same
+           onReopen/reopenDisabled wiring, only its position changes. */
+        <div style={{ padding: '10px 14px 14px' }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: 'flex', flexDirection: 'column', gap: 13, marginBottom: 15 }}
+          >
+            <AxisSlider
+              labelLow="Calm"
+              labelHigh="Activated"
+              value={curX}
+              origin={pin.x}
+              accent="recorded"
+              onGrab={onSelect}
+              onDrag={(v) => dragDeparture('x', v)}
+              onCommit={(v) => commitDeparture('x', v)}
+              onCancel={cancelAxis}
+              opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
+              reducedMotion={!!reduced}
+            />
+            <AxisSlider
+              labelLow="Negative"
+              labelHigh="Positive"
+              value={curY}
+              origin={pin.y}
+              accent="recorded"
+              onGrab={onSelect}
+              onDrag={(v) => dragDeparture('y', v)}
+              onCommit={(v) => commitDeparture('y', v)}
+              onCancel={cancelAxis}
+              opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
+              reducedMotion={!!reduced}
+            />
+          </div>
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
+            {pin.regionDescription.relational}
+          </p>
+          <button
+            onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
+            disabled={reopenDisabled}
+            style={{
+              display: 'block',
+              marginTop: 13,
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: reopenDisabled ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
+              fontSize: 11,
+              letterSpacing: '0.01em',
+              textAlign: 'left',
+              cursor: reopenDisabled ? 'default' : 'pointer',
+            }}
+          >
+            reopen this entry instead →
+          </button>
+        </div>
+      ) : readOnly ? (
         /* Read-only body: no sliders (R5), no tap-to-recognize, and never
            expands — a recorded card is always exactly this one-line summary.
            It used to reveal a fuller caption on tap, but that caption reused

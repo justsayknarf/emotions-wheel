@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
 import { emotions } from './data/emotions';
-import { nearestTagIds } from './data/regions';
+import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
 import { relativeDayLabel } from './data/departure';
@@ -305,6 +306,23 @@ export default function App() {
       setEnteringPinId((cur) => (cur === entry.id ? null : cur));
     }, 620);
   }, [draftId]);
+
+  // U2/R1-R4: the landing card's pre-positioned sliders, released for the
+  // first time — mints a brand-new draft pin departing from the previous
+  // check-in's anchor. Builds the same shape EmotionField's own field-press
+  // drop does (handleRelease there) and hands it to handlePinRelease, which
+  // already does everything a fresh pin needs: withOrigin, select, expand
+  // the tray, scroll it into view. The anchor itself is never touched —
+  // this only ever appends to `pins`.
+  const handleDepart = useCallback((x: number, y: number) => {
+    handlePinRelease({
+      id: uuidv4(),
+      x,
+      y,
+      recognizedWords: [],
+      regionDescription: getRegionDescription(x, y, emotions),
+    });
+  }, [handlePinRelease]);
 
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
@@ -647,6 +665,7 @@ export default function App() {
                 onDone={handleDone}
                 onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
+                onDepart={handleDepart}
                 isReopened={draftId !== null}
                 expandedPinIds={expandedPinIds}
                 onExpandPin={handleExpandPin}
