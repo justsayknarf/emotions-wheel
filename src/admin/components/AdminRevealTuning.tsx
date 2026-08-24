@@ -38,6 +38,13 @@ const CARD_KNOBS: Knob[] = [
   { key: 'captionFadeIn', label: 'Word fade in', min: 0, max: 1, step: 0.02, fmt: (v) => `${v.toFixed(2)}s` },
 ];
 
+// Departure knobs: the connector's fade in / hold / fade out on commit.
+const DEPARTURE_KNOBS: Knob[] = [
+  { key: 'departureFadeIn', label: 'Fade in', min: 0, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'departureHold', label: 'Hold', min: 0, max: 4, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'departureFadeOut', label: 'Fade out', min: 0, max: 5, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+];
+
 // Grounding-welcome knobs: the axis emphasis fade and the guiding pulse.
 const WELCOME_KNOBS: Knob[] = [
   { key: 'axisFade', label: 'Axis fade', min: 0.1, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
@@ -179,6 +186,13 @@ export function AdminRevealTuning() {
         <SectionHeader title="Check-in card" subtitle="word dissolve when a slider is released" />
 
         {CARD_KNOBS.map(renderKnob)}
+      </div>
+
+      {/* Departure */}
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--ui-border)', paddingTop: 12 }}>
+        <SectionHeader title="Departure" subtitle="connector from the anchor on commit" />
+
+        {DEPARTURE_KNOBS.map(renderKnob)}
       </div>
     </div>
   );

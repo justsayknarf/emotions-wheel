@@ -312,6 +312,14 @@ export default function App() {
     }, 620);
   }, [draftId]);
 
+  // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
+  // pair it draws between. `play` increments only in handleDepart below —
+  // never in handleAdjustPin — so later adjustments of the same pin never
+  // re-fire the connector, matching R6/LC5.
+  const [departureTracePlay, setDepartureTracePlay] = useState(0);
+  const [departureTraceFrom, setDepartureTraceFrom] = useState<{ x: number; y: number } | null>(null);
+  const [departureTraceTo, setDepartureTraceTo] = useState<{ x: number; y: number } | null>(null);
+
   // U2/R1-R4: the landing card's pre-positioned sliders, released for the
   // first time — mints a brand-new draft pin departing from the previous
   // check-in's anchor. Builds the same shape EmotionField's own field-press
@@ -320,6 +328,11 @@ export default function App() {
   // the tray, scroll it into view. The anchor itself is never touched —
   // this only ever appends to `pins`.
   const handleDepart = useCallback((x: number, y: number) => {
+    if (anchorPin) {
+      setDepartureTraceFrom({ x: anchorPin.x, y: anchorPin.y });
+      setDepartureTraceTo({ x, y });
+      setDepartureTracePlay((p) => p + 1);
+    }
     handlePinRelease({
       id: uuidv4(),
       x,
@@ -327,7 +340,7 @@ export default function App() {
       recognizedWords: [],
       regionDescription: getRegionDescription(x, y, emotions),
     });
-  }, [handlePinRelease]);
+  }, [handlePinRelease, anchorPin]);
 
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
@@ -581,6 +594,9 @@ export default function App() {
           emphasizedPinId={effectiveSelectedPinId}
           adjustDraft={adjustDraft ? { x: adjustDraft.x, y: adjustDraft.y } : null}
           onGestureActiveChange={handleFieldGestureActiveChange}
+          departureTracePlay={departureTracePlay}
+          departureTraceFrom={departureTraceFrom}
+          departureTraceTo={departureTraceTo}
         />
       </div>
 

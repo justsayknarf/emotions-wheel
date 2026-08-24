@@ -52,6 +52,15 @@ export interface RevealTuning {
   captionFadeIn: number;
   /** The empty beat held between fade-out and fade-in — the "re-suggest" pause. */
   captionHold: number;
+  /**
+   * The departure connector (U6/R6): a chevron from the previous check-in's
+   * anchor to the newly committed pin, shown once on commit then dissolved.
+   * These three tune fade in / hold / fade out (seconds) — starting points
+   * from the prototype study, not settled numbers (LC5/LC6 territory).
+   */
+  departureFadeIn: number;
+  departureHold: number;
+  departureFadeOut: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -72,6 +81,9 @@ export const DEFAULT_TUNING: RevealTuning = {
   captionFadeOut: 0.3,
   captionFadeIn: 0.6,
   captionHold: 0.05,
+  departureFadeIn: 0.5,
+  departureHold: 1.6,
+  departureFadeOut: 2.6,
 };
 
 const KEY = 'reveal-tuning';

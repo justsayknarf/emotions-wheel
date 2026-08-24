@@ -13,6 +13,7 @@ import { WordTethers, type TetherSegment } from './WordTethers';
 import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
+import { DepartureTrace } from './DepartureTrace';
 import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 
@@ -77,6 +78,13 @@ interface Props {
   // the tap/drag movement threshold, and again with `false` on release or
   // cancel — drives the tray's peek during pin placement (U3). Optional.
   onGestureActiveChange?: (active: boolean) => void;
+  // U6/R6: the departure connector's one-shot trigger — increments once per
+  // departure commit (App's handleDepart), paired with the anchor/new-pin
+  // field-space coordinates that commit departed between. Optional: the
+  // trace simply never fires if these are never populated.
+  departureTracePlay?: number;
+  departureTraceFrom?: { x: number; y: number } | null;
+  departureTraceTo?: { x: number; y: number } | null;
 }
 
 export function EmotionField({
@@ -92,11 +100,21 @@ export function EmotionField({
   emphasizedPinId = null,
   adjustDraft = null,
   onGestureActiveChange,
+  departureTracePlay = 0,
+  departureTraceFrom = null,
+  departureTraceTo = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const tuning = useRevealTuning();
   const reducedMotion = useReducedMotion();
+  // Field-space [-1,1] -> container px. Recreated each render (cheap, no
+  // memo) — used by the always-mounted DepartureTrace below the same way
+  // the adjust overlay and recorded-pin blocks already convert inline.
+  const toFieldPx = (c: { x: number; y: number }) => ({
+    x: (toPercent(c.x) / 100) * size.width,
+    y: (toPercent(-c.y) / 100) * size.height,
+  });
 
   useEffect(() => {
     const el = containerRef.current;
@@ -386,6 +404,19 @@ export function EmotionField({
         stagger={tuning.axisPulseStagger}
         duration={tuning.axisPulseDuration}
         strength={tuning.axisPulseStrength}
+      />
+
+      {/* Departure connector (U6/R6) — always mounted, self-gating on
+          `play`, same shape as AxisRadiance above. */}
+      <DepartureTrace
+        play={departureTracePlay}
+        from={departureTraceFrom}
+        to={departureTraceTo}
+        size={size}
+        toPx={toFieldPx}
+        fadeIn={tuning.departureFadeIn}
+        hold={tuning.departureHold}
+        fadeOut={tuning.departureFadeOut}
       />
 
       {/* Axis labels — brighten with emphasis. */}
