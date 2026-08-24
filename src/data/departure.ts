@@ -1,4 +1,5 @@
 import type { DiaryEntry, PinEntry } from '../types';
+import { startOfDay } from '../utils/formatDate';
 
 // Pure logic for the departure mark (docs/plans/2026-08-24-001-feat-departure-mark-plan.md).
 // No storage access, so it's importable directly under `npx tsx` for
@@ -46,7 +47,6 @@ const WEEKDAY_ABBR = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
  */
 export function relativeDayLabel(timestamp: string, now: Date): string {
   const then = new Date(timestamp);
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const diffDays = Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000);
 
   if (diffDays <= 0) return 'TODAY';

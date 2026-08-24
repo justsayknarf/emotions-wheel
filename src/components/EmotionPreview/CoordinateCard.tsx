@@ -414,11 +414,25 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     const base = draftRef.current ?? { x: pin.x, y: pin.y };
     return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
   };
-  const dragAxis = (axis: 'x' | 'y', v: number) => {
+  // The local drag-state bookkeeping shared by every axis interaction below
+  // (ordinary adjustment and departure alike) — kept in these two functions
+  // so the four call sites differ only in which external callback fires,
+  // not in how draftRef/draft/draggingAxis get set or cleared.
+  const setLiveDraft = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
     draftRef.current = next;
     setDraft(next);
     setDraggingAxis(axis);
+    return next;
+  };
+  const clearLiveDraft = () => {
+    draftRef.current = null;
+    setDraft(null);
+    setDraggingAxis(null);
+  };
+
+  const dragAxis = (axis: 'x' | 'y', v: number) => {
+    const next = setLiveDraft(axis, v);
     onAdjustDraft?.({ pinId: pin.id, ...next });
   };
   // Abandon an unfinished drag: drop the draft so the thumbs snap back to the
@@ -428,38 +442,29 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // draft is harder to reason about than a clean revert to the last committed
   // position.
   const cancelAxis = () => {
-    draftRef.current = null;
-    setDraft(null);
-    setDraggingAxis(null);
+    clearLiveDraft();
     onAdjustDraft?.(null);
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
-    draftRef.current = null;
-    setDraft(null);
-    setDraggingAxis(null);
+    clearLiveDraft();
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
   };
 
-  // U2: departure mode's own drag/commit pair — reuses the same local
-  // draft/draggingAxis state as dragAxis/commitAxis (so the thumb still
-  // follows the pointer smoothly) but never calls onAdjust or onAdjustDraft:
-  // `pin` here is the anchor, a recorded pin outside the draft array, and
-  // there is no draft pin yet for the field's live ghost to key on. The
-  // card's own thumb is the only live feedback until release, when
-  // onDepart mints the real pin — see App's handleDepart.
+  // U2: departure mode's own drag/commit pair — shares the same local
+  // draft/draggingAxis bookkeeping above (so the thumb still follows the
+  // pointer smoothly) but never calls onAdjust or onAdjustDraft: `pin` here
+  // is the anchor, a recorded pin outside the draft array, and there is no
+  // draft pin yet for the field's live ghost to key on. The card's own
+  // thumb is the only live feedback until release, when onDepart mints the
+  // real pin — see App's handleDepart.
   const dragDeparture = (axis: 'x' | 'y', v: number) => {
-    const next = nextFrom(axis, v);
-    draftRef.current = next;
-    setDraft(next);
-    setDraggingAxis(axis);
+    setLiveDraft(axis, v);
   };
   const commitDeparture = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
-    draftRef.current = null;
-    setDraft(null);
-    setDraggingAxis(null);
+    clearLiveDraft();
     onDepart?.(next.x, next.y);
   };
 
@@ -519,9 +524,11 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           null
         ) : readOnly ? (
           // The reopen/expand control (R22) — see reopenLabel above for what
-          // distinguishes the two uses. Always rendered while readOnly
-          // (never hidden); reopenDisabled only disables it, per the plan's
-          // "renders disabled until the draft is recorded or discarded."
+          // distinguishes the two uses. Rendered here for every readOnly
+          // card except departure mode (branch above, LC1 — the button
+          // relocates to a link there instead); reopenDisabled only
+          // disables it, per the plan's "renders disabled until the draft
+          // is recorded or discarded."
           <button
             onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
             disabled={reopenDisabled}

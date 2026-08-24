@@ -6,7 +6,7 @@ import { emotions } from './data/emotions';
 import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
-import { relativeDayLabel, departureAnchor } from './data/departure';
+import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/departure';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
@@ -281,6 +281,14 @@ export default function App() {
     [selectedPin, tetherSuppressed, tuning.tagCount],
   );
 
+  // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
+  // pair it draws between. `play` increments only inside handlePinRelease
+  // below — never in handleAdjustPin — so later adjustments of the same
+  // pin never re-fire the connector, matching R6/LC5.
+  const [departureTracePlay, setDepartureTracePlay] = useState(0);
+  const [departureTraceFrom, setDepartureTraceFrom] = useState<{ x: number; y: number } | null>(null);
+  const [departureTraceTo, setDepartureTraceTo] = useState<{ x: number; y: number } | null>(null);
+
   const handlePinRelease = useCallback((entry: PinEntry) => {
     // Reopening is for correcting an existing check-in's pins, not growing
     // it with a new one — a fresh drop here would silently join whichever
@@ -290,6 +298,18 @@ export default function App() {
     // reaches `pins` here, so no pin ever appears on the field or the card
     // list for it.
     if (draftId !== null) return;
+    // R6: any mint while the landing state applies is a departure from the
+    // anchor — both gestures the plan describes (dragging a departure
+    // slider via handleDepart below, or pressing the field directly) end
+    // up here, so the connector fires for either one rather than only the
+    // slider gesture. Checked with the same shared predicate the card uses
+    // (isDepartureEligible), against `pins` as it stands *before* this
+    // mint — draftId is already known null from the guard above.
+    if (isDepartureEligible(false, pins.length, previousCheckIn) && anchorPin) {
+      setDepartureTraceFrom({ x: anchorPin.x, y: anchorPin.y });
+      setDepartureTraceTo({ x: entry.x, y: entry.y });
+      setDepartureTracePlay((p) => p + 1);
+    }
     // R5/R11: every new-pin drop re-expands the tray, whether it had been
     // peeked by U3's field-press gesture or by the manual toggle (R1) — a
     // fresh card should always be visible right after it lands. Selecting an
@@ -310,15 +330,7 @@ export default function App() {
     window.setTimeout(() => {
       setEnteringPinId((cur) => (cur === entry.id ? null : cur));
     }, 620);
-  }, [draftId]);
-
-  // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
-  // pair it draws between. `play` increments only in handleDepart below —
-  // never in handleAdjustPin — so later adjustments of the same pin never
-  // re-fire the connector, matching R6/LC5.
-  const [departureTracePlay, setDepartureTracePlay] = useState(0);
-  const [departureTraceFrom, setDepartureTraceFrom] = useState<{ x: number; y: number } | null>(null);
-  const [departureTraceTo, setDepartureTraceTo] = useState<{ x: number; y: number } | null>(null);
+  }, [draftId, pins.length, previousCheckIn, anchorPin]);
 
   // U2/R1-R4: the landing card's pre-positioned sliders, released for the
   // first time — mints a brand-new draft pin departing from the previous
@@ -328,11 +340,11 @@ export default function App() {
   // the tray, scroll it into view. The anchor itself is never touched —
   // this only ever appends to `pins`.
   const handleDepart = useCallback((x: number, y: number) => {
-    if (anchorPin) {
-      setDepartureTraceFrom({ x: anchorPin.x, y: anchorPin.y });
-      setDepartureTraceTo({ x, y });
-      setDepartureTracePlay((p) => p + 1);
-    }
+    // The departure-trace trigger now lives centrally in handlePinRelease
+    // (it fires for *either* departure gesture — this slider path or a
+    // direct field press — see its own comment), so this stays a thin
+    // wrapper building the same shape EmotionField's own field-press drop
+    // does (handleRelease there).
     handlePinRelease({
       id: uuidv4(),
       x,
@@ -340,7 +352,7 @@ export default function App() {
       recognizedWords: [],
       regionDescription: getRegionDescription(x, y, emotions),
     });
-  }, [handlePinRelease, anchorPin]);
+  }, [handlePinRelease]);
 
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
