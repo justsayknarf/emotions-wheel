@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
 import { findNearbyPin } from '../../data/checkIn';
@@ -60,6 +60,12 @@ interface Props {
   // pick these up, and the adjust overlay (which searches only `pins`) stays
   // draft-only for free.
   recordedPins?: PinEntry[];
+  // U4/R5: the previous check-in's relative-day label (e.g. "TUE"), already
+  // resolved by relativeDayLabel (src/data/departure.ts) once in App so the
+  // field's anchor label and the card's delta sentence (U3) read the same
+  // value rather than each deriving their own. Rendered on the anchor pin
+  // only — recordedPins's own last entry, matching departureAnchor.
+  previousCheckInLabel?: string | null;
   // The pin whose card is currently selected in the tray — rendered larger and
   // brighter so the card↔point link reads both ways.
   emphasizedPinId?: string | null;
@@ -82,6 +88,7 @@ export function EmotionField({
   hasInteracted,
   axisEmphasis = false,
   recordedPins = [],
+  previousCheckInLabel = null,
   emphasizedPinId = null,
   adjustDraft = null,
   onGestureActiveChange,
@@ -89,6 +96,7 @@ export function EmotionField({
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const tuning = useRevealTuning();
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -616,11 +624,107 @@ export function EmotionField({
               than switching to gold, so the distinction holds through
               selection too. zIndex 9, one below the draft dots' 10, so a
               draft pin dropped on top of a recorded one reads as the live
-              one on top. */}
-          {recordedPins.map((pin) => {
+              one on top.
+
+              U4/R5: the anchor — the check-in's newest pin, matching
+              departureAnchor's own fallback (src/data/departure.ts), so this
+              mark and the departure card can't disagree about which pin is
+              the anchor (LC2) — renders as a hollow ring instead of a filled
+              dot, carrying the relative-day label. It reads as settled
+              history and as unmistakably *another check-in*, not a quieter
+              copy of today's. Non-anchor pins in a multi-pin check-in keep
+              the filled-dot treatment (LC3) and their own breathing halo
+              unchanged, below. */}
+          {recordedPins.map((pin, i) => {
             const px = (toPercent(pin.x) / 100) * size.width;
             const py = (toPercent(-pin.y) / 100) * size.height;
             const isEmphasized = pin.id === emphasizedPinId;
+            const isAnchor = i === recordedPins.length - 1;
+
+            if (isAnchor) {
+              // The mark *is* the breathing ring — folded into one element so
+              // a hollow ring plus a separate halo never stack into two
+              // concentric rings (the noise this unit exists to avoid).
+              // Breathing lives in opacity only; the ring never changes size
+              // on its own, so its position and radius stay a stable target
+              // to depart from mid-drag.
+              const ringSize = isEmphasized ? 14 : 11;
+              return (
+                <div
+                  key={pin.id}
+                  style={{
+                    position: 'absolute',
+                    left: px,
+                    top: py,
+                    pointerEvents: 'none',
+                    zIndex: 9,
+                    width: 0,
+                    height: 0,
+                  }}
+                >
+                  {isEmphasized &&
+                    [0, 1.1].map((delay, k) => (
+                      <motion.div
+                        key={k}
+                        initial={{ scale: 0.7, opacity: 0.45 }}
+                        animate={{ scale: 3.4, opacity: 0 }}
+                        transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3, delay }}
+                        style={{
+                          position: 'absolute',
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          border: '1px solid var(--ui-recorded-dim)',
+                          top: -6,
+                          left: -6,
+                        }}
+                      />
+                    ))}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={
+                      reducedMotion
+                        ? { opacity: isEmphasized ? 0.95 : 0.7 }
+                        : { opacity: isEmphasized ? [0.75, 1, 0.75] : [0.55, 0.85, 0.55] }
+                    }
+                    transition={
+                      reducedMotion
+                        ? { duration: 0.3 }
+                        : { duration: 3.2, ease: 'easeInOut', repeat: Infinity }
+                    }
+                    style={{
+                      position: 'absolute',
+                      width: ringSize,
+                      height: ringSize,
+                      marginLeft: -ringSize / 2,
+                      marginTop: -ringSize / 2,
+                      borderRadius: '50%',
+                      border: `1.5px solid var(--ui-recorded)`,
+                      boxShadow: isEmphasized ? '0 0 8px 1px var(--ui-recorded-dim)' : 'none',
+                    }}
+                  />
+                  {previousCheckInLabel && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: -(ringSize / 2 + 13),
+                        transform: 'translateX(-50%)',
+                        fontSize: 8,
+                        fontWeight: 600,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color: 'var(--ui-recorded)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {previousCheckInLabel}
+                    </span>
+                  )}
+                </div>
+              );
+            }
+
             const dotSize = isEmphasized ? 7 : 4;
             return (
               <div
@@ -639,8 +743,16 @@ export function EmotionField({
                     one-shot mount pulse */}
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0.2 }}
-                  animate={{ scale: [0.8, 1.25, 0.8], opacity: [0.2, 0.06, 0.2] }}
-                  transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+                  animate={
+                    reducedMotion
+                      ? { scale: 1, opacity: 0.12 }
+                      : { scale: [0.8, 1.25, 0.8], opacity: [0.2, 0.06, 0.2] }
+                  }
+                  transition={
+                    reducedMotion
+                      ? { duration: 0.3 }
+                      : { duration: 3.2, ease: 'easeInOut', repeat: Infinity }
+                  }
                   style={{
                     position: 'absolute',
                     width: 10,
