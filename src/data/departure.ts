@@ -66,6 +66,17 @@ const NAME_THRESHOLD = 0.10;
 const LITTLE_EDGE = 0.32;
 const MUCH_EDGE = 0.62;
 
+/**
+ * Whether `from`/`to` differ enough on either axis to be worth naming (R9) —
+ * the same NAME_THRESHOLD describeDelta itself uses. Exported so the card
+ * (U3) can suppress its delta line entirely when the two ticks coincide,
+ * rather than rendering describeDelta's neutral "about where you were"
+ * phrasing, which would just restate a tick position the card already shows.
+ */
+export function hasNotableDelta(from: { x: number; y: number }, to: { x: number; y: number }): boolean {
+  return Math.abs(to.x - from.x) >= NAME_THRESHOLD || Math.abs(to.y - from.y) >= NAME_THRESHOLD;
+}
+
 function band(delta: number): 'little' | 'plain' | 'much' | null {
   const a = Math.abs(delta);
   if (a < NAME_THRESHOLD) return null;

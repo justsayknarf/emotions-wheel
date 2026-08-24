@@ -80,6 +80,13 @@ interface Props {
   // (its newest pin) — fired by that one card's pre-positioned sliders when
   // the draft is empty. Never touches the anchor itself (R2/R3).
   onDepart: (x: number, y: number) => void;
+  // U3/R9: the same anchor coordinate + relative-day label, resolved once
+  // in App (departureAnchor/relativeDayLabel) and threaded into each
+  // *draft* card's own anchor tick + delta — not the previous check-in's
+  // own (already-anchored) card, and not a reopened check-in's cards, whose
+  // comparison would be against a different, older check-in (out of scope).
+  anchor: PinEntry | null;
+  anchorLabel: string | null;
   // True while a previous check-in is being edited in place (App.tsx's
   // draftId is set). The draft's pins ARE that check-in's pins at this
   // point — this flag only changes how they're presented: in the previous
@@ -130,6 +137,8 @@ export function EmotionDrawer({
   onClear,
   onReopen,
   onDepart,
+  anchor,
+  anchorLabel,
   isReopened,
   expandedPinIds,
   onExpandPin,
@@ -425,6 +434,8 @@ export function EmotionDrawer({
             onAdjust={onAdjust}
             onAdjustDraft={onAdjustDraft}
             dissolve={dissolve}
+            anchor={anchor}
+            anchorLabel={anchorLabel}
           />
         </motion.div>
       ))}

@@ -6,7 +6,7 @@ import { emotions } from './data/emotions';
 import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
-import { relativeDayLabel } from './data/departure';
+import { relativeDayLabel, departureAnchor } from './data/departure';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
@@ -193,6 +193,11 @@ export default function App() {
   // field's anchor label and the card's delta sentence (U3) can't drift
   // apart into reporting a different "how long ago" for the same check-in.
   const previousCheckInLabel = previousCheckIn ? relativeDayLabel(previousCheckIn.timestamp, new Date()) : null;
+  // U3/R9: the draft card's own anchor tick + delta compare against this
+  // same pin — matching departureAnchor's fallback everywhere else already
+  // does, so the field ring, the departure card, and the draft card never
+  // point at three different "anchors."
+  const anchorPin = departureAnchor(previousCheckIn);
   // The most recent entry regardless of any active reopen — unlike
   // previousCheckIn, never excludes the entry currently being edited. Feeds
   // only the drawer's returning-summary (time + rhythm), which should stay
@@ -666,6 +671,8 @@ export default function App() {
                 onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
                 onDepart={handleDepart}
+                anchor={anchorPin}
+                anchorLabel={previousCheckInLabel}
                 isReopened={draftId !== null}
                 expandedPinIds={expandedPinIds}
                 onExpandPin={handleExpandPin}

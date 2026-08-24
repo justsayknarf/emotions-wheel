@@ -5,7 +5,7 @@
 // departure-mode predicate assertions to this same script as it lands. This
 // repo has no test runner, so this is the only automated exercise of the
 // logic. Exits non-zero on any violation.
-import { departureAnchor, relativeDayLabel, describeDelta, isDepartureEligible } from '../src/data/departure';
+import { departureAnchor, relativeDayLabel, describeDelta, isDepartureEligible, hasNotableDelta } from '../src/data/departure';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
 let failures = 0;
@@ -165,6 +165,25 @@ const entry = (id: string, timestamp: string, pins: PinEntry[]): DiaryEntry => (
   check('TODAY reads as "today" in the neutral tail', today === 'About where you were today.', today);
   const yesterday = describeDelta({ x: 0.5, y: 0 }, { x: 0, y: 0 }, 'YESTERDAY');
   check('YESTERDAY reads as "yesterday" in a qualified tail', yesterday.endsWith('than yesterday.'), yesterday);
+}
+
+// --- hasNotableDelta (U3) ---
+{
+  check(
+    'both axes under threshold: not notable',
+    hasNotableDelta({ x: 0.2, y: -0.1 }, { x: 0.25, y: -0.05 }) === false,
+    'false expected',
+  );
+  check(
+    'one axis at the threshold: notable',
+    hasNotableDelta({ x: 0, y: 0 }, { x: 0.10, y: 0 }) === true,
+    'true expected',
+  );
+  check(
+    'identical coordinates: not notable',
+    hasNotableDelta({ x: 0.4, y: -0.4 }, { x: 0.4, y: -0.4 }) === false,
+    'false expected',
+  );
 }
 
 // --- isDepartureEligible (U2) ---

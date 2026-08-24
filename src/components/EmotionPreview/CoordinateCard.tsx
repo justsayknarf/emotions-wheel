@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
+import { describeDelta, hasNotableDelta } from '../../data/departure';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -72,6 +73,14 @@ interface Props {
   // entirely if the user reopens instead) — mints the new draft pin at the
   // committed coordinate. Only meaningful alongside `departure`.
   onDepart?: (x: number, y: number) => void;
+  // U3/R9: the previous check-in's anchor coordinate and its relative-day
+  // label, for the draft card's own anchor tick + plain-language delta.
+  // Only rendered on the ordinary editable body (not readOnly/departure —
+  // Reopen's flow compares against a *different*, older check-in, which is
+  // out of this unit's scope). Null/omitted when there's no previous
+  // check-in, which leaves the card exactly as it was before this unit.
+  anchor?: { x: number; y: number } | null;
+  anchorLabel?: string | null;
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -113,6 +122,8 @@ function AxisSlider({
   value,
   origin,
   accent = 'gold',
+  anchorValue,
+  anchorLabel,
   onGrab,
   onDrag,
   onCommit,
@@ -125,6 +136,13 @@ function AxisSlider({
   value: number;
   origin: number;
   accent?: 'gold' | 'recorded';
+  // U3/R9: the previous check-in's anchor value on this axis, rendered as a
+  // second tick distinct from the origin tick above — recorded-dim rather
+  // than text-3, and carrying `anchorLabel` (e.g. "TUE") so the two ticks
+  // read as different *kinds* of thing, not two of the same. Omitted when
+  // there's no previous check-in to compare against.
+  anchorValue?: number;
+  anchorLabel?: string;
   onGrab?: () => void;
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
@@ -205,6 +223,36 @@ function AxisSlider({
         />
         {/* origin tick — where this pin was dropped */}
         <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--ui-text-3)', left: `${pct(origin)}%` }} />
+        {/* anchor tick — the previous check-in's own value on this axis
+            (U3/R9). recorded-dim + a label, deliberately not styled like the
+            plain origin tick above: two ticks that looked like the same kind
+            of mark is exactly the overload the field-side decisions (U4/U5)
+            were made to avoid. Renders even when it coincides with the
+            origin tick — nothing doubles, since the origin tick never
+            carries a label of its own. */}
+        {anchorValue !== undefined && (
+          <>
+            <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1.5, background: 'var(--ui-recorded-dim)', left: `${pct(anchorValue)}%` }} />
+            {anchorLabel && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -14,
+                  left: `${pct(anchorValue)}%`,
+                  transform: 'translateX(-50%)',
+                  fontSize: 7,
+                  fontWeight: 600,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: 'var(--ui-recorded)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {anchorLabel}
+              </span>
+            )}
+          </>
+        )}
         {/* thumb */}
         <div
           style={{
@@ -226,7 +274,7 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, anchor = null, anchorLabel = null }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -619,6 +667,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelHigh="Activated"
             value={curX}
             origin={originX}
+            anchorValue={anchor?.x}
+            anchorLabel={anchorLabel ?? undefined}
             onGrab={onSelect}
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
@@ -631,6 +681,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelHigh="Positive"
             value={curY}
             origin={originY}
+            anchorValue={anchor?.y}
+            anchorLabel={anchorLabel ?? undefined}
             onGrab={onSelect}
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
@@ -714,6 +766,19 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         </AnimatePresence>
         </div>
         </motion.div>
+
+        {/* Across-time delta (U3/R9) — grouped with the caption rather than
+            the "your words" summary below, since it's still describing the
+            same anchor the tick above shows. Suppressed rather than printing
+            describeDelta's neutral phrasing when the two ticks coincide —
+            that would just restate a tick position already on screen. Reads
+            from the pin's committed coordinate, not the live drag draft, so
+            it holds steady mid-drag the same way the caption's words do. */}
+        {anchor && anchorLabel && hasNotableDelta(anchor, pin) && (
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--ui-recorded)', lineHeight: 1.5 }}>
+            {describeDelta(anchor, pin, anchorLabel)}
+          </p>
+        )}
 
         {pin.recognizedWords.length > 0 && (
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
