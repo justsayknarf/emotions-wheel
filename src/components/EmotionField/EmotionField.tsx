@@ -559,52 +559,49 @@ export function EmotionField({
 
           {/* Adjust overlay — the selected pin's drop anchor, a travel line to
               where it sits now, and a ghost preview at the live slider draft.
-              Keeps a card-driven adjustment anchored to where it was felt. */}
+              Live-only (R8): rendering is gated on `adjustDraft` alone, not on
+              whether the pin has moved from its origin, so the whole overlay —
+              travel line, origin ring, ghost line, ghost ring — appears only
+              while a drag is in flight and disappears entirely on release.
+              Control feedback has no job after release; a persistent version
+              of this is exactly the dashed-stroke overload the design removes
+              (KTD3). `pin.origin` itself is untouched — still stamped at birth
+              and still carried in the diary record. */}
           {(() => {
             const emphasized = emphasizedPinId ? pins.find((p) => p.id === emphasizedPinId) : null;
-            if (!emphasized || size.width === 0) return null;
-            const origin = emphasized.origin ?? null;
+            if (!emphasized || !adjustDraft || size.width === 0) return null;
+            const origin = emphasized.origin ?? { x: emphasized.x, y: emphasized.y };
             const px = (toPercent(emphasized.x) / 100) * size.width;
             const py = (toPercent(-emphasized.y) / 100) * size.height;
-            const moved = origin != null && Math.hypot(emphasized.x - origin.x, emphasized.y - origin.y) > 0.02;
-            const ox = origin ? (toPercent(origin.x) / 100) * size.width : 0;
-            const oy = origin ? (toPercent(-origin.y) / 100) * size.height : 0;
-            const gx = adjustDraft ? (toPercent(adjustDraft.x) / 100) * size.width : 0;
-            const gy = adjustDraft ? (toPercent(-adjustDraft.y) / 100) * size.height : 0;
-            if (!moved && !adjustDraft) return null;
+            const ox = (toPercent(origin.x) / 100) * size.width;
+            const oy = (toPercent(-origin.y) / 100) * size.height;
+            const gx = (toPercent(adjustDraft.x) / 100) * size.width;
+            const gy = (toPercent(-adjustDraft.y) / 100) * size.height;
             return (
               <>
                 <svg
                   style={{ position: 'absolute', inset: 0, width: size.width, height: size.height, pointerEvents: 'none', zIndex: 8, overflow: 'visible' }}
                   aria-hidden="true"
                 >
-                  {moved && (
-                    <line x1={ox} y1={oy} x2={px} y2={py} stroke="rgba(201, 168, 124, 0.3)" strokeWidth={1} />
-                  )}
-                  {adjustDraft && (
-                    <>
-                      <line x1={px} y1={py} x2={gx} y2={gy} stroke="rgba(201, 168, 124, 0.5)" strokeWidth={1} strokeDasharray="3 3" />
-                      <circle cx={gx} cy={gy} r={5} fill="none" stroke="rgba(201, 168, 124, 0.6)" strokeWidth={1} strokeDasharray="3 2" />
-                    </>
-                  )}
+                  <line x1={ox} y1={oy} x2={px} y2={py} stroke="rgba(201, 168, 124, 0.3)" strokeWidth={1} />
+                  <line x1={px} y1={py} x2={gx} y2={gy} stroke="rgba(201, 168, 124, 0.5)" strokeWidth={1} strokeDasharray="3 3" />
+                  <circle cx={gx} cy={gy} r={5} fill="none" stroke="rgba(201, 168, 124, 0.6)" strokeWidth={1} strokeDasharray="3 2" />
                 </svg>
-                {moved && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: ox,
-                      top: oy,
-                      width: 11,
-                      height: 11,
-                      marginLeft: -5.5,
-                      marginTop: -5.5,
-                      borderRadius: '50%',
-                      border: '1px solid rgba(237, 232, 223, 0.35)',
-                      pointerEvents: 'none',
-                      zIndex: 8,
-                    }}
-                  />
-                )}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: ox,
+                    top: oy,
+                    width: 11,
+                    height: 11,
+                    marginLeft: -5.5,
+                    marginTop: -5.5,
+                    borderRadius: '50%',
+                    border: '1px solid rgba(237, 232, 223, 0.35)',
+                    pointerEvents: 'none',
+                    zIndex: 8,
+                  }}
+                />
               </>
             );
           })()}
