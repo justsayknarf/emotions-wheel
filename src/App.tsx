@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { AnimatePresence, motion } from 'framer-motion';
 import { emotions } from './data/emotions';
-import { nearestTagIds } from './data/regions';
+import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
+import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/departure';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
@@ -187,6 +189,15 @@ export default function App() {
   // Only meaningful while draftId is set; reset alongside it.
   const [expandedPinIds, setExpandedPinIds] = useState<Set<string>>(new Set());
   const previousCheckIn = derivePreviousCheckIn(entries, draftId);
+  // U4/R5, U3: resolved once here rather than in each consumer, so the
+  // field's anchor label and the card's delta sentence (U3) can't drift
+  // apart into reporting a different "how long ago" for the same check-in.
+  const previousCheckInLabel = previousCheckIn ? relativeDayLabel(previousCheckIn.timestamp, new Date()) : null;
+  // U3/R9: the draft card's own anchor tick + delta compare against this
+  // same pin — matching departureAnchor's fallback everywhere else already
+  // does, so the field ring, the departure card, and the draft card never
+  // point at three different "anchors."
+  const anchorPin = departureAnchor(previousCheckIn);
   // The most recent entry regardless of any active reopen — unlike
   // previousCheckIn, never excludes the entry currently being edited. Feeds
   // only the drawer's returning-summary (time + rhythm), which should stay
@@ -270,6 +281,14 @@ export default function App() {
     [selectedPin, tetherSuppressed, tuning.tagCount],
   );
 
+  // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
+  // pair it draws between. `play` increments only inside handlePinRelease
+  // below — never in handleAdjustPin — so later adjustments of the same
+  // pin never re-fire the connector, matching R6/LC5.
+  const [departureTracePlay, setDepartureTracePlay] = useState(0);
+  const [departureTraceFrom, setDepartureTraceFrom] = useState<{ x: number; y: number } | null>(null);
+  const [departureTraceTo, setDepartureTraceTo] = useState<{ x: number; y: number } | null>(null);
+
   const handlePinRelease = useCallback((entry: PinEntry) => {
     // Reopening is for correcting an existing check-in's pins, not growing
     // it with a new one — a fresh drop here would silently join whichever
@@ -279,6 +298,18 @@ export default function App() {
     // reaches `pins` here, so no pin ever appears on the field or the card
     // list for it.
     if (draftId !== null) return;
+    // R6: any mint while the landing state applies is a departure from the
+    // anchor — both gestures the plan describes (dragging a departure
+    // slider via handleDepart below, or pressing the field directly) end
+    // up here, so the connector fires for either one rather than only the
+    // slider gesture. Checked with the same shared predicate the card uses
+    // (isDepartureEligible), against `pins` as it stands *before* this
+    // mint — draftId is already known null from the guard above.
+    if (isDepartureEligible(false, pins.length, previousCheckIn) && anchorPin) {
+      setDepartureTraceFrom({ x: anchorPin.x, y: anchorPin.y });
+      setDepartureTraceTo({ x: entry.x, y: entry.y });
+      setDepartureTracePlay((p) => p + 1);
+    }
     // R5/R11: every new-pin drop re-expands the tray, whether it had been
     // peeked by U3's field-press gesture or by the manual toggle (R1) — a
     // fresh card should always be visible right after it lands. Selecting an
@@ -299,7 +330,29 @@ export default function App() {
     window.setTimeout(() => {
       setEnteringPinId((cur) => (cur === entry.id ? null : cur));
     }, 620);
-  }, [draftId]);
+  }, [draftId, pins.length, previousCheckIn, anchorPin]);
+
+  // U2/R1-R4: the landing card's pre-positioned sliders, released for the
+  // first time — mints a brand-new draft pin departing from the previous
+  // check-in's anchor. Builds the same shape EmotionField's own field-press
+  // drop does (handleRelease there) and hands it to handlePinRelease, which
+  // already does everything a fresh pin needs: withOrigin, select, expand
+  // the tray, scroll it into view. The anchor itself is never touched —
+  // this only ever appends to `pins`.
+  const handleDepart = useCallback((x: number, y: number) => {
+    // The departure-trace trigger now lives centrally in handlePinRelease
+    // (it fires for *either* departure gesture — this slider path or a
+    // direct field press — see its own comment), so this stays a thin
+    // wrapper building the same shape EmotionField's own field-press drop
+    // does (handleRelease there).
+    handlePinRelease({
+      id: uuidv4(),
+      x,
+      y,
+      recognizedWords: [],
+      regionDescription: getRegionDescription(x, y, emotions),
+    });
+  }, [handlePinRelease]);
 
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
@@ -549,9 +602,13 @@ export default function App() {
           hasInteracted={hasInteracted}
           axisEmphasis={showDemo || axisPulseOn}
           recordedPins={previousCheckIn?.pins ?? []}
+          previousCheckInLabel={previousCheckInLabel}
           emphasizedPinId={effectiveSelectedPinId}
           adjustDraft={adjustDraft ? { x: adjustDraft.x, y: adjustDraft.y } : null}
           onGestureActiveChange={handleFieldGestureActiveChange}
+          departureTracePlay={departureTracePlay}
+          departureTraceFrom={departureTraceFrom}
+          departureTraceTo={departureTraceTo}
         />
       </div>
 
@@ -641,6 +698,9 @@ export default function App() {
                 onDone={handleDone}
                 onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
+                onDepart={handleDepart}
+                anchor={anchorPin}
+                anchorLabel={previousCheckInLabel}
                 isReopened={draftId !== null}
                 expandedPinIds={expandedPinIds}
                 onExpandPin={handleExpandPin}

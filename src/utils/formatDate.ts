@@ -19,7 +19,12 @@ function timeOfDay(hour: number): string {
   return 'late evening';
 }
 
-function startOfDay(d: Date): number {
+// Local midnight, as a timestamp — the shared day-boundary primitive for any
+// "how many days ago" comparison. Exported so src/data/departure.ts's
+// relativeDayLabel computes the same day-delta this module's own
+// formatRelative does, rather than a second copy of the same diffing that
+// could drift (a DST edge case, an off-by-one) if only one were fixed.
+export function startOfDay(d: Date): number {
   const c = new Date(d);
   c.setHours(0, 0, 0, 0);
   return c.getTime();

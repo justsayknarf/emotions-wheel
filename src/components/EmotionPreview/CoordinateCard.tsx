@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
+import { describeDelta, hasNotableDelta } from '../../data/departure';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -55,11 +56,31 @@ interface Props {
   reopenLabel?: string;
   // Disabled while a DIFFERENT draft already holds pins — there is one
   // draft, so reopening into a non-empty one would either absorb unsaved
-  // pins into an existing record on save or destroy them on abandon
+  // pins into an existing record on save or discard them on abandon
   // (R18/R27). Not meaningful for a sibling's own expand trigger, which
   // never starts a new reopen. Rendered disabled rather than hidden, per the
   // plan's "renders disabled until the draft is recorded or discarded."
   reopenDisabled?: boolean;
+  // U2/R1-R4: the landing state for the previous check-in's anchor pin only
+  // (readOnly && showMirror, resolved by the caller) — pre-positioned,
+  // interactive sliders that mint a *new* draft pin rather than editing this
+  // one. Only meaningful alongside readOnly; ignored otherwise. LC1: Reopen
+  // relocates to a plain link below the sliders in this mode, and the
+  // header's top-right corner renders nothing — nothing button-shaped
+  // competes with the continuous control.
+  departure?: boolean;
+  // Fires once, on release of the first departure slider drag (or omitted
+  // entirely if the user reopens instead) — mints the new draft pin at the
+  // committed coordinate. Only meaningful alongside `departure`.
+  onDepart?: (x: number, y: number) => void;
+  // U3/R9: the previous check-in's anchor coordinate and its relative-day
+  // label, for the draft card's own anchor tick + plain-language delta.
+  // Only rendered on the ordinary editable body (not readOnly/departure —
+  // Reopen's flow compares against a *different*, older check-in, which is
+  // out of this unit's scope). Null/omitted when there's no previous
+  // check-in, which leaves the card exactly as it was before this unit.
+  anchor?: { x: number; y: number } | null;
+  anchorLabel?: string | null;
 }
 
 const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
@@ -78,11 +99,31 @@ const endLabelStyle = {
 // once more on release (onCommit) — the card commits on release. The origin tick
 // marks where the pin was first dropped, so travel from the felt drop is visible.
 // A gesture the user never finished (onCancel) reverts instead of committing.
+// Thumb/fill tones per accent — gold for an editable draft pin, recorded for
+// the departure card's pre-mint sliders (U2): this coordinate isn't yours
+// yet, so it borrows the same cool hue the field already uses for a
+// recorded pin (R11) rather than the warm gold every other slider gets.
+const ACCENT = {
+  gold: {
+    fill: 'rgba(201,168,124,0.12)',
+    thumb: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
+    ring: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+  },
+  recorded: {
+    fill: 'rgba(124,147,168,0.12)',
+    thumb: 'radial-gradient(circle at 40% 35%, #c3ceda, var(--ui-recorded) 62%)',
+    ring: '0 0 0 4px rgba(124,147,168,0.12), 0 2px 8px rgba(124,147,168,0.35)',
+  },
+} as const;
+
 function AxisSlider({
   labelLow,
   labelHigh,
   value,
   origin,
+  accent = 'gold',
+  anchorValue,
+  anchorLabel,
   onGrab,
   onDrag,
   onCommit,
@@ -94,6 +135,14 @@ function AxisSlider({
   labelHigh: string;
   value: number;
   origin: number;
+  accent?: 'gold' | 'recorded';
+  // U3/R9: the previous check-in's anchor value on this axis, rendered as a
+  // second tick distinct from the origin tick above — recorded-dim rather
+  // than text-3, and carrying `anchorLabel` (e.g. "TUE") so the two ticks
+  // read as different *kinds* of thing, not two of the same. Omitted when
+  // there's no previous check-in to compare against.
+  anchorValue?: number;
+  anchorLabel?: string;
   onGrab?: () => void;
   onDrag: (v: number) => void;
   onCommit: (v: number) => void;
@@ -104,6 +153,7 @@ function AxisSlider({
   opacity?: number;
   reducedMotion?: boolean;
 }) {
+  const tone = ACCENT[accent];
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
@@ -166,13 +216,43 @@ function AxisSlider({
             top: 0,
             bottom: 0,
             borderRadius: 3,
-            background: 'rgba(201,168,124,0.12)',
+            background: tone.fill,
             left: value >= 0 ? '50%' : `${p}%`,
             right: value >= 0 ? `${100 - p}%` : '50%',
           }}
         />
         {/* origin tick — where this pin was dropped */}
         <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--ui-text-3)', left: `${pct(origin)}%` }} />
+        {/* anchor tick — the previous check-in's own value on this axis
+            (U3/R9). recorded-dim + a label, deliberately not styled like the
+            plain origin tick above: two ticks that looked like the same kind
+            of mark is exactly the overload the field-side decisions (U4/U5)
+            were made to avoid. Renders even when it coincides with the
+            origin tick — nothing doubles, since the origin tick never
+            carries a label of its own. */}
+        {anchorValue !== undefined && (
+          <>
+            <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1.5, background: 'var(--ui-recorded-dim)', left: `${pct(anchorValue)}%` }} />
+            {anchorLabel && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -14,
+                  left: `${pct(anchorValue)}%`,
+                  transform: 'translateX(-50%)',
+                  fontSize: 7,
+                  fontWeight: 600,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: 'var(--ui-recorded)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {anchorLabel}
+              </span>
+            )}
+          </>
+        )}
         {/* thumb */}
         <div
           style={{
@@ -183,8 +263,8 @@ function AxisSlider({
             marginTop: -7.5,
             marginLeft: -7.5,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
-            boxShadow: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+            background: tone.thumb,
+            boxShadow: tone.ring,
             left: `${p}%`,
             touchAction: 'none',
           }}
@@ -194,7 +274,7 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, anchor = null, anchorLabel = null }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -334,11 +414,25 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     const base = draftRef.current ?? { x: pin.x, y: pin.y };
     return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
   };
-  const dragAxis = (axis: 'x' | 'y', v: number) => {
+  // The local drag-state bookkeeping shared by every axis interaction below
+  // (ordinary adjustment and departure alike) — kept in these two functions
+  // so the four call sites differ only in which external callback fires,
+  // not in how draftRef/draft/draggingAxis get set or cleared.
+  const setLiveDraft = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
     draftRef.current = next;
     setDraft(next);
     setDraggingAxis(axis);
+    return next;
+  };
+  const clearLiveDraft = () => {
+    draftRef.current = null;
+    setDraft(null);
+    setDraggingAxis(null);
+  };
+
+  const dragAxis = (axis: 'x' | 'y', v: number) => {
+    const next = setLiveDraft(axis, v);
     onAdjustDraft?.({ pinId: pin.id, ...next });
   };
   // Abandon an unfinished drag: drop the draft so the thumbs snap back to the
@@ -348,18 +442,30 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // draft is harder to reason about than a clean revert to the last committed
   // position.
   const cancelAxis = () => {
-    draftRef.current = null;
-    setDraft(null);
-    setDraggingAxis(null);
+    clearLiveDraft();
     onAdjustDraft?.(null);
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
-    draftRef.current = null;
-    setDraft(null);
-    setDraggingAxis(null);
+    clearLiveDraft();
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
+  };
+
+  // U2: departure mode's own drag/commit pair — shares the same local
+  // draft/draggingAxis bookkeeping above (so the thumb still follows the
+  // pointer smoothly) but never calls onAdjust or onAdjustDraft: `pin` here
+  // is the anchor, a recorded pin outside the draft array, and there is no
+  // draft pin yet for the field's live ghost to key on. The card's own
+  // thumb is the only live feedback until release, when onDepart mints the
+  // real pin — see App's handleDepart.
+  const dragDeparture = (axis: 'x' | 'y', v: number) => {
+    setLiveDraft(axis, v);
+  };
+  const commitDeparture = (axis: 'x' | 'y', v: number) => {
+    const next = nextFrom(axis, v);
+    clearLiveDraft();
+    onDepart?.(next.x, next.y);
   };
 
   return (
@@ -411,11 +517,18 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         >
           Emotional State
         </span>
-        {readOnly ? (
+        {readOnly && departure ? (
+          // LC1: departure mode's corner carries no control at all — Reopen
+          // lives below the sliders instead (see the departure body below).
+          // Nothing button-shaped sits next to the continuous control.
+          null
+        ) : readOnly ? (
           // The reopen/expand control (R22) — see reopenLabel above for what
-          // distinguishes the two uses. Always rendered while readOnly
-          // (never hidden); reopenDisabled only disables it, per the plan's
-          // "renders disabled until the draft is recorded or discarded."
+          // distinguishes the two uses. Rendered here for every readOnly
+          // card except departure mode (branch above, LC1 — the button
+          // relocates to a link there instead); reopenDisabled only
+          // disables it, per the plan's "renders disabled until the draft
+          // is recorded or discarded."
           <button
             onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
             disabled={reopenDisabled}
@@ -459,7 +572,69 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         )}
       </div>
 
-      {readOnly ? (
+      {readOnly && departure ? (
+        /* Departure body (U2/R1-R4): pre-positioned sliders, live and
+           interactive, in the recorded hue — touching one mints a *new*
+           draft pin (onDepart) rather than editing this one. No Save, no
+           Remove, no recognize/derecognize; the caption stays the same
+           plain relational line the ordinary read-only card shows. Reopen
+           relocates below as a plain link (LC1) — still the same
+           onReopen/reopenDisabled wiring, only its position changes. */
+        <div style={{ padding: '10px 14px 14px' }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: 'flex', flexDirection: 'column', gap: 13, marginBottom: 15 }}
+          >
+            <AxisSlider
+              labelLow="Calm"
+              labelHigh="Activated"
+              value={curX}
+              origin={pin.x}
+              accent="recorded"
+              onGrab={onSelect}
+              onDrag={(v) => dragDeparture('x', v)}
+              onCommit={(v) => commitDeparture('x', v)}
+              onCancel={cancelAxis}
+              opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
+              reducedMotion={!!reduced}
+            />
+            <AxisSlider
+              labelLow="Negative"
+              labelHigh="Positive"
+              value={curY}
+              origin={pin.y}
+              accent="recorded"
+              onGrab={onSelect}
+              onDrag={(v) => dragDeparture('y', v)}
+              onCommit={(v) => commitDeparture('y', v)}
+              onCancel={cancelAxis}
+              opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
+              reducedMotion={!!reduced}
+            />
+          </div>
+          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
+            {pin.regionDescription.relational}
+          </p>
+          <button
+            onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
+            disabled={reopenDisabled}
+            style={{
+              display: 'block',
+              marginTop: 13,
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: reopenDisabled ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
+              fontSize: 11,
+              letterSpacing: '0.01em',
+              textAlign: 'left',
+              cursor: reopenDisabled ? 'default' : 'pointer',
+            }}
+          >
+            reopen this entry instead →
+          </button>
+        </div>
+      ) : readOnly ? (
         /* Read-only body: no sliders (R5), no tap-to-recognize, and never
            expands — a recorded card is always exactly this one-line summary.
            It used to reveal a fuller caption on tap, but that caption reused
@@ -499,6 +674,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelHigh="Activated"
             value={curX}
             origin={originX}
+            anchorValue={anchor?.x}
+            anchorLabel={anchorLabel ?? undefined}
             onGrab={onSelect}
             onDrag={(v) => dragAxis('x', v)}
             onCommit={(v) => commitAxis('x', v)}
@@ -511,6 +688,8 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelHigh="Positive"
             value={curY}
             origin={originY}
+            anchorValue={anchor?.y}
+            anchorLabel={anchorLabel ?? undefined}
             onGrab={onSelect}
             onDrag={(v) => dragAxis('y', v)}
             onCommit={(v) => commitAxis('y', v)}
@@ -594,6 +773,19 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         </AnimatePresence>
         </div>
         </motion.div>
+
+        {/* Across-time delta (U3/R9) — grouped with the caption rather than
+            the "your words" summary below, since it's still describing the
+            same anchor the tick above shows. Suppressed rather than printing
+            describeDelta's neutral phrasing when the two ticks coincide —
+            that would just restate a tick position already on screen. Reads
+            from the pin's committed coordinate, not the live drag draft, so
+            it holds steady mid-drag the same way the caption's words do. */}
+        {anchor && anchorLabel && hasNotableDelta(anchor, pin) && (
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--ui-recorded)', lineHeight: 1.5 }}>
+            {describeDelta(anchor, pin, anchorLabel)}
+          </p>
+        )}
 
         {pin.recognizedWords.length > 0 && (
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
