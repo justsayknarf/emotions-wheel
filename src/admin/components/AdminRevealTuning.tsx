@@ -38,11 +38,13 @@ const CARD_KNOBS: Knob[] = [
   { key: 'captionFadeIn', label: 'Word fade in', min: 0, max: 1, step: 0.02, fmt: (v) => `${v.toFixed(2)}s` },
 ];
 
-// Departure knobs: the connector's fade in / hold / fade out on commit.
+// Departure knobs: the traveling-glow connector's motion + dissolve on commit.
 const DEPARTURE_KNOBS: Knob[] = [
-  { key: 'departureFadeIn', label: 'Fade in', min: 0, max: 2, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
-  { key: 'departureHold', label: 'Hold', min: 0, max: 4, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
-  { key: 'departureFadeOut', label: 'Fade out', min: 0, max: 5, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'departureTravel', label: 'Travel', min: 0.2, max: 2.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'departureTrail', label: 'Trail', min: 0.02, max: 0.25, step: 0.005, fmt: (v) => v.toFixed(3) },
+  { key: 'departureHold', label: 'Hold', min: 0, max: 4, step: 0.1, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'departureFadeOut', label: 'Fade out', min: 0, max: 5, step: 0.1, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'departureStrength', label: 'Strength', min: 0.3, max: 1.6, step: 0.05, fmt: (v) => `${v.toFixed(2)}×` },
 ];
 
 // Grounding-welcome knobs: the axis emphasis fade and the guiding pulse.
@@ -190,7 +192,7 @@ export function AdminRevealTuning() {
 
       {/* Departure */}
       <div style={{ ...rowStyle, borderTop: '1px solid var(--ui-border)', paddingTop: 12 }}>
-        <SectionHeader title="Departure" subtitle="connector from the anchor on commit" />
+        <SectionHeader title="Departure" subtitle="traveling glow from the anchor on commit" />
 
         {DEPARTURE_KNOBS.map(renderKnob)}
       </div>

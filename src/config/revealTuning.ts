@@ -53,14 +53,23 @@ export interface RevealTuning {
   /** The empty beat held between fade-out and fade-in — the "re-suggest" pause. */
   captionHold: number;
   /**
-   * The departure connector (U6/R6): a chevron from the previous check-in's
-   * anchor to the newly committed pin, shown once on commit then dissolved.
-   * These three tune fade in / hold / fade out (seconds) — starting points
-   * from the prototype study, not settled numbers (LC5/LC6 territory).
+   * The departure connector (U6/R6): a soft glow that travels from the
+   * previous check-in's anchor to the newly committed pin, leaving a
+   * dissipating trail, then dissolves — shown once on commit. Chosen over an
+   * arrow via a live canvas comparison (prototype:
+   * wiki/concepts/emotion-selector/prototype-departure-pulse.html), tuned
+   * live in that same comparison — not derived from first principles.
    */
-  departureFadeIn: number;
+  /** Seconds the glow takes to travel from the anchor to the pin. */
+  departureTravel: number;
+  /** Per-frame trail decay (0..1) — higher fades the streak faster/shorter. */
+  departureTrail: number;
+  /** Seconds the glow holds, steady, once it reaches the pin. */
   departureHold: number;
+  /** Seconds the remaining glow takes to dissolve after the hold. */
   departureFadeOut: number;
+  /** Glow intensity/size multiplier. */
+  departureStrength: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -81,9 +90,12 @@ export const DEFAULT_TUNING: RevealTuning = {
   captionFadeOut: 0.3,
   captionFadeIn: 0.6,
   captionHold: 0.05,
-  departureFadeIn: 0.5,
-  departureHold: 1.6,
-  departureFadeOut: 2.6,
+  // Frank's own tuning, live in the departure-pulse comparison prototype.
+  departureTravel: 0.85,
+  departureTrail: 0.050,
+  departureHold: 1.40,
+  departureFadeOut: 1.80,
+  departureStrength: 0.50,
 };
 
 const KEY = 'reveal-tuning';

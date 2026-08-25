@@ -414,9 +414,11 @@ export function EmotionField({
         to={departureTraceTo}
         size={size}
         toPx={toFieldPx}
-        fadeIn={tuning.departureFadeIn}
+        travel={tuning.departureTravel}
+        trail={tuning.departureTrail}
         hold={tuning.departureHold}
         fadeOut={tuning.departureFadeOut}
+        strength={tuning.departureStrength}
       />
 
       {/* Axis labels — brighten with emphasis. */}
