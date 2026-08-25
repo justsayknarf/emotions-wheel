@@ -91,20 +91,24 @@ function qualify(b: 'little' | 'plain' | 'much', word: string): string {
   return word;
 }
 
-// TODAY/YESTERDAY read as ordinary words inline ("than today"); every other
-// label (a weekday abbreviation or a coarse week/month/year bucket) stays
-// uppercase, read as a compact token rather than prose ("than TUE").
+// TODAY/YESTERDAY don't read as dates at all — "than earlier" / "than
+// before" — since naming the day the check-in itself happened on reads as
+// redundant. Every other label (a weekday abbreviation or a coarse
+// week/month/year bucket) stays uppercase, read as a compact token rather
+// than prose ("than TUE").
 function sentenceTail(dayLabel: string): string {
-  if (dayLabel === 'TODAY') return 'today';
-  if (dayLabel === 'YESTERDAY') return 'yesterday';
+  if (dayLabel === 'TODAY') return 'earlier';
+  if (dayLabel === 'YESTERDAY') return 'before';
   return dayLabel;
 }
 
 /**
  * The card's plain-language delta (R9) — e.g. "A little more activated and
- * much more positive than TUE." `dayLabel` is relativeDayLabel's own output,
- * passed in rather than recomputed, so the card and the field read the same
- * value. Phrasing carried from the prototype study (LC6) — cheap to revise.
+ * much more positive than TUE," or "than earlier"/"than before" when the
+ * anchor is today's/yesterday's own check-in. `dayLabel` is relativeDayLabel's
+ * own output, passed in rather than recomputed, so the card and the field
+ * read the same value. Phrasing carried from the prototype study (LC6) —
+ * cheap to revise.
  */
 export function describeDelta(
   from: { x: number; y: number },
@@ -121,7 +125,7 @@ export function describeDelta(
   if (by) parts.push(qualify(by, to.y > from.y ? 'more positive' : 'more negative'));
 
   if (parts.length === 0) {
-    const prep = tail === 'today' || tail === 'yesterday' ? '' : ' on';
+    const prep = dayLabel === 'TODAY' || dayLabel === 'YESTERDAY' ? '' : ' on';
     return `About where you were${prep} ${tail}.`;
   }
 
