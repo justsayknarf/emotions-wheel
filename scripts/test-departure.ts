@@ -160,11 +160,11 @@ const entry = (id: string, timestamp: string, pins: PinEntry[]): DiaryEntry => (
     check(`"${s}" has exactly one terminal period`, periods === 1 && s.endsWith('.'), s);
   }
 
-  // TODAY/YESTERDAY read as ordinary words, not uppercase tokens, in the tail.
+  // TODAY/YESTERDAY don't read as dates at all — "earlier"/"before".
   const today = describeDelta({ x: 0, y: 0 }, { x: 0, y: 0 }, 'TODAY');
-  check('TODAY reads as "today" in the neutral tail', today === 'About where you were today.', today);
+  check('TODAY reads as "earlier" in the neutral tail', today === 'About where you were earlier.', today);
   const yesterday = describeDelta({ x: 0.5, y: 0 }, { x: 0, y: 0 }, 'YESTERDAY');
-  check('YESTERDAY reads as "yesterday" in a qualified tail', yesterday.endsWith('than yesterday.'), yesterday);
+  check('YESTERDAY reads as "before" in a qualified tail', yesterday.endsWith('than before.'), yesterday);
 }
 
 // --- hasNotableDelta (U3) ---
