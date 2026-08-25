@@ -95,7 +95,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   departureTrail: 0.050,
   departureHold: 1.40,
   departureFadeOut: 1.80,
-  departureStrength: 0.50,
+  departureStrength: 0.40,
 };
 
 const KEY = 'reveal-tuning';
