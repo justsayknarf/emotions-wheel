@@ -7,6 +7,7 @@ import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
 import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/departure';
+import { resolveEntrySource } from './data/source';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
@@ -98,6 +99,13 @@ export default function App() {
   // clicks change the pin without a key change, so they reposition instantly.
   const [tetherKey, setTetherKey] = useState(0);
 
+  // Which surface loaded this tab (?source=new-tab vs. a direct visit) — read
+  // once at boot via a lazy initializer, same as welcomeCue below, rather than
+  // recomputed at render: the query param gets stripped from the URL right
+  // after (see the mount effect below), so re-deriving later in the session
+  // would silently fall back to 'web'.
+  const [entrySource] = useState<DiaryEntry['source']>(() => resolveEntrySource(window.location.search));
+
   // Grounding welcome: a cue shown at the start of each check-in. `nonce` lets
   // the auto-dissolve timer restart when a new check-in re-opens the welcome
   // even if it was already showing. `fast` selects the snappy exit on skip.
@@ -121,6 +129,16 @@ export default function App() {
   // session/interaction resets it in its own handler.
   useEffect(() => {
     sessionStartRef.current = Date.now();
+  }, []);
+
+  // Strip the `source` query param once entrySource has captured it — otherwise
+  // a later refresh, bookmark, or share of this same tab would keep re-resolving
+  // `source=new-tab` from the persisted query string and mistag every
+  // subsequent check-in from it indefinitely.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('source')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
   }, []);
 
   // Tear down the welcome message. `fast` picks the snappy exit (a touch skipped
@@ -471,7 +489,7 @@ export default function App() {
       // (R25's "updates its existing record" is not a new completion moment),
       // not the append path's celebration screen.
     } else {
-      const entry = record(pins, sessionStartRef.current);
+      const entry = record(pins, sessionStartRef.current, entrySource);
       // Clear the draft so the just-recorded entry becomes the previous
       // check-in through derivePreviousCheckIn (above) rather than through a
       // second stored copy — this is what keeps a second handleRecord call
@@ -484,7 +502,7 @@ export default function App() {
       setLastEntry(entry);
       setView('complete');
     }
-  }, [pins, record, updateEntry, draftId]);
+  }, [pins, record, updateEntry, draftId, entrySource]);
 
   const handleDone = useCallback(() => {
     if (pins.length > 0) handleRecord();

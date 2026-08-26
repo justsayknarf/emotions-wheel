@@ -7,12 +7,13 @@ export function useDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>(() => readDiary());
 
   const record = useCallback(
-    (pins: PinEntry[], sessionStartMs: number): DiaryEntry => {
+    (pins: PinEntry[], sessionStartMs: number, source: DiaryEntry['source']): DiaryEntry => {
       const entry: DiaryEntry = {
         id: uuidv4(),
         timestamp: new Date().toISOString(),
         pins,
         sessionDurationMs: Date.now() - sessionStartMs,
+        source,
       };
       appendEntry(entry);
       setEntries(readDiary());
