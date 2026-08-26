@@ -23,7 +23,11 @@ import type { DiaryEntry, PinEntry } from '../types';
 // the edit took. Together this means a caller re-saving a reopened check-in
 // (App.tsx's handleRecord) never needs to look up or compute a "correct"
 // timestamp or duration — it can pass placeholders for both, since this
-// function discards them in favor of the original.
+// function discards them in favor of the original. `source` (which surface
+// produced the check-in) is preserved the same way: a correction doesn't
+// change which surface originally recorded the entry, and App.tsx's
+// correction-path `updated` object never sets it — without this it would
+// silently revert to absent on every correction.
 //
 // A missing id is a no-op — the same entries are returned unchanged rather
 // than `updated` being appended. An update for an entry that was pruned must
@@ -34,7 +38,12 @@ export function updateEntryInList(entries: DiaryEntry[], updated: DiaryEntry): D
 
   const original = entries[index];
   const next = [...entries];
-  next[index] = { ...updated, timestamp: original.timestamp, sessionDurationMs: original.sessionDurationMs };
+  next[index] = {
+    ...updated,
+    timestamp: original.timestamp,
+    sessionDurationMs: original.sessionDurationMs,
+    source: original.source,
+  };
   return next;
 }
 

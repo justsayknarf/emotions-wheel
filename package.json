@@ -14,6 +14,7 @@
     "check:pin": "npx tsx scripts/test-pin-adjust.ts",
     "check:checkin": "npx tsx scripts/test-check-in.ts",
     "check:departure": "npx tsx scripts/test-departure.ts",
+    "check:source": "npx tsx scripts/test-source.ts",
     "preview": "vite preview"
   },
   "dependencies": {

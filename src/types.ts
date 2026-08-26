@@ -33,4 +33,8 @@ export interface DiaryEntry {
   timestamp: string;       // ISO 8601
   pins: PinEntry[];
   sessionDurationMs: number;
+  // Which surface produced this check-in. Optional so entries written before
+  // the new-tab entry point stay valid; an absent value is treated as 'web'
+  // wherever it's read (see src/data/source.ts).
+  source?: 'web' | 'new-tab';
 }
