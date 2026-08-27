@@ -488,6 +488,21 @@ export function EmotionDrawer({
   const visibleDraftPins = dragShrinkActive
     ? reversedPins.filter((pin) => pin.id === draggingPinId)
     : reversedPins;
+  // Review fix (P1, anchor-tick leak): `anchor` is departureAnchor's
+  // synthetic (0, 0) neutral pin (src/data/departure.ts) whenever there's no
+  // real previousCheckIn — that pin exists only to feed the
+  // neutralDepartureEligible departure card below (which reads `anchor`
+  // directly, unfiltered). An ordinary draft card below must never receive
+  // it as its comparison anchor: CoordinateCard/AxisSlider render the anchor
+  // tick whenever `anchorValue !== undefined`, with no dependency on
+  // anchorLabel, so the synthetic pin's always-defined (0, 0) coordinate was
+  // drawing an unlabeled tick on every axis of every draft card for any
+  // first-time user (mobile and new-tab included, not just this desktop
+  // landing). `previousCheckIn` truthiness is the same condition
+  // departureAnchor itself branches on to decide real-vs-synthetic, so it's
+  // the correct signal here too, with no new prop needed.
+  const realAnchor = previousCheckIn ? anchor : null;
+
   const draftCards = (
     <AnimatePresence initial={false}>
       {visibleDraftPins.map((pin) => (
@@ -511,7 +526,7 @@ export function EmotionDrawer({
             onAdjust={onAdjust}
             onAdjustDraft={onAdjustDraft}
             dissolve={dissolve}
-            anchor={anchor}
+            anchor={realAnchor}
             anchorLabel={anchorLabel}
           />
         </motion.div>
@@ -840,7 +855,16 @@ export function EmotionDrawer({
         // isReopened case above). Explicit 'auto' lets `top`/`bottom` (in
         // `style` below) govern the height again, as they always did
         // before the sheet's animated height existed.
-        animate={{ x: 0, height: 'auto' }}
+        //
+        // Review fix (P1, scale leak): `scale`/`opacity` are set explicitly
+        // here for the same reason `height: 'auto'` is above — the 'focus'
+        // branch's own `animate` (below) interpolates `scale` down toward
+        // ~0.92 during its recede state and always targets `opacity: 1`;
+        // omitting either key here left framer's last-applied inline value
+        // in place on this reused DOM node, freezing the rail permanently
+        // shrunk at whatever scale the focus card last animated to when a
+        // drag-commit/field-press/breakpoint resize swapped 'focus' -> 'rail'.
+        animate={{ x: 0, height: 'auto', scale: 1, opacity: 1 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
         style={{
@@ -1043,6 +1067,14 @@ export function EmotionDrawer({
         // freeze the container at that stale pixel value instead of
         // sizing to the static `maxHeight: '46vh'` below.
         height: isReopened ? 'auto' : sheetHeight ?? (sheetBodyVisible ? undefined : PEEK_BAR_HEIGHT),
+        // Review fix (P1, scale leak): same reasoning as `height` just
+        // above, and as the 'rail' branch's own `animate` — the 'focus'
+        // branch interpolates `scale` toward ~0.92 and always targets
+        // `opacity: 1`; setting both explicitly here keeps a
+        // 'focus' -> 'sheet' swap (a breakpoint-crossing resize mid-landing)
+        // from freezing this tray at focus's last-animated scale.
+        scale: 1,
+        opacity: 1,
       }}
       exit={{ y: '100%' }}
       transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
