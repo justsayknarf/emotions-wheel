@@ -478,6 +478,45 @@ export default function App() {
   // transition completes") — clearing it immediately would swap
   // EmotionDrawer to 'rail' before the card and field had visually arrived,
   // a jump rather than a landing.
+  // U5/review-fix: shared clear-then-schedule helper for the settle timeout
+  // both U3's committed-drag branch and U4's press branch below need to
+  // arm. Both write into the SAME landingSettleTimeoutRef, so scheduling a
+  // new one without first clearing whatever the ref already holds would
+  // orphan an earlier still-pending timer: it would keep counting down,
+  // but the U5 breakpoint-reconciliation effect's cleanup can only ever
+  // clear whatever the ref CURRENTLY holds, so it would lose the ability
+  // to cancel the earlier timer once a later call overwrote the ref. A
+  // reachable sequence — committing a departure drag (arms timer A), then
+  // pressing the still-interactive receded field before timer A fires
+  // (arms timer B, overwriting the ref) — would otherwise leave timer A
+  // free to fire mid-flight and force-clear desktopLandingActive before
+  // the second gesture's own settle transition has visually finished, a
+  // jump instead of a smooth landing. Clearing first makes each new call
+  // fully supersede whatever settle was previously pending.
+  //
+  // tuning.fieldRecedeDuration is read once here, at the moment a settle
+  // is scheduled, into a local const rather than referenced again inside
+  // the timeout callback — useRevealTuning is reactive within the same
+  // tab (a same-tab CustomEvent triggers a re-render immediately when the
+  // admin panel saves new tuning values), so a callback that closed over
+  // the live tuning value would let the imperative timer's own delay
+  // drift from the duration it was scheduled against if someone changed
+  // the tuning mid-settle. This only pins the setTimeout's own delay; the
+  // CSS transition strings that are supposed to visually complete in the
+  // same window (this file's field wrapper below, and EmotionDrawer's
+  // focus card) are left reading tuning.fieldRecedeDuration live on every
+  // render, as they already did — out of scope here.
+  const scheduleLandingSettle = useCallback(() => {
+    if (landingSettleTimeoutRef.current !== null) {
+      window.clearTimeout(landingSettleTimeoutRef.current);
+    }
+    const settleDurationMs = tuning.fieldRecedeDuration * 1000;
+    landingSettleTimeoutRef.current = window.setTimeout(() => {
+      landingSettleTimeoutRef.current = null;
+      setDesktopLandingActive(false);
+    }, settleDurationMs);
+  }, [tuning.fieldRecedeDuration]);
+
   const handleDepartureDragProgress = useCallback((progress: number, phase: 'drag' | 'commit' | 'cancel') => {
     if (phase === 'drag') {
       setDesktopFocusLive(true);
@@ -488,16 +527,14 @@ export default function App() {
     const committed = isDepartureDragCommitted(progress, tuning.focusDragCommitThreshold);
     setDesktopFocusProgress(committed ? 1 : 0);
     if (committed) {
-      // U5: tracked in landingSettleTimeoutRef so a breakpoint-crossing
-      // resize inside this window can cancel it (see the reconciliation
-      // effect below) rather than letting it fire later against a landing
-      // state a resize has already resolved on its own.
-      landingSettleTimeoutRef.current = window.setTimeout(() => {
-        landingSettleTimeoutRef.current = null;
-        setDesktopLandingActive(false);
-      }, tuning.fieldRecedeDuration * 1000);
+      // U5: tracked in landingSettleTimeoutRef (via scheduleLandingSettle)
+      // so a breakpoint-crossing resize inside this window can cancel it
+      // (see the reconciliation effect below) rather than letting it fire
+      // later against a landing state a resize has already resolved on
+      // its own.
+      scheduleLandingSettle();
     }
-  }, [tuning.focusDragCommitThreshold, tuning.fieldRecedeDuration]);
+  }, [tuning.focusDragCommitThreshold, scheduleLandingSettle]);
 
   // U4 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // press-triggered discrete transition, R8): wraps handlePinRelease for
@@ -532,13 +569,11 @@ export default function App() {
     if (desktopLandingActive) {
       setDesktopFocusLive(false);
       setDesktopFocusProgress(1);
-      // U5: same tracked-timeout treatment as U3's commit branch above.
-      landingSettleTimeoutRef.current = window.setTimeout(() => {
-        landingSettleTimeoutRef.current = null;
-        setDesktopLandingActive(false);
-      }, tuning.fieldRecedeDuration * 1000);
+      // U5: same tracked-timeout treatment as U3's commit branch above,
+      // via the same scheduleLandingSettle helper.
+      scheduleLandingSettle();
     }
-  }, [handlePinRelease, desktopLandingActive, tuning.fieldRecedeDuration]);
+  }, [handlePinRelease, desktopLandingActive, scheduleLandingSettle]);
 
   // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // breakpoint and interruption resilience): resolves the landing state
