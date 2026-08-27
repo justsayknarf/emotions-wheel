@@ -6,7 +6,7 @@ import { emotions } from './data/emotions';
 import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
-import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/departure';
+import { relativeDayLabel, departureAnchor, isDepartureEligible, isDepartureDragCommitted } from './data/departure';
 import { resolveEntrySource } from './data/source';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
@@ -141,11 +141,12 @@ export default function App() {
   // shipped. Being one-shot-at-mount, rather than derived, is what keeps
   // completing the very first check-in mid-session from re-triggering the
   // landing for the entry just recorded — `previousCheckIn` changing
-  // afterward has no effect on this flag. No setter yet, matching
-  // `entrySource` above: U3-U5 add the ways to *clear* it (drag past the
-  // commit threshold, a direct field press, a breakpoint crossing out of
-  // desktop) — this unit only establishes the one-shot mount value.
-  const [desktopLandingActive] = useState(() => sideBySide && entrySource !== 'new-tab');
+  // afterward has no effect on this flag. U3 adds the setter: the drag
+  // transition (handleDepartureDragProgress below) clears it once a
+  // committed drag's settle transition has had time to finish; U4/U5 will
+  // add the remaining ways to clear it (a direct field press, a breakpoint
+  // crossing out of desktop).
+  const [desktopLandingActive, setDesktopLandingActive] = useState(() => sideBySide && entrySource !== 'new-tab');
 
   // U2: which variant EmotionDrawer renders — 'focus' while the landing flag
   // above is active, else the ordinary sideBySide-driven 'rail'/'sheet' split
@@ -156,13 +157,39 @@ export default function App() {
       ? 'rail'
       : 'sheet';
 
+  // U3 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
+  // drag-triggered progressive transition): how far a departure-card slider
+  // drag has progressed toward focused/rail (0 = still fully receded/
+  // centered — the landing's resting state — 1 = focused/rail). The single
+  // value that drives BOTH recedeProgress below and the focus card's own
+  // position/size (EmotionDrawer's `cardFocusProgress` prop) in lockstep,
+  // per R7. Driven two ways by handleDepartureDragProgress below: a live
+  // 'drag' phase call sets it directly, every frame, with no easing
+  // (desktopFocusLive true suppresses the CSS transition wherever this
+  // value is applied); a 'commit'/'cancel' phase call settles it to a fixed
+  // target (0 or 1) once the commit-threshold decision is made, and re-
+  // enables the CSS transition so the *visible* change eases there — this
+  // state itself never animates, only its consumers' CSS does (matching the
+  // field wrapper's own transition-toggle pattern from U1).
+  const [desktopFocusProgress, setDesktopFocusProgress] = useState(0);
+  // Whether a departure drag is being actively live-tracked right now — see
+  // desktopFocusProgress above. Read by the field wrapper's own transition
+  // string below and passed straight through to EmotionDrawer as
+  // `cardFocusLive`, so both consumers toggle their CSS transition off in
+  // lockstep during a drag and back on together once it settles.
+  const [desktopFocusLive, setDesktopFocusLive] = useState(false);
+
   // U1: how far the field is receded behind the front-and-center card (0 =
-  // focused/today's rail, 1 = fully receded). U2 wires this to the landing
-  // flag as a binary placeholder — fully receded for the whole time the
-  // landing is active, focused otherwise; U3/U4 replace this with the real
-  // continuous drag-progress / fixed-duration press transition, and U5 adds
-  // breakpoint-interruption handling.
-  const recedeProgress = desktopLandingActive ? 1 : 0;
+  // focused/today's rail, 1 = fully receded). U3 replaces U2's binary
+  // placeholder (`desktopLandingActive ? 1 : 0`) with the continuous
+  // drag-progress mapping — still 1 at the landing's resting state (progress
+  // 0), easing toward 0 as a departure drag advances. Collapses to 0
+  // outright once desktopLandingActive itself clears (a committed drag's
+  // settle transition has finished) — the recede mechanism has nothing left
+  // to apply once EmotionDrawer has swapped to 'rail' for real. U4/U5 add
+  // the remaining triggers (a direct field press's fixed-duration
+  // transition, breakpoint-interruption handling).
+  const recedeProgress = desktopLandingActive ? 1 - desktopFocusProgress : 0;
 
   // Seed the session clock on mount (kept out of render to stay pure); each new
   // session/interaction resets it in its own handler.
@@ -414,6 +441,38 @@ export default function App() {
     });
   }, [handlePinRelease]);
 
+  // U3 (drag-triggered progressive transition): fired continuously during a
+  // departure-card slider drag (phase 'drag') and once more on release or
+  // cancel (phase 'commit'/'cancel') by CoordinateCard's dragDeparture/
+  // commitDeparture/cancelDeparture, threaded through EmotionDrawer — new
+  // plumbing, not adjustDraft/draggingPinId (Key Technical Decisions: this
+  // drag branch never calls onAdjustDraft, so those never fire for it).
+  // 'drag' just mirrors the live value straight into desktopFocusProgress
+  // with no easing (desktopFocusLive true disables the CSS transition
+  // wherever it's consumed); 'commit'/'cancel' compare the reported
+  // progress — already the gesture's PEAK for a cancel (see
+  // CoordinateCard's cancelDeparture) or the final released value for a
+  // commit — against the tunable threshold and settle to the corresponding
+  // target, letting the now-re-enabled CSS transition ease there.
+  // desktopLandingActive only clears on a genuine commit, and only after
+  // giving that settle transition time to actually finish (R9: "once the
+  // transition completes") — clearing it immediately would swap
+  // EmotionDrawer to 'rail' before the card and field had visually arrived,
+  // a jump rather than a landing.
+  const handleDepartureDragProgress = useCallback((progress: number, phase: 'drag' | 'commit' | 'cancel') => {
+    if (phase === 'drag') {
+      setDesktopFocusLive(true);
+      setDesktopFocusProgress(progress);
+      return;
+    }
+    setDesktopFocusLive(false);
+    const committed = isDepartureDragCommitted(progress, tuning.focusDragCommitThreshold);
+    setDesktopFocusProgress(committed ? 1 : 0);
+    if (committed) {
+      window.setTimeout(() => setDesktopLandingActive(false), tuning.fieldRecedeDuration * 1000);
+    }
+  }, [tuning.focusDragCommitThreshold, tuning.fieldRecedeDuration]);
+
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
   // derives activeCheckIn from the id on its own (R15): the id belongs to a
@@ -655,7 +714,14 @@ export default function App() {
           // for the same reason: layering a per-key transition override on
           // top of a separate spring animate didn't take reliably). Reduced
           // motion collapses straight to the target value instead of easing.
-          transition: reducedMotion
+          // U3: also 'none' while desktopFocusLive (a departure drag is
+          // actively being live-tracked) — recedeProgress is changing every
+          // frame in that state, and a CSS transition would add lag behind
+          // the pointer instead of tracking it directly; re-enabled the
+          // instant the drag settles (release/cancel), which is exactly
+          // when a transition should ease the value to its threshold
+          // outcome.
+          transition: reducedMotion || desktopFocusLive
             ? 'none'
             : `transform ${tuning.fieldRecedeDuration}s ease-out, filter ${tuning.fieldRecedeDuration}s ease-out`,
         }}
@@ -793,6 +859,9 @@ export default function App() {
                 onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
                 onDepart={handleDepart}
+                onDepartureDragProgress={handleDepartureDragProgress}
+                cardFocusProgress={desktopFocusProgress}
+                cardFocusLive={desktopFocusLive}
                 anchor={anchorPin}
                 anchorLabel={previousCheckInLabel}
                 isReopened={draftId !== null}

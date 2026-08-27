@@ -10,7 +10,15 @@
 // null) — see the "departureAnchor: neutral-anchor synthetic pin" block
 // below. This repo has no test runner, so this is the only automated
 // exercise of the logic. Exits non-zero on any violation.
-import { departureAnchor, relativeDayLabel, describeDelta, isDepartureEligible, hasNotableDelta } from '../src/data/departure';
+import {
+  departureAnchor,
+  relativeDayLabel,
+  describeDelta,
+  isDepartureEligible,
+  hasNotableDelta,
+  departureDragProgress,
+  isDepartureDragCommitted,
+} from '../src/data/departure';
 import { emotions } from '../src/data/emotions';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
@@ -253,6 +261,70 @@ const entry = (id: string, timestamp: string, pins: PinEntry[]): DiaryEntry => (
     'mid-reopen: not eligible even with an empty draft and a previous check-in',
     isDepartureEligible(true, 0, prev) === false,
     String(isDepartureEligible(true, 0, prev)),
+  );
+}
+
+// --- departureDragProgress (U3: drag-triggered progressive transition,
+// docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md) ---
+{
+  check(
+    'no travel from the origin: progress 0',
+    departureDragProgress(0, 0, 1) === 0,
+    String(departureDragProgress(0, 0, 1)),
+  );
+  check(
+    'travel equal to fullTravel: progress 1',
+    departureDragProgress(0, 1, 1) === 1,
+    String(departureDragProgress(0, 1, 1)),
+  );
+  check(
+    'travel in the opposite direction is treated the same (absolute distance)',
+    departureDragProgress(0, -1, 1) === 1,
+    String(departureDragProgress(0, -1, 1)),
+  );
+  check(
+    'half the fullTravel: progress 0.5',
+    departureDragProgress(0, 0.5, 1) === 0.5,
+    String(departureDragProgress(0, 0.5, 1)),
+  );
+  check(
+    'travel from a non-zero origin measures distance from THAT origin, not from 0',
+    departureDragProgress(0.6, 0.6, 1) === 0 && departureDragProgress(0.6, 0.1, 1) === 0.5,
+    `${departureDragProgress(0.6, 0.6, 1)} / ${departureDragProgress(0.6, 0.1, 1)}`,
+  );
+  check(
+    'overshooting fullTravel clamps to 1, never exceeds it',
+    departureDragProgress(0, 1, 0.4) === 1,
+    String(departureDragProgress(0, 1, 0.4)),
+  );
+  check(
+    'a non-positive fullTravel does not throw or return NaN/Infinity — any real movement is full progress',
+    departureDragProgress(0, 0.01, 0) === 1 && Number.isFinite(departureDragProgress(0, 0.01, 0)),
+    String(departureDragProgress(0, 0.01, 0)),
+  );
+}
+
+// --- isDepartureDragCommitted (U3) ---
+{
+  check(
+    'progress exactly at the threshold: committed',
+    isDepartureDragCommitted(0.5, 0.5) === true,
+    String(isDepartureDragCommitted(0.5, 0.5)),
+  );
+  check(
+    'progress just below the threshold: not committed',
+    isDepartureDragCommitted(0.49, 0.5) === false,
+    String(isDepartureDragCommitted(0.49, 0.5)),
+  );
+  check(
+    'progress well past the threshold: committed',
+    isDepartureDragCommitted(1, 0.5) === true,
+    String(isDepartureDragCommitted(1, 0.5)),
+  );
+  check(
+    'zero progress against a zero threshold: committed (an edge case, not expected live — a threshold this low would commit at drag start)',
+    isDepartureDragCommitted(0, 0) === true,
+    String(isDepartureDragCommitted(0, 0)),
   );
 }
 

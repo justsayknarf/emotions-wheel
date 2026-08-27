@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
-import { describeDelta, hasNotableDelta } from '../../data/departure';
+import { describeDelta, hasNotableDelta, departureDragProgress } from '../../data/departure';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -21,6 +21,20 @@ const CARD_DRAG_BORDER = 'none';
 // Non-active content (header, the sibling axis slider, caption/tags) fades
 // to this opacity — the axis actually being dragged stays at 1.
 const CARD_DRAG_CONTENT_OPACITY = 0.3;
+
+// U3 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
+// drag-triggered progressive transition): how far (in this card's own
+// -1..1 coordinate space — the same one `pct()`/the departure tick's
+// `origin` prop already use) a departure slider must travel from the
+// anchor's own value on that axis before the drag-progress signal below
+// (departureDragProgress) reports 1. Deliberately a fixed fraction of the
+// track's range, not its full -2..2 end-to-end span — requiring the whole
+// track's length to reach full progress would make the transition feel
+// unreachable for an ordinary drag gesture. Not itself a tunable knob
+// (unlike the commit-threshold *decision* made against this progress in
+// App.tsx, RevealTuning's focusDragCommitThreshold) — this is a geometric
+// constant of the drag gesture, not a feel/timing knob.
+const DEPARTURE_DRAG_TRAVEL = 1;
 
 interface Props {
   pin: PinEntry;
@@ -73,6 +87,19 @@ interface Props {
   // entirely if the user reopens instead) — mints the new draft pin at the
   // committed coordinate. Only meaningful alongside `departure`.
   onDepart?: (x: number, y: number) => void;
+  // U3 (drag-triggered progressive transition): a NEW drag-progress signal
+  // out of this same departure gesture — distinct from onAdjustDraft/
+  // onAdjust, which this branch never calls (see the plan's Key Technical
+  // Decisions: dragDeparture/commitDeparture only ever call onDepart, on
+  // release). Fired continuously during the drag ('drag', one call per
+  // frame) and once more on release or cancel ('commit'/'cancel') — a
+  // cancel reports the PEAK progress reached during the gesture, not
+  // wherever the thumb happened to end up when the browser took it away
+  // (see cancelDeparture below). Only meaningful alongside `departure`; the
+  // caller (EmotionDrawer) only wires this while its own variant is
+  // 'focus' — the rail's departure card isn't receded and has nothing to
+  // progress toward.
+  onDepartureDragProgress?: (progress: number, phase: 'drag' | 'commit' | 'cancel') => void;
   // U3/R9: the previous check-in's anchor coordinate and its relative-day
   // label, for the draft card's own anchor tick + plain-language delta.
   // Only rendered on the ordinary editable body (not readOnly/departure —
@@ -274,7 +301,7 @@ function AxisSlider({
   );
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, anchor = null, anchorLabel = null }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, onDepartureDragProgress, anchor = null, anchorLabel = null }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -459,13 +486,52 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // draft pin yet for the field's live ghost to key on. The card's own
   // thumb is the only live feedback until release, when onDepart mints the
   // real pin — see App's handleDepart.
+  //
+  // U3: also reports drag progress (onDepartureDragProgress) alongside that
+  // existing behavior — unrelated to onAdjustDraft, purely additive.
+  // `departureGestureActiveRef`/`maxDepartureProgressRef` are refs rather
+  // than state: they only need to be correct *within* this same drag
+  // gesture's synchronous pointer-event callbacks, and a ref sidesteps any
+  // question of whether a `draggingAxis` state read here reflects the prior
+  // event's committed render (React's batching) or not.
+  const departureGestureActiveRef = useRef(false);
+  const maxDepartureProgressRef = useRef(0);
   const dragDeparture = (axis: 'x' | 'y', v: number) => {
+    const origin = axis === 'x' ? pin.x : pin.y;
+    const progress = departureDragProgress(origin, v, DEPARTURE_DRAG_TRAVEL);
     setLiveDraft(axis, v);
+    if (!departureGestureActiveRef.current) {
+      departureGestureActiveRef.current = true;
+      maxDepartureProgressRef.current = progress;
+    } else {
+      maxDepartureProgressRef.current = Math.max(maxDepartureProgressRef.current, progress);
+    }
+    onDepartureDragProgress?.(progress, 'drag');
   };
   const commitDeparture = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
+    const origin = axis === 'x' ? pin.x : pin.y;
+    const progress = departureDragProgress(origin, v, DEPARTURE_DRAG_TRAVEL);
     clearLiveDraft();
     onDepart?.(next.x, next.y);
+    onDepartureDragProgress?.(progress, 'commit');
+    departureGestureActiveRef.current = false;
+    maxDepartureProgressRef.current = 0;
+  };
+  // Departure-only cancel — distinct from the shared `cancelAxis` the
+  // ordinary adjust sliders use (onCancel below is wired separately per
+  // slider). Reports the PEAK progress reached during this drag, not
+  // wherever the thumb ended up when the browser yanked the gesture away: a
+  // drag that already crossed the commit threshold and was then cancelled
+  // must still complete to focused/rail (Key Technical Decisions), which
+  // reading only the final, possibly-reverted position would silently
+  // undo.
+  const cancelDeparture = () => {
+    const progress = maxDepartureProgressRef.current;
+    clearLiveDraft();
+    onDepartureDragProgress?.(progress, 'cancel');
+    departureGestureActiveRef.current = false;
+    maxDepartureProgressRef.current = 0;
   };
 
   return (
@@ -594,7 +660,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
               onGrab={onSelect}
               onDrag={(v) => dragDeparture('x', v)}
               onCommit={(v) => commitDeparture('x', v)}
-              onCancel={cancelAxis}
+              onCancel={cancelDeparture}
               opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
               reducedMotion={!!reduced}
             />
@@ -607,7 +673,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
               onGrab={onSelect}
               onDrag={(v) => dragDeparture('y', v)}
               onCommit={(v) => commitDeparture('y', v)}
-              onCancel={cancelAxis}
+              onCancel={cancelDeparture}
               opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
               reducedMotion={!!reduced}
             />

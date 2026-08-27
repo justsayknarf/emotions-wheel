@@ -101,6 +101,42 @@ export function hasNotableDelta(from: { x: number; y: number }, to: { x: number;
   return Math.abs(to.x - from.x) >= NAME_THRESHOLD || Math.abs(to.y - from.y) >= NAME_THRESHOLD;
 }
 
+/**
+ * U3 (drag-triggered progressive transition,
+ * docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): how far a
+ * departure-card slider has traveled from the anchor's own value on one axis
+ * (`origin` — the same value the departure card's tick mark already draws
+ * at, `origin={pin.x}`/`origin={pin.y}` in CoordinateCard.tsx), normalized
+ * to 0..1 against `fullTravel`. `fullTravel` is deliberately a fixed
+ * fraction of the full -1..1 track (CoordinateCard's own
+ * `DEPARTURE_DRAG_TRAVEL`, currently 1) rather than the track's own full
+ * end-to-end span — requiring the whole track's length to reach full
+ * progress would make the transition feel unreachable for an ordinary drag.
+ * Shared by CoordinateCard's dragDeparture/commitDeparture (the live,
+ * per-frame value reported every drag frame) and cancelDeparture (which
+ * reports the PEAK of this same function reached across the gesture, not
+ * just wherever the thumb ended up when the browser cancelled it — see its
+ * own comment). Pure so it's exercised directly here rather than only live
+ * in a drag; this repo has no test runner beyond these scripts.
+ */
+export function departureDragProgress(origin: number, current: number, fullTravel: number): number {
+  if (fullTravel <= 0) return current === origin ? 0 : 1;
+  return Math.max(0, Math.min(1, Math.abs(current - origin) / fullTravel));
+}
+
+/**
+ * U3: the drag-commit decision — at or above `commitThreshold`
+ * (RevealTuning's `focusDragCommitThreshold`), the desktop landing's
+ * transition completes to focused/rail; below it, it eases back to
+ * receded/centered. Shared by every settle path App.tsx's
+ * handleDepartureDragProgress runs (an ordinary release, and a cancel
+ * reporting its ratcheted peak progress) so that comparison lives in one
+ * tested place rather than repeated per call site.
+ */
+export function isDepartureDragCommitted(progress: number, commitThreshold: number): boolean {
+  return progress >= commitThreshold;
+}
+
 function band(delta: number): 'little' | 'plain' | 'much' | null {
   const a = Math.abs(delta);
   if (a < NAME_THRESHOLD) return null;

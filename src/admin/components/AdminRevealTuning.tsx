@@ -59,11 +59,15 @@ const WELCOME_KNOBS: Knob[] = [
 // U1 (desktop check-in focus): the field's whole-container recede treatment —
 // scale + blur applied to the field's wrapper, driven by `recedeProgress`
 // (0-1, wired up by later units). These tune its target scale/blur and base
-// ease duration; recedeProgress's own value is not itself a knob here.
+// ease duration; recedeProgress's own value is not itself a knob here. U3
+// adds `focusDragCommitThreshold`: the same family (it governs the same
+// recede/focus transition), but tunes the drag-commit *decision* rather than
+// the transform itself.
 const RECEDE_KNOBS: Knob[] = [
   { key: 'fieldRecedeScale', label: 'Recede scale', min: 0.5, max: 1, step: 0.01, fmt: (v) => `${v.toFixed(2)}×` },
   { key: 'fieldRecedeBlur', label: 'Recede blur', min: 0, max: 20, step: 0.5, fmt: (v) => `${v}px` },
   { key: 'fieldRecedeDuration', label: 'Recede duration', min: 0.1, max: 1.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'focusDragCommitThreshold', label: 'Drag commit', min: 0.1, max: 0.9, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
 ];
 
 const labelStyle: React.CSSProperties = {

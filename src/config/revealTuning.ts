@@ -85,6 +85,16 @@ export interface RevealTuning {
   fieldRecedeBlur: number;
   /** Seconds for the base recede/return transition to ease. */
   fieldRecedeDuration: number;
+  /**
+   * U3 (desktop check-in focus, drag-triggered progressive transition): the
+   * drag-progress fraction (0-1, see `departureDragProgress` in
+   * src/data/departure.ts) a front-and-center card's slider drag must reach
+   * before release/cancel settles the transition forward to focused/rail
+   * rather than back to receded/centered. Distinct from the `fieldRecede*`
+   * knobs above, which tune the recede treatment's own scale/blur/duration —
+   * this only tunes the commit/revert decision itself.
+   */
+  focusDragCommitThreshold: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -114,6 +124,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   fieldRecedeScale: 0.92,
   fieldRecedeBlur: 6,
   fieldRecedeDuration: 0.5,
+  focusDragCommitThreshold: 0.5,
 };
 
 const KEY = 'reveal-tuning';

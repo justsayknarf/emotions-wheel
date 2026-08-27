@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
 import { isDepartureEligible } from '../../data/departure';
+import { useRevealTuning } from '../../config/revealTuning';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
 import { formatRelative } from '../../utils/formatDate';
 import type { DiaryEntry, PinEntry } from '../../types';
@@ -88,6 +89,27 @@ interface Props {
   // (its newest pin) — fired by that one card's pre-positioned sliders when
   // the draft is empty. Never touches the anchor itself (R2/R3).
   onDepart: (x: number, y: number) => void;
+  // U3 (drag-triggered progressive transition,
+  // docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): the
+  // departure card's own drag-progress signal (CoordinateCard's
+  // dragDeparture/commitDeparture/cancelDeparture), threaded straight
+  // through to App.tsx. Only ever wired to the departure card while
+  // `isFocus` (see cardList below) — the rail's own departure card isn't
+  // receded and has nothing to progress toward, so it's left undefined
+  // there, same as the mobile sheet.
+  onDepartureDragProgress?: (progress: number, phase: 'drag' | 'commit' | 'cancel') => void;
+  // U3: the same 0-1 drag-progress value that drives App's recedeProgress —
+  // threaded down so the 'focus' variant's own position/size interpolates
+  // in lockstep with the field's recede (R7). Ignored by 'rail'/'sheet'
+  // (neither is receded); defaults to 0 (resting/centered) so those callers
+  // don't need to pass it.
+  cardFocusProgress?: number;
+  // U3: whether that same drag is being actively live-tracked right now.
+  // true disables the CSS transition on the 'focus' variant's interpolated
+  // style below, so it tracks the pointer with no easing lag; false (the
+  // default) is the resting/settling state — mirrors App.tsx's
+  // `desktopFocusLive`, which this should always be passed in lockstep with.
+  cardFocusLive?: boolean;
   // U3/R9: the same anchor coordinate + relative-day label, resolved once
   // in App (departureAnchor/relativeDayLabel) and threaded into each
   // *draft* card's own anchor tick + delta — not the previous check-in's
@@ -145,6 +167,9 @@ export function EmotionDrawer({
   onClear,
   onReopen,
   onDepart,
+  onDepartureDragProgress,
+  cardFocusProgress = 0,
+  cardFocusLive = false,
   anchor,
   anchorLabel,
   isReopened,
@@ -172,6 +197,13 @@ export function EmotionDrawer({
   const isSheet = !isRail && !isFocus;
   const isPanelLayout = !isSheet;
   const reduce = useReducedMotion();
+  // U3: only consulted by the 'focus' return branch below (its
+  // fieldRecedeDuration keeps the card's own settle transition in sync with
+  // the field's — see that branch's own comment) — reading it
+  // unconditionally here, rather than only within `if (isFocus)`, keeps
+  // this a plain hook call rather than one gated behind a runtime
+  // condition, which hook-order rules require anyway.
+  const tuning = useRevealTuning();
   // U2: on mount as 'focus', move focus onto the card's own root so the next
   // Tab press lands on the card's first focusable descendant (the departure
   // card's Reopen link, or the draft actionBar's Discard/Save once a pin is
@@ -723,6 +755,9 @@ export function EmotionDrawer({
                 reopenDisabled
                 departure
                 onDepart={onDepart}
+                // U3: only the focus card is receded/has anything to
+                // progress toward — see the prop's own doc comment.
+                onDepartureDragProgress={isFocus ? onDepartureDragProgress : undefined}
               />
             </motion.div>
           )}
@@ -762,6 +797,9 @@ export function EmotionDrawer({
                     // draft, stays the plain read-only summary above.
                     departure={departureEligible && pin.id === anchorPinId}
                     onDepart={onDepart}
+                    // U3: only the focus card is receded/has anything to
+                    // progress toward — see the prop's own doc comment.
+                    onDepartureDragProgress={isFocus ? onDepartureDragProgress : undefined}
                   />
                 </motion.div>
               ))}
@@ -828,36 +866,73 @@ export function EmotionDrawer({
   // the desktop landing's front-and-center card — same cardList/actionBar
   // content as 'rail' above (isPanelLayout keeps their group headers and
   // history-visibility identical), positioned as a centered overlay instead
-  // of a docked side rail. `x`/`y` (percentage translate) rather than a raw
-  // CSS `transform` in `style`, so it composes correctly with the `scale`
-  // framer-motion also animates here — framer computes its own transform
-  // from x/y/scale/rotate together and would otherwise discard a static
-  // `style.transform` string. `tabIndex={-1}` + the mount-focus effect above
+  // of a docked side rail. `tabIndex={-1}` + the mount-focus effect above
   // make this the keyboard landing point (R1/R2's card is the primary
   // element) without adding a stop of its own to the page's ordinary tab
   // sequence — the very next Tab reaches the card's own first focusable
   // descendant (the departure card's Reopen link, or Discard/Save once a
   // pin lands), not wherever focus happened to be before the landing mounted.
+  //
+  // U3 (drag-triggered progressive transition): `cardFocusProgress` (0 =
+  // resting centered overlay, 1 = about to swap to 'rail' — App.tsx clears
+  // desktopLandingActive once the settle transition below has had time to
+  // finish, so this never has to literally land on 'rail's own layout
+  // pixel-for-pixel, just visibly move toward it — see the plan's own U3
+  // scope note: "proportionate... not pixel-perfect") drives a plain,
+  // continuous lerp of this card's own translate offset / width /
+  // border-radius. Framer's own `animate` keeps its original job here —
+  // mount/exit opacity + a scale "pop" — but its `scale` target is now fed
+  // from the SAME progress (`focusScale`), so a drag doesn't just move the
+  // field's recede but also, in lockstep, shrinks the card itself toward
+  // roughly a rail-card's own weight (R7: "the layout eases toward today's
+  // side-rail arrangement" describes the field AND the card moving
+  // together). The position/size offset itself is carried on the CSS
+  // `translate` property — distinct from `transform`, so it composes
+  // independently of framer's own `transform` output (which owns `scale`
+  // via `animate`) rather than colliding with it, the same way a second
+  // `transform` source would. Both `translate`'s own CSS `transition` here
+  // and framer's `transition` toggle to an instant snap while
+  // `cardFocusLive` (an active drag: track the pointer directly, no easing
+  // lag — mirrors the field wrapper's own transition treatment in App.tsx,
+  // and the reasoning EmotionDrawer's own dragShrinkActive background-fade
+  // comment already gives for choosing a plain CSS transition over layering
+  // into a spring `animate` for a drag-tracked value) and to the tuned
+  // recede duration otherwise (the settle animation on release/cancel).
   if (isFocus) {
+    const focusP = Math.max(0, Math.min(1, cardFocusProgress));
+    const lerp = (a: number, b: number) => a + (b - a) * focusP;
+    // % of the card's own width/height — drifts from dead-center toward the
+    // upper-right, roughly where 'rail' docks (top-right, full height).
+    const focusTranslateX = lerp(-50, 20);
+    const focusTranslateY = lerp(-50, -44);
+    const focusScale = lerp(1, 0.92);
+    const focusWidthPx = lerp(420, 372); // eases toward RAIL_WIDTH's own ~340-420px clamp range
+    const focusRadius = lerp(16, 0); // 'rail' docks flush — no rounding
+    const focusInstant = reduce || cardFocusLive;
+
     return (
       <motion.div
         ref={focusRootRef}
         tabIndex={-1}
-        initial={{ opacity: 0, scale: 0.96, x: '-50%', y: '-50%' }}
-        animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
-        exit={{ opacity: 0, scale: 0.96, x: '-50%', y: '-50%' }}
-        transition={{ type: 'spring', stiffness: 300, damping: 35 }}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: focusScale }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={focusInstant ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
         style={{
           ...shared,
           top: '50%',
           left: '50%',
-          width: 'min(420px, 92vw)',
+          translate: `${focusTranslateX}% ${focusTranslateY}%`,
+          width: `min(${focusWidthPx}px, 92vw)`,
           maxHeight: '86vh',
-          borderRadius: 16,
+          borderRadius: focusRadius,
           border: '1px solid var(--ui-border)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
           outline: 'none',
           touchAction: 'pan-y',
+          transition: focusInstant
+            ? 'none'
+            : `translate ${tuning.fieldRecedeDuration}s ease-out, width ${tuning.fieldRecedeDuration}s ease-out, border-radius ${tuning.fieldRecedeDuration}s ease-out`,
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
