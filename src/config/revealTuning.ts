@@ -70,6 +70,21 @@ export interface RevealTuning {
   departureFadeOut: number;
   /** Glow intensity/size multiplier. */
   departureStrength: number;
+  /**
+   * U1 (desktop check-in focus): the field's whole-container recede
+   * treatment — a scale + blur applied to the field's wrapper, driven by a
+   * single `recedeProgress` (0 = focused, 1 = fully receded behind the
+   * front-and-center card). Distinct from `recedeStrength` above, which
+   * dims individual words while a card names a specific pair; this recedes
+   * the entire field as one plane. U2-U5 drive `recedeProgress` itself —
+   * these three only tune its target scale/blur and the base ease duration.
+   */
+  /** Scale factor at recedeProgress = 1 (1 = no shrink). */
+  fieldRecedeScale: number;
+  /** Blur radius (px) at recedeProgress = 1. */
+  fieldRecedeBlur: number;
+  /** Seconds for the base recede/return transition to ease. */
+  fieldRecedeDuration: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -96,6 +111,9 @@ export const DEFAULT_TUNING: RevealTuning = {
   departureHold: 1.40,
   departureFadeOut: 1.80,
   departureStrength: 0.40,
+  fieldRecedeScale: 0.92,
+  fieldRecedeBlur: 6,
+  fieldRecedeDuration: 0.5,
 };
 
 const KEY = 'reveal-tuning';

@@ -56,6 +56,16 @@ const WELCOME_KNOBS: Knob[] = [
   { key: 'axisPulseStrength', label: 'Pulse strength', min: 0, max: 1, step: 0.025, fmt: (v) => (v === 0 ? 'off' : `${+(v * 100).toFixed(1)}%`) },
 ];
 
+// U1 (desktop check-in focus): the field's whole-container recede treatment —
+// scale + blur applied to the field's wrapper, driven by `recedeProgress`
+// (0-1, wired up by later units). These tune its target scale/blur and base
+// ease duration; recedeProgress's own value is not itself a knob here.
+const RECEDE_KNOBS: Knob[] = [
+  { key: 'fieldRecedeScale', label: 'Recede scale', min: 0.5, max: 1, step: 0.01, fmt: (v) => `${v.toFixed(2)}×` },
+  { key: 'fieldRecedeBlur', label: 'Recede blur', min: 0, max: 20, step: 0.5, fmt: (v) => `${v}px` },
+  { key: 'fieldRecedeDuration', label: 'Recede duration', min: 0.1, max: 1.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
+];
+
 const labelStyle: React.CSSProperties = {
   fontSize: 9,
   textTransform: 'uppercase',
@@ -195,6 +205,13 @@ export function AdminRevealTuning() {
         <SectionHeader title="Departure" subtitle="traveling glow from the anchor on commit" />
 
         {DEPARTURE_KNOBS.map(renderKnob)}
+      </div>
+
+      {/* Recede (U1) */}
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--ui-border)', paddingTop: 12 }}>
+        <SectionHeader title="Recede" subtitle="field scale + blur behind the front-and-center card" />
+
+        {RECEDE_KNOBS.map(renderKnob)}
       </div>
     </div>
   );

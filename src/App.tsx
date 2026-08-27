@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { emotions } from './data/emotions';
 import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
@@ -124,6 +124,15 @@ export default function App() {
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
   const tuning = useRevealTuning();
+  const reducedMotion = useReducedMotion();
+
+  // U1 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): how
+  // far the field is receded behind the front-and-center card (0 = focused/
+  // today's rail, 1 = fully receded). Static at 0 for now — this unit only
+  // builds the recede mechanism itself; U2-U5 will drive this from the
+  // desktop landing state machine (mount, drag progress, press-release,
+  // breakpoint changes) instead of leaving it a constant.
+  const recedeProgress = 0;
 
   // Seed the session clock on mount (kept out of render to stay pure); each new
   // session/interaction resets it in its own handler.
@@ -588,7 +597,35 @@ export default function App() {
           Sized to the left plane on desktop; full-bleed on mobile. */}
       <div
         ref={fieldPlaneRef}
-        style={{ position: 'absolute', top: 0, bottom: fieldBottom, left: 0, width: fieldWidth, zIndex: 2 }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: fieldBottom,
+          left: 0,
+          width: fieldWidth,
+          zIndex: 2,
+          // U1: the recede transform lives on this exact wrapper — the same
+          // element useFieldGesture's rect-based coordinate math (via
+          // EmotionField's own containerRef, a descendant of this element)
+          // resolves against getBoundingClientRect for. Applying it here
+          // (rather than an outer, non-participating container) is what
+          // makes the live-rect gesture fix in useFieldGesture.ts actually
+          // correct: getBoundingClientRect on a descendant already reflects
+          // an ancestor's CSS transform, so scaling here keeps the field's
+          // visual and interactive boxes in lockstep at any recedeProgress.
+          transform: `scale(${1 - recedeProgress * (1 - tuning.fieldRecedeScale)})`,
+          transformOrigin: 'center center',
+          filter: recedeProgress > 0 ? `blur(${recedeProgress * tuning.fieldRecedeBlur}px)` : 'none',
+          // Plain CSS transition, not framer's `animate` — this element has
+          // no spring-driven `animate` of its own to conflict with, mirroring
+          // EmotionDrawer's dragShrinkActive background fade (chosen there
+          // for the same reason: layering a per-key transition override on
+          // top of a separate spring animate didn't take reliably). Reduced
+          // motion collapses straight to the target value instead of easing.
+          transition: reducedMotion
+            ? 'none'
+            : `transform ${tuning.fieldRecedeDuration}s ease-out, filter ${tuning.fieldRecedeDuration}s ease-out`,
+        }}
         onPointerDownCapture={(e) => {
           // While the passive, nothing-to-add mirror is EXPANDED (showMirror:
           // empty draft, previous check-in present — AND mirrorExpanded: it's
@@ -627,6 +664,7 @@ export default function App() {
           departureTracePlay={departureTracePlay}
           departureTraceFrom={departureTraceFrom}
           departureTraceTo={departureTraceTo}
+          recedeProgress={recedeProgress}
         />
       </div>
 
