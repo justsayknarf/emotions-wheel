@@ -181,6 +181,19 @@ export default function App() {
   // lockstep during a drag and back on together once it settles.
   const [desktopFocusLive, setDesktopFocusLive] = useState(false);
 
+  // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
+  // breakpoint and interruption resilience): tracks the settle timeout U3's
+  // committed-drag branch and U4's press branch each schedule below
+  // (window.setTimeout(() => setDesktopLandingActive(false), ...)), so the
+  // reconciliation further down (a render-phase state adjustment plus a
+  // small dedicated effect — see their own comments for why it's split
+  // that way) can cancel a still-pending one if a breakpoint-crossing
+  // resize lands inside that window — reachable, since both schedule
+  // against tuning.fieldRecedeDuration seconds (500ms by default), not
+  // instantaneously. A ref, not state: the timeout id itself never drives
+  // rendering.
+  const landingSettleTimeoutRef = useRef<number | null>(null);
+
   // U1: how far the field is receded behind the front-and-center card (0 =
   // focused/today's rail, 1 = fully receded). U3 replaces U2's binary
   // placeholder (`desktopLandingActive ? 1 : 0`) with the continuous
@@ -475,7 +488,14 @@ export default function App() {
     const committed = isDepartureDragCommitted(progress, tuning.focusDragCommitThreshold);
     setDesktopFocusProgress(committed ? 1 : 0);
     if (committed) {
-      window.setTimeout(() => setDesktopLandingActive(false), tuning.fieldRecedeDuration * 1000);
+      // U5: tracked in landingSettleTimeoutRef so a breakpoint-crossing
+      // resize inside this window can cancel it (see the reconciliation
+      // effect below) rather than letting it fire later against a landing
+      // state a resize has already resolved on its own.
+      landingSettleTimeoutRef.current = window.setTimeout(() => {
+        landingSettleTimeoutRef.current = null;
+        setDesktopLandingActive(false);
+      }, tuning.fieldRecedeDuration * 1000);
     }
   }, [tuning.focusDragCommitThreshold, tuning.fieldRecedeDuration]);
 
@@ -512,9 +532,138 @@ export default function App() {
     if (desktopLandingActive) {
       setDesktopFocusLive(false);
       setDesktopFocusProgress(1);
-      window.setTimeout(() => setDesktopLandingActive(false), tuning.fieldRecedeDuration * 1000);
+      // U5: same tracked-timeout treatment as U3's commit branch above.
+      landingSettleTimeoutRef.current = window.setTimeout(() => {
+        landingSettleTimeoutRef.current = null;
+        setDesktopLandingActive(false);
+      }, tuning.fieldRecedeDuration * 1000);
     }
   }, [handlePinRelease, desktopLandingActive, tuning.fieldRecedeDuration]);
+
+  // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
+  // breakpoint and interruption resilience): resolves the landing state
+  // when `sideBySide` itself flips false mid-landing (Receded) or mid-drag
+  // (DragTransitioning, per the plan's state diagram) — a window resize
+  // crossing the 900px breakpoint. useSidePanelLayout (read directly to
+  // confirm this) is a live matchMedia listener, not a one-time check, so
+  // this is reachable at any point while desktopLandingActive is still
+  // true, not just at mount.
+  //
+  // Left unhandled, drawerVariant (above) would keep resolving to 'focus'
+  // after the resize: its ternary checks desktopLandingActive before
+  // sideBySide, and nothing today clears desktopLandingActive on its own
+  // when sideBySide goes false — so a first-time desktop landing, or a
+  // committed-but-not-yet-settled drag/press, would carry the 'focus'
+  // variant straight onto a mobile-width viewport rather than degrading to
+  // today's ordinary 'sheet'. This is what makes drawerVariant fall through
+  // to its own sideBySide branch (which already correctly resolves to
+  // 'sheet' once desktopLandingActive is false) on its very next
+  // evaluation.
+  //
+  // Implemented as a render-phase state adjustment (React's own documented
+  // "adjusting state when a prop/derived value changes" pattern), not a
+  // useEffect/useLayoutEffect — matching AGENTS.md's "derive at render
+  // rather than reconciling in an effect" and this exact file's own
+  // `mirrorWasShown` precedent just above (comparing a tracked previous
+  // value to the current one, guarded so it only runs on the actual
+  // transition). This is required here, not just preferred: an effect
+  // calling setState synchronously in its body is exactly the "cascading
+  // renders" pattern react-hooks/set-state-in-effect flags (confirmed by
+  // running lint against a useLayoutEffect version of this first) — and
+  // even past the lint error, an effect would still leave one committed
+  // paint where drawerVariant reads the stale desktopLandingActive before
+  // the effect's setState catches up, since effects run after render
+  // commits. Adjusting during render lets desktopLandingActive/
+  // desktopFocusProgress/desktopFocusLive already be resolved-false by the
+  // same render drawerVariant/recedeProgress are computed in below, so
+  // there is no stale frame to flash at all.
+  //
+  // desktopFocusProgress is reset to 0 too, even though recedeProgress's
+  // own formula above (`desktopLandingActive ? 1 - desktopFocusProgress :
+  // 0`) already evaluates to 0 the instant desktopLandingActive is false,
+  // regardless of desktopFocusProgress's value — so this reset isn't
+  // required for recedeProgress's own correctness. It's done anyway
+  // because desktopFocusProgress is also passed straight through as
+  // EmotionDrawer's cardFocusProgress regardless of variant (ignored by
+  // 'sheet', which never reads it — but there's no reason to leave a stale
+  // mid-drag value sitting in state once nothing consumes it as fresh).
+  // desktopLandingActive itself is never set true again after mount, by
+  // any path (see its own comment above: the mount's lazy initializer is
+  // the only place it's ever set true; U3's commit branch, U4's press
+  // branch, and this effect are the only three places that ever clear it)
+  // — so unlike desktopFocusProgress, there is no later desktop session in
+  // the same page load that could read a stale value back in; this isn't
+  // guarding against desktopLandingActive re-arming (it can't), just
+  // against a dangling progress value nothing needs anymore.
+  //
+  // desktopFocusLive is cleared too, so nothing is left mid-drag-tracking
+  // (its CSS-transition-suppressing role, read by the field wrapper's own
+  // transition string below) once the 'focus' card that was reading it has
+  // already unmounted in favor of 'sheet'.
+  //
+  // A separate, dedicated effect just below (not folded in here) cancels
+  // U3's committed-drag settle timeout or U4's press settle timeout if
+  // either is still pending — reachable whenever the resize lands inside
+  // the tuning.fieldRecedeDuration-second window between a commit/press
+  // and that timeout's own scheduled setDesktopLandingActive(false). Left
+  // uncancelled, the stale timeout would still fire later and call
+  // setDesktopLandingActive(false) again — harmless today, since this
+  // block has already set it false and desktopLandingActive is never
+  // re-armed afterward, so the redundant call is a same-value no-op React
+  // bails out of. Cancelled anyway so the two mechanisms can't end up
+  // racing against each other on some future change that makes "set false
+  // again" no longer a no-op. It's a separate effect, not inline here,
+  // because reading/writing a ref (landingSettleTimeoutRef) during render
+  // is its own lint violation (react-hooks/refs) distinct from the
+  // set-state-in-effect one above — refs are only safe to touch outside
+  // render (event handlers, effects), so the ref-touching half of this
+  // reconciliation has to live in an effect even though the state-only
+  // half above doesn't.
+  //
+  // No pointer-capture safeguard is added for the departure card's own
+  // AxisSlider, which this variant swap can unmount mid-drag: the browser
+  // releases an element's pointer capture automatically when that element
+  // is removed from the DOM (no pointercancel is dispatched to a node
+  // that's already gone, and none is needed — nothing here calls back into
+  // it). The drag's only App-level state, desktopFocusProgress/
+  // desktopFocusLive, is exactly what this block already resets regardless
+  // of whether the abandoned gesture's own commit/cancel ever fires. (A
+  // separate, pre-existing gap was noticed while checking this: an
+  // ordinary, already-minted draft pin's slider — not the departure
+  // card's — writes to adjustDraft/draggingPinId, App-level state this
+  // reconciliation does not touch, via onAdjustDraft; interrupting that
+  // ordinary slider's drag with a resize mid-gesture (any rail<->sheet
+  // transition, not specific to this landing feature) could leave
+  // adjustDraft stuck non-null the same way. That gap predates this plan
+  // and isn't part of its three-piece landing state, so it's left unfixed
+  // here — flagged for a separate fix.)
+  const [sideBySideWasActive, setSideBySideWasActive] = useState(sideBySide);
+  if (sideBySide !== sideBySideWasActive) {
+    setSideBySideWasActive(sideBySide);
+    if (!sideBySide && desktopLandingActive) {
+      setDesktopLandingActive(false);
+      setDesktopFocusProgress(0);
+      setDesktopFocusLive(false);
+    }
+  }
+  // The ref-touching half of the same U5 reconciliation (see the long
+  // comment above): cancels a still-pending settle timeout on the same
+  // sideBySide-goes-false transition the render-phase block above reacts
+  // to, tracked independently via its own previous-value ref rather than
+  // reading desktopLandingActive's current value — by the time this effect
+  // runs, the render-phase block above has already resolved
+  // desktopLandingActive to false for this same transition (render-phase
+  // state adjustments re-render before committing), so checking it here
+  // would always read false and this would never fire. No setState here —
+  // purely the imperative clearTimeout side effect an effect exists for.
+  const sideBySideWasTrueRef = useRef(sideBySide);
+  useEffect(() => {
+    if (sideBySideWasTrueRef.current && !sideBySide && landingSettleTimeoutRef.current !== null) {
+      window.clearTimeout(landingSettleTimeoutRef.current);
+      landingSettleTimeoutRef.current = null;
+    }
+    sideBySideWasTrueRef.current = sideBySide;
+  }, [sideBySide]);
 
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
