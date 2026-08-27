@@ -141,11 +141,13 @@ export default function App() {
   // shipped. Being one-shot-at-mount, rather than derived, is what keeps
   // completing the very first check-in mid-session from re-triggering the
   // landing for the entry just recorded — `previousCheckIn` changing
-  // afterward has no effect on this flag. U3 adds the setter: the drag
-  // transition (handleDepartureDragProgress below) clears it once a
-  // committed drag's settle transition has had time to finish; U4/U5 will
-  // add the remaining ways to clear it (a direct field press, a breakpoint
-  // crossing out of desktop).
+  // afterward has no effect on this flag. U3 adds one way to clear it: the
+  // drag transition (handleDepartureDragProgress below) clears it once a
+  // committed drag's settle transition has had time to finish. U4 adds a
+  // second, parallel way: a direct field press (handleFieldPress below)
+  // clears it on the same settle-duration timing, once its own discrete
+  // jump-to-focused transition has had time to finish. U5 will add the
+  // remaining way (a breakpoint crossing out of desktop).
   const [desktopLandingActive, setDesktopLandingActive] = useState(() => sideBySide && entrySource !== 'new-tab');
 
   // U2: which variant EmotionDrawer renders — 'focus' while the landing flag
@@ -186,9 +188,13 @@ export default function App() {
   // 0), easing toward 0 as a departure drag advances. Collapses to 0
   // outright once desktopLandingActive itself clears (a committed drag's
   // settle transition has finished) — the recede mechanism has nothing left
-  // to apply once EmotionDrawer has swapped to 'rail' for real. U4/U5 add
-  // the remaining triggers (a direct field press's fixed-duration
-  // transition, breakpoint-interruption handling).
+  // to apply once EmotionDrawer has swapped to 'rail' for real. U4 adds its
+  // own trigger onto the SAME desktopFocusProgress value rather than a
+  // parallel one (handleFieldPress below jumps it straight to 1, with the
+  // CSS transition enabled, on a direct field press) — R9's "no divergent
+  // downstream state between the two trigger paths" is exactly why this
+  // stays one value with two ways to set it rather than two. U5 adds the
+  // remaining trigger (breakpoint-interruption handling).
   const recedeProgress = desktopLandingActive ? 1 - desktopFocusProgress : 0;
 
   // Seed the session clock on mount (kept out of render to stay pure); each new
@@ -473,6 +479,43 @@ export default function App() {
     }
   }, [tuning.focusDragCommitThreshold, tuning.fieldRecedeDuration]);
 
+  // U4 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
+  // press-triggered discrete transition, R8): wraps handlePinRelease for
+  // presses that originate on the field itself (EmotionField's onPinRelease
+  // prop below) — handleDepart above, the OTHER path into handlePinRelease,
+  // is left calling it directly, unwrapped, since a departure-slider drag's
+  // release already drives its own settle transition via
+  // handleDepartureDragProgress's 'commit'/'cancel' branch (which can settle
+  // to EITHER end, 0 or 1, depending on the commit threshold) — wiring this
+  // unconditional jump-to-1 into handlePinRelease itself would fire for that
+  // path too and stomp a below-threshold revert back to 1 regardless.
+  //
+  // A direct field press has no drag phase to key progress off of (R8), so
+  // there's no threshold decision to make: it always jumps straight to the
+  // committed outcome. Mints the pin first (today's unconditional behavior —
+  // must not change, so this always runs regardless of desktopLandingActive),
+  // then, only while the landing is still active, sets desktopFocusProgress
+  // to 1 directly (skipping any intermediate value) with the CSS transition
+  // enabled (desktopFocusLive false) so recedeProgress/cardFocusProgress's
+  // consumers ease there over tuning.fieldRecedeDuration rather than
+  // snapping — reusing that same knob rather than adding a new one, since
+  // it's already the duration both the field wrapper below and
+  // EmotionDrawer's focus variant use for every OTHER settle transition
+  // (U3's committed-drag case included) — a separate knob here would risk
+  // the two trigger paths visibly settling at different speeds, which is
+  // exactly the kind of divergence R9 asks this unit to avoid. Clears
+  // desktopLandingActive after that same duration, matching U3's
+  // commit-settle timing pattern exactly, so EmotionDrawer only swaps out of
+  // 'focus' once the transition has actually had time to arrive.
+  const handleFieldPress = useCallback((entry: PinEntry) => {
+    handlePinRelease(entry);
+    if (desktopLandingActive) {
+      setDesktopFocusLive(false);
+      setDesktopFocusProgress(1);
+      window.setTimeout(() => setDesktopLandingActive(false), tuning.fieldRecedeDuration * 1000);
+    }
+  }, [handlePinRelease, desktopLandingActive, tuning.fieldRecedeDuration]);
+
   // A release on the field matched an existing pin (EmotionField's hit-test)
   // rather than minting a new one — just select it. resolveActiveSelection
   // derives activeCheckIn from the id on its own (R15): the id belongs to a
@@ -750,7 +793,7 @@ export default function App() {
         <EmotionField
           pins={pins}
           highlightedIds={highlightedIds}
-          onPinRelease={handlePinRelease}
+          onPinRelease={handleFieldPress}
           onPinSelect={handlePinSelect}
           onFirstInteraction={handleFirstInteraction}
           hasInteracted={hasInteracted}
