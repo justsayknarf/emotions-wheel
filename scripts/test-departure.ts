@@ -1,11 +1,17 @@
 // Behavioural check for the departure mark's pure logic (src/data/departure.ts).
 // Run: npm run check:departure
 //
-// U1 covers departureAnchor, relativeDayLabel, and describeDelta. U2 adds the
-// departure-mode predicate assertions to this same script as it lands. This
-// repo has no test runner, so this is the only automated exercise of the
-// logic. Exits non-zero on any violation.
+// U1 (departure-mark plan) covers departureAnchor, relativeDayLabel, and
+// describeDelta; that same plan's U2 adds the departure-mode predicate
+// assertions. The desktop-check-in-focus plan's own U2
+// (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md) extends
+// departureAnchor's signature with an `emotions` parameter and its
+// null-previousCheckIn behavior (a synthetic neutral-center pin rather than
+// null) — see the "departureAnchor: neutral-anchor synthetic pin" block
+// below. This repo has no test runner, so this is the only automated
+// exercise of the logic. Exits non-zero on any violation.
 import { departureAnchor, relativeDayLabel, describeDelta, isDepartureEligible, hasNotableDelta } from '../src/data/departure';
+import { emotions } from '../src/data/emotions';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
 let failures = 0;
@@ -34,21 +40,59 @@ const entry = (id: string, timestamp: string, pins: PinEntry[]): DiaryEntry => (
   const multi = entry('e1', '2026-08-20T09:00:00.000Z', [pin('p1', 0.1, 0.2), pin('p2', -0.3, 0.4)]);
   check(
     'returns the last pin of a multi-pin check-in',
-    departureAnchor(multi)?.id === 'p2',
-    `resolved to ${departureAnchor(multi)?.id}`,
+    departureAnchor(multi, emotions)?.id === 'p2',
+    `resolved to ${departureAnchor(multi, emotions)?.id}`,
   );
 
+  // desktop-check-in-focus plan's U2: a real previousCheckIn's own anchor
+  // pin is unchanged by the new `emotions` parameter — same pin, same id,
+  // regardless of which emotions array is passed (it's only consulted for
+  // the synthetic neutral-anchor case below).
   check(
-    'null check-in returns null',
-    departureAnchor(null) === null,
-    `resolved to ${departureAnchor(null)}`,
+    'a real previous check-in returns its own anchor pin, unaffected by `emotions`',
+    departureAnchor(multi, emotions)?.id === 'p2' && departureAnchor(multi, [])?.id === 'p2',
+    `resolved to ${departureAnchor(multi, emotions)?.id} / ${departureAnchor(multi, [])?.id}`,
   );
 
   const empty = entry('e2', '2026-08-20T09:00:00.000Z', []);
   check(
-    'empty-pins check-in returns null',
-    departureAnchor(empty) === null,
-    `resolved to ${departureAnchor(empty)}`,
+    'empty-pins check-in returns null (unreachable via the UI — Save is disabled at zero pins — but unchanged from before this unit)',
+    departureAnchor(empty, emotions) === null,
+    `resolved to ${departureAnchor(empty, emotions)}`,
+  );
+}
+
+// --- departureAnchor: neutral-anchor synthetic pin (desktop-check-in-focus
+// plan's U2) — no previousCheckIn at all now returns a synthetic (0, 0) pin
+// instead of null, the first-time desktop landing's neutral-centered anchor
+// (R2). A real previousCheckIn's own anchor pin (above) is unchanged. ---
+{
+  const neutral = departureAnchor(null, emotions);
+  check(
+    'null check-in returns a pin, not null',
+    neutral !== null,
+    `resolved to ${neutral}`,
+  );
+  check(
+    'neutral anchor is centered at (0, 0)',
+    neutral?.x === 0 && neutral?.y === 0,
+    `resolved to (${neutral?.x}, ${neutral?.y})`,
+  );
+  check(
+    'neutral anchor carries the "neutral-anchor" id',
+    neutral?.id === 'neutral-anchor',
+    `resolved to ${neutral?.id}`,
+  );
+  check(
+    'neutral anchor has no recognized words',
+    Array.isArray(neutral?.recognizedWords) && neutral?.recognizedWords.length === 0,
+    JSON.stringify(neutral?.recognizedWords),
+  );
+  check(
+    'neutral anchor carries a valid regionDescription',
+    typeof neutral?.regionDescription?.relational === 'string' && (neutral?.regionDescription.relational.length ?? 0) > 0
+      && typeof neutral?.regionDescription?.narrative === 'string' && (neutral?.regionDescription.narrative.length ?? 0) > 0,
+    JSON.stringify(neutral?.regionDescription),
   );
 }
 

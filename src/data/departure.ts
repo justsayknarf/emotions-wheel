@@ -1,4 +1,6 @@
 import type { DiaryEntry, PinEntry } from '../types';
+import type { Emotion } from './emotions';
+import { getRegionDescription } from './regions';
 import { startOfDay } from '../utils/formatDate';
 
 // Pure logic for the departure mark (docs/plans/2026-08-24-001-feat-departure-mark-plan.md).
@@ -10,10 +12,32 @@ import { startOfDay } from '../utils/formatDate';
  * Which pin today departs from — the previous check-in's newest pin. Matches
  * resolveActiveSelection's own case-4 fallback (src/data/checkIn.ts) so the
  * card and the field can never disagree about which pin is the anchor (LC2).
+ *
+ * U2 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): when
+ * there's no previous check-in at all, this now returns a synthetic pin at
+ * the neutral center of both axes (`id: 'neutral-anchor'`) rather than null
+ * — the desktop landing's neutral-centered first-time variant (R2) departs
+ * from this same synthetic pin the same way a returning user's card departs
+ * from their own last entry. `emotions` is only needed for this synthetic
+ * case's `regionDescription` (getRegionDescription's own signature); a real
+ * previousCheckIn's own anchor pin already carries its own stored
+ * regionDescription and ignores it. The empty-pins case (a previousCheckIn
+ * that somehow holds zero pins — unreachable via the UI, since Save is
+ * disabled at zero pins) is left returning null, unchanged from before this
+ * unit: only the *no previousCheckIn* case gained the synthetic pin.
  */
-export function departureAnchor(previousCheckIn: DiaryEntry | null): PinEntry | null {
-  if (!previousCheckIn || previousCheckIn.pins.length === 0) return null;
-  return previousCheckIn.pins[previousCheckIn.pins.length - 1];
+export function departureAnchor(previousCheckIn: DiaryEntry | null, emotions: Emotion[]): PinEntry | null {
+  if (previousCheckIn) {
+    if (previousCheckIn.pins.length === 0) return null;
+    return previousCheckIn.pins[previousCheckIn.pins.length - 1];
+  }
+  return {
+    id: 'neutral-anchor',
+    x: 0,
+    y: 0,
+    recognizedWords: [],
+    regionDescription: getRegionDescription(0, 0, emotions),
+  };
 }
 
 /**

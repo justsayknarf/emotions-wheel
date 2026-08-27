@@ -126,13 +126,43 @@ export default function App() {
   const tuning = useRevealTuning();
   const reducedMotion = useReducedMotion();
 
-  // U1 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): how
-  // far the field is receded behind the front-and-center card (0 = focused/
-  // today's rail, 1 = fully receded). Static at 0 for now — this unit only
-  // builds the recede mechanism itself; U2-U5 will drive this from the
-  // desktop landing state machine (mount, drag progress, press-release,
-  // breakpoint changes) instead of leaving it a constant.
-  const recedeProgress = 0;
+  // U2 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): the
+  // one-shot, session-scoped desktop landing flag — whether EmotionDrawer
+  // renders the previous check-in (or, with no history, its neutral
+  // first-time variant) card front-and-center, receded field behind it. A
+  // lazy state initializer, not a value re-derived from `sideBySide`/
+  // `previousCheckIn` on every render (Key Technical Decisions): `sideBySide`
+  // (useSidePanelLayout's useSyncExternalStore reads matchMedia
+  // synchronously) and `entries` (a lazy localStorage read in useDiary,
+  // above) are both already resolved by this first render, so "previousCheckIn
+  // resolution complete" is already satisfied here — nothing waits on a
+  // later effect. Excludes 'new-tab' sessions (R4/AE6) so this plan stays
+  // correct standalone, independent of whether the sibling new-tab plan has
+  // shipped. Being one-shot-at-mount, rather than derived, is what keeps
+  // completing the very first check-in mid-session from re-triggering the
+  // landing for the entry just recorded — `previousCheckIn` changing
+  // afterward has no effect on this flag. No setter yet, matching
+  // `entrySource` above: U3-U5 add the ways to *clear* it (drag past the
+  // commit threshold, a direct field press, a breakpoint crossing out of
+  // desktop) — this unit only establishes the one-shot mount value.
+  const [desktopLandingActive] = useState(() => sideBySide && entrySource !== 'new-tab');
+
+  // U2: which variant EmotionDrawer renders — 'focus' while the landing flag
+  // above is active, else the ordinary sideBySide-driven 'rail'/'sheet' split
+  // this app already had.
+  const drawerVariant: 'focus' | 'rail' | 'sheet' = desktopLandingActive
+    ? 'focus'
+    : sideBySide
+      ? 'rail'
+      : 'sheet';
+
+  // U1: how far the field is receded behind the front-and-center card (0 =
+  // focused/today's rail, 1 = fully receded). U2 wires this to the landing
+  // flag as a binary placeholder — fully receded for the whole time the
+  // landing is active, focused otherwise; U3/U4 replace this with the real
+  // continuous drag-progress / fixed-duration press transition, and U5 adds
+  // breakpoint-interruption handling.
+  const recedeProgress = desktopLandingActive ? 1 : 0;
 
   // Seed the session clock on mount (kept out of render to stay pure); each new
   // session/interaction resets it in its own handler.
@@ -223,8 +253,11 @@ export default function App() {
   // U3/R9: the draft card's own anchor tick + delta compare against this
   // same pin — matching departureAnchor's fallback everywhere else already
   // does, so the field ring, the departure card, and the draft card never
-  // point at three different "anchors."
-  const anchorPin = departureAnchor(previousCheckIn);
+  // point at three different "anchors." U2 (desktop-check-in-focus):
+  // departureAnchor now takes `emotions` too, since a null previousCheckIn
+  // resolves to a synthetic (0, 0) pin rather than null — the neutral anchor
+  // the focus card's first-time variant (R2) departs from.
+  const anchorPin = departureAnchor(previousCheckIn, emotions);
   // The most recent entry regardless of any active reopen — unlike
   // previousCheckIn, never excludes the entry currently being edited. Feeds
   // only the drawer's returning-summary (time + rhythm), which should stay
@@ -737,14 +770,19 @@ export default function App() {
                 (the entry is excluded from it while being edited), so
                 without this the drawer would vanish entirely with no Discard
                 Edit / Update Check-in left to click, leaving a refresh as
-                the only way out. */}
-            {(pins.length > 0 || previousCheckIn || draftId !== null) && (
+                the only way out. Also mounts on `desktopLandingActive` alone
+                (U2): a first-time desktop landing has none of the first
+                three (pins.length === 0, previousCheckIn null, draftId
+                null) but still needs to mount so its neutral-centered
+                'focus' variant (R2) — EmotionDrawer's own
+                neutralDepartureEligible — can render. */}
+            {(pins.length > 0 || previousCheckIn || draftId !== null || desktopLandingActive) && (
               <EmotionDrawer
                 pins={pins}
                 previousCheckIn={previousCheckIn}
                 mostRecentEntry={mostRecentEntry}
                 entries={entries}
-                variant={sideBySide ? 'rail' : 'sheet'}
+                variant={drawerVariant}
                 onRecognize={handleRecognize}
                 onDerecognize={handleDerecognize}
                 onPinRemove={handlePinRemove}
