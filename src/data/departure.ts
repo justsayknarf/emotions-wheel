@@ -124,19 +124,6 @@ export function departureDragProgress(origin: number, current: number, fullTrave
   return Math.max(0, Math.min(1, Math.abs(current - origin) / fullTravel));
 }
 
-/**
- * U3: the drag-commit decision — at or above `commitThreshold`
- * (RevealTuning's `focusDragCommitThreshold`), the desktop landing's
- * transition completes to focused/rail; below it, it eases back to
- * receded/centered. Shared by every settle path App.tsx's
- * handleDepartureDragProgress runs (an ordinary release, and a cancel
- * reporting its ratcheted peak progress) so that comparison lives in one
- * tested place rather than repeated per call site.
- */
-export function isDepartureDragCommitted(progress: number, commitThreshold: number): boolean {
-  return progress >= commitThreshold;
-}
-
 function band(delta: number): 'little' | 'plain' | 'much' | null {
   const a = Math.abs(delta);
   if (a < NAME_THRESHOLD) return null;

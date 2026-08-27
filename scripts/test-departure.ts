@@ -17,7 +17,6 @@ import {
   isDepartureEligible,
   hasNotableDelta,
   departureDragProgress,
-  isDepartureDragCommitted,
 } from '../src/data/departure';
 import { emotions } from '../src/data/emotions';
 import type { DiaryEntry, PinEntry } from '../src/types';
@@ -301,30 +300,6 @@ const entry = (id: string, timestamp: string, pins: PinEntry[]): DiaryEntry => (
     'a non-positive fullTravel does not throw or return NaN/Infinity — any real movement is full progress',
     departureDragProgress(0, 0.01, 0) === 1 && Number.isFinite(departureDragProgress(0, 0.01, 0)),
     String(departureDragProgress(0, 0.01, 0)),
-  );
-}
-
-// --- isDepartureDragCommitted (U3) ---
-{
-  check(
-    'progress exactly at the threshold: committed',
-    isDepartureDragCommitted(0.5, 0.5) === true,
-    String(isDepartureDragCommitted(0.5, 0.5)),
-  );
-  check(
-    'progress just below the threshold: not committed',
-    isDepartureDragCommitted(0.49, 0.5) === false,
-    String(isDepartureDragCommitted(0.49, 0.5)),
-  );
-  check(
-    'progress well past the threshold: committed',
-    isDepartureDragCommitted(1, 0.5) === true,
-    String(isDepartureDragCommitted(1, 0.5)),
-  );
-  check(
-    'zero progress against a zero threshold: committed (an edge case, not expected live — a threshold this low would commit at drag start)',
-    isDepartureDragCommitted(0, 0) === true,
-    String(isDepartureDragCommitted(0, 0)),
   );
 }
 

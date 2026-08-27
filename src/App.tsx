@@ -6,7 +6,7 @@ import { emotions } from './data/emotions';
 import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
-import { relativeDayLabel, departureAnchor, isDepartureEligible, isDepartureDragCommitted } from './data/departure';
+import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/departure';
 import { resolveEntrySource } from './data/source';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
@@ -468,11 +468,29 @@ export default function App() {
   // drag branch never calls onAdjustDraft, so those never fire for it).
   // 'drag' just mirrors the live value straight into desktopFocusProgress
   // with no easing (desktopFocusLive true disables the CSS transition
-  // wherever it's consumed); 'commit'/'cancel' compare the reported
-  // progress — already the gesture's PEAK for a cancel (see
-  // CoordinateCard's cancelDeparture) or the final released value for a
-  // commit — against the tunable threshold and settle to the corresponding
-  // target, letting the now-re-enabled CSS transition ease there.
+  // wherever it's consumed).
+  //
+  // review-fix: 'commit'/'cancel' settle unconditionally on their phase —
+  // NOT on a distance/progress threshold. `commitDeparture` in
+  // CoordinateCard.tsx mints a real pin on ANY release, including a plain
+  // click with zero movement (this is the pre-existing departure-mark
+  // gesture's own semantics, unrelated to this plan — AE3/R5's "touching a
+  // slider... records"). The original threshold-gated design here assumed
+  // a drag could be "released short" and mean "changed my mind, nothing
+  // happened" — false for this gesture: every 'commit' call has already
+  // minted a pin by the time this fires. Gating the LANDING transition on
+  // a separate distance threshold let the two diverge: a plain click on
+  // the slider committed a new draft pin (real check-in data) while the
+  // threshold check said "not committed," leaving the field stuck receded
+  // behind an ever-growing merged previous+draft card that never
+  // transitioned to the rail — reproduced live: a zero-movement click
+  // left `desktopLandingActive` true and the field's transform at
+  // `scale(0.92)`/`blur(6px)` indefinitely, with a real draft pin already
+  // recorded underneath. Fixed: 'commit' always settles to focused (a pin
+  // was always minted, so the landing must always complete); 'cancel'
+  // always reverts to receded (cancelDeparture never mints a pin, so
+  // there's nothing new to show). `focusDragCommitThreshold` no longer
+  // drives this decision — see its own removal below.
   // desktopLandingActive only clears on a genuine commit, and only after
   // giving that settle transition time to actually finish (R9: "once the
   // transition completes") — clearing it immediately would swap
@@ -524,7 +542,11 @@ export default function App() {
       return;
     }
     setDesktopFocusLive(false);
-    const committed = isDepartureDragCommitted(progress, tuning.focusDragCommitThreshold);
+    // review-fix: phase alone decides the outcome now, not a progress
+    // threshold — see the comment above this callback for why. `progress`
+    // is still accepted as a parameter (CoordinateCard still reports it)
+    // but is intentionally unused here.
+    const committed = phase === 'commit';
     setDesktopFocusProgress(committed ? 1 : 0);
     if (committed) {
       // U5: tracked in landingSettleTimeoutRef (via scheduleLandingSettle)
@@ -534,7 +556,7 @@ export default function App() {
       // its own.
       scheduleLandingSettle();
     }
-  }, [tuning.focusDragCommitThreshold, scheduleLandingSettle]);
+  }, [scheduleLandingSettle]);
 
   // U4 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // press-triggered discrete transition, R8): wraps handlePinRelease for
