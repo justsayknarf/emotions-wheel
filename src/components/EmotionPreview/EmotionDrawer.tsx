@@ -98,18 +98,18 @@ interface Props {
   // receded and has nothing to progress toward, so it's left undefined
   // there, same as the mobile sheet.
   onDepartureDragProgress?: (progress: number, phase: 'drag' | 'commit' | 'cancel') => void;
-  // U3: the same 0-1 drag-progress value that drives App's recedeProgress —
-  // threaded down so the 'focus' variant's own position/size interpolates
-  // in lockstep with the field's recede (R7). Ignored by 'rail'/'sheet'
-  // (neither is receded); defaults to 0 (resting/centered) so those callers
-  // don't need to pass it.
+  // U3: how far the 'focus' variant's own position/size has settled toward
+  // the rail (0 = resting/centered, 1 = rail). Ignored by 'rail'/'sheet'
+  // (neither is receded); defaults to 0 so those callers don't need to pass
+  // it. review-fix: deliberately NOT the same live value that drives App's
+  // recedeProgress during a drag — App only updates this prop on release
+  // (commit/cancel), never while a drag is in flight, so the card holds
+  // still (only the field recedes into view) while the user's finger is
+  // still on a departure slider inside it. Always animates with the normal
+  // eased CSS transition below; there is no "live, no-easing" state for the
+  // card to be in anymore (see `focusInstant`, which no longer branches on
+  // anything drag-related — only reduced-motion).
   cardFocusProgress?: number;
-  // U3: whether that same drag is being actively live-tracked right now.
-  // true disables the CSS transition on the 'focus' variant's interpolated
-  // style below, so it tracks the pointer with no easing lag; false (the
-  // default) is the resting/settling state — mirrors App.tsx's
-  // `desktopFocusLive`, which this should always be passed in lockstep with.
-  cardFocusLive?: boolean;
   // U3/R9: the same anchor coordinate + relative-day label, resolved once
   // in App (departureAnchor/relativeDayLabel) and threaded into each
   // *draft* card's own anchor tick + delta — not the previous check-in's
@@ -169,7 +169,6 @@ export function EmotionDrawer({
   onDepart,
   onDepartureDragProgress,
   cardFocusProgress = 0,
-  cardFocusLive = false,
   anchor,
   anchorLabel,
   isReopened,
@@ -906,22 +905,26 @@ export function EmotionDrawer({
   // continuous lerp of this card's own translate offset / width /
   // border-radius. Framer's own `animate` keeps its original job here —
   // mount/exit opacity + a scale "pop" — but its `scale` target is now fed
-  // from the SAME progress (`focusScale`), so a drag doesn't just move the
-  // field's recede but also, in lockstep, shrinks the card itself toward
-  // roughly a rail-card's own weight (R7: "the layout eases toward today's
-  // side-rail arrangement" describes the field AND the card moving
-  // together). The position/size offset itself is carried on the CSS
-  // `translate` property — distinct from `transform`, so it composes
-  // independently of framer's own `transform` output (which owns `scale`
-  // via `animate`) rather than colliding with it, the same way a second
-  // `transform` source would. Both `translate`'s own CSS `transition` here
-  // and framer's `transition` toggle to an instant snap while
-  // `cardFocusLive` (an active drag: track the pointer directly, no easing
-  // lag — mirrors the field wrapper's own transition treatment in App.tsx,
-  // and the reasoning EmotionDrawer's own dragShrinkActive background-fade
-  // comment already gives for choosing a plain CSS transition over layering
-  // into a spring `animate` for a drag-tracked value) and to the tuned
-  // recede duration otherwise (the settle animation on release/cancel).
+  // from the SAME progress (`focusScale`).
+  //
+  // review-fix: `cardFocusProgress` only ever changes on release now (App's
+  // handleDepartureDragProgress sets it on 'commit'/'cancel', never on
+  // 'drag') — R7's "the layout eases toward today's side-rail arrangement"
+  // used to be read as "field AND card move together, live, during the
+  // drag," but that made the card resize/reposition under the user's own
+  // finger while they were still dragging a slider mounted on it (reported
+  // live: "the slider is fighting the drag"). The card now holds its
+  // resting position/size for the whole drag — only the field recedes into
+  // view during that phase — and animates to the rail in one eased motion
+  // only after release. Because of that, there is no longer a "live,
+  // no-easing" state for the card to be in — `focusInstant` below no longer
+  // branches on drag-liveness, only reduced-motion, and the CSS `transition`
+  // is always active for this card's own position/size interpolation. The
+  // position/size offset itself is still carried on the CSS `translate`
+  // property — distinct from `transform`, so it composes independently of
+  // framer's own `transform` output (which owns `scale` via `animate`)
+  // rather than colliding with it, the same way a second `transform` source
+  // would.
   if (isFocus) {
     const focusP = Math.max(0, Math.min(1, cardFocusProgress));
     const lerp = (a: number, b: number) => a + (b - a) * focusP;
@@ -932,7 +935,7 @@ export function EmotionDrawer({
     const focusScale = lerp(1, 0.92);
     const focusWidthPx = lerp(420, 372); // eases toward RAIL_WIDTH's own ~340-420px clamp range
     const focusRadius = lerp(16, 0); // 'rail' docks flush — no rounding
-    const focusInstant = reduce || cardFocusLive;
+    const focusInstant = reduce;
 
     return (
       <motion.div
