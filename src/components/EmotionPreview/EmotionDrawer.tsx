@@ -79,6 +79,13 @@ interface Props {
   // Tunable timings (seconds) for the card's word dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
+  // review-fix (product direction, 2nd pass): the 'focus' variant's own
+  // ending — actionBar's Save button calls this instead of `onDone` while
+  // `isFocus`, so the landing's own persist+reveal-rail flow
+  // (App.tsx's handleLandingSave) fires instead of the ordinary
+  // record-and-celebrate path. Optional and unused by 'rail'/'sheet',
+  // which keep calling `onDone` exactly as before.
+  onLandingSave?: () => void;
   onClear: () => void;
   // Reopen the previous check-in (by its entry id) into the draft, expanding
   // only the specific pin that was clicked — its siblings move into the
@@ -164,6 +171,7 @@ export function EmotionDrawer({
   onAdjustDraft,
   dissolve,
   onDone,
+  onLandingSave,
   onClear,
   onReopen,
   onDepart,
@@ -444,7 +452,12 @@ export function EmotionDrawer({
         <span />
       )}
       <button
-        onClick={onDone}
+        // review-fix (product direction, 2nd pass): the 'focus' variant's
+        // own Save ends the landing (reveal rail + animate this card to the
+        // right) instead of the ordinary record-and-celebrate path — see
+        // onLandingSave's own prop comment. 'rail'/'sheet' keep calling
+        // onDone exactly as before.
+        onClick={isFocus && onLandingSave ? onLandingSave : onDone}
         disabled={!canSave}
         style={{
           background: canSave ? 'var(--ui-gold)' : 'var(--ui-border)',

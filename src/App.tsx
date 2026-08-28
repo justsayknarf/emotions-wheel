@@ -194,13 +194,14 @@ export default function App() {
   const [desktopFocusLive, setDesktopFocusLive] = useState(false);
 
   // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
-  // breakpoint and interruption resilience): tracks the settle timeout U3's
-  // committed-drag branch and U4's press branch each schedule below
-  // (window.setTimeout(() => setDesktopLandingActive(false), ...)), so the
-  // reconciliation further down (a render-phase state adjustment plus a
+  // breakpoint and interruption resilience): tracks the settle timeout
+  // handleLandingSave schedules below (review-fix, product direction 2nd
+  // pass: the landing's own Save button is now the only thing that ends
+  // it — window.setTimeout(() => setDesktopLandingActive(false), ...)), so
+  // the reconciliation further down (a render-phase state adjustment plus a
   // small dedicated effect — see their own comments for why it's split
   // that way) can cancel a still-pending one if a breakpoint-crossing
-  // resize lands inside that window — reachable, since both schedule
+  // resize lands inside that window — reachable, since it schedules
   // against tuning.fieldRecedeDuration seconds (500ms by default), not
   // instantaneously. A ref, not state: the timeout id itself never drives
   // rendering.
@@ -280,8 +281,20 @@ export default function App() {
 
   // On desktop the field occupies a left plane and the tray a right rail;
   // keep the two flush by sizing the field to the remaining width.
-  const fieldWidth = sideBySide ? `calc(100% - ${RAIL_WIDTH})` : '100%';
-  const fieldCenterLeft = sideBySide ? `calc((100% - ${RAIL_WIDTH}) / 2)` : '50%';
+  //
+  // review-fix (product direction, 2nd pass): full-bleed (no rail reserved)
+  // for the entire desktop landing — "have the field span the entire screen
+  // without the rail" — until the landing's own Save button reveals it.
+  // Gated on desktopCardProgress reaching 1 rather than on
+  // desktopLandingActive directly: handleLandingSave sets
+  // desktopCardProgress synchronously, well before desktopLandingActive
+  // itself clears at the end of the settle timeout, so this lets the
+  // width's own CSS transition below start in lockstep with the card's
+  // animation toward the rail rather than lagging behind until the variant
+  // swap.
+  const railRevealed = !desktopLandingActive || desktopCardProgress > 0;
+  const fieldWidth = sideBySide && railRevealed ? `calc(100% - ${RAIL_WIDTH})` : '100%';
+  const fieldCenterLeft = sideBySide && railRevealed ? `calc((100% - ${RAIL_WIDTH}) / 2)` : '50%';
 
   // Empty-state surface selection (all within the 'field' view):
   //   history + no pins  → previous check-in's own surface docks peeked
@@ -504,26 +517,22 @@ export default function App() {
   // always reverts to receded (cancelDeparture never mints a pin, so
   // there's nothing new to show). `focusDragCommitThreshold` no longer
   // drives this decision — see its own removal below.
-  // desktopLandingActive only clears on a genuine commit, and only after
+  // review-fix (product direction, 2nd pass): desktopLandingActive no
+  // longer clears on a commit at all — dropping a pin (drag or press) only
+  // focuses the field now, never the rail/card. It clears exclusively via
+  // handleLandingSave below, the landing's own Save button, and only after
   // giving that settle transition time to actually finish (R9: "once the
   // transition completes") — clearing it immediately would swap
   // EmotionDrawer to 'rail' before the card and field had visually arrived,
   // a jump rather than a landing.
-  // U5/review-fix: shared clear-then-schedule helper for the settle timeout
-  // both U3's committed-drag branch and U4's press branch below need to
-  // arm. Both write into the SAME landingSettleTimeoutRef, so scheduling a
-  // new one without first clearing whatever the ref already holds would
-  // orphan an earlier still-pending timer: it would keep counting down,
-  // but the U5 breakpoint-reconciliation effect's cleanup can only ever
-  // clear whatever the ref CURRENTLY holds, so it would lose the ability
-  // to cancel the earlier timer once a later call overwrote the ref. A
-  // reachable sequence — committing a departure drag (arms timer A), then
-  // pressing the still-interactive receded field before timer A fires
-  // (arms timer B, overwriting the ref) — would otherwise leave timer A
-  // free to fire mid-flight and force-clear desktopLandingActive before
-  // the second gesture's own settle transition has visually finished, a
-  // jump instead of a smooth landing. Clearing first makes each new call
-  // fully supersede whatever settle was previously pending.
+  // U5: shared clear-then-schedule helper for that settle timeout —
+  // handleLandingSave is its only caller now, but it still clears any
+  // already-pending timeout before scheduling a new one (defensive: two
+  // rapid Save clicks, e.g. a double-click before the button disables
+  // itself, must not orphan an earlier timer the same way a stray second
+  // trigger could before this redesign — see the U5 breakpoint-
+  // reconciliation effect's own comment, which cancels whatever this ref
+  // CURRENTLY holds and would lose track of an orphaned earlier one).
   //
   // tuning.fieldRecedeDuration is read once here, at the moment a settle
   // is scheduled, into a local const rather than referenced again inside
@@ -564,66 +573,65 @@ export default function App() {
     // but is intentionally unused here.
     const committed = phase === 'commit';
     setDesktopFieldProgress(committed ? 1 : 0);
-    // review-fix: the card only ever moves here, on release — never during
-    // 'drag' above. This is the single point where its eased transition to
-    // the rail (committed) or back to centered (not committed) begins.
-    setDesktopCardProgress(committed ? 1 : 0);
-    if (committed) {
-      // U5: tracked in landingSettleTimeoutRef (via scheduleLandingSettle)
-      // so a breakpoint-crossing resize inside this window can cancel it
-      // (see the reconciliation effect below) rather than letting it fire
-      // later against a landing state a resize has already resolved on
-      // its own.
-      scheduleLandingSettle();
-    }
-  }, [scheduleLandingSettle]);
+    // review-fix (product direction, 2nd pass): committing a departure drag
+    // no longer touches desktopCardProgress or schedules the rail/card
+    // settle at all. Minting a pin (which commitDeparture in
+    // CoordinateCard.tsx already did, unconditionally, before this callback
+    // even fires) still focuses the field so the user can see where it
+    // landed — that's the setDesktopFieldProgress(1) above — but the card
+    // stays centered and the landing stays active until the user explicitly
+    // ends it via the card's own Save button (handleLandingSave below).
+    // Dropping a pin is no longer, by itself, a reason to reveal the rail.
+  }, []);
 
   // U4 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // press-triggered discrete transition, R8): wraps handlePinRelease for
   // presses that originate on the field itself (EmotionField's onPinRelease
   // prop below) — handleDepart above, the OTHER path into handlePinRelease,
-  // is left calling it directly, unwrapped, since a departure-slider drag's
-  // release already drives its own settle transition via
-  // handleDepartureDragProgress's 'commit'/'cancel' branch (which can settle
-  // to EITHER end, 0 or 1, depending on the commit threshold) — wiring this
-  // unconditional jump-to-1 into handlePinRelease itself would fire for that
-  // path too and stomp a below-threshold revert back to 1 regardless.
+  // is left calling it directly, unwrapped.
   //
-  // A direct field press has no drag phase to key progress off of (R8), so
-  // there's no threshold decision to make: it always jumps straight to the
-  // committed outcome. Mints the pin first (today's unconditional behavior —
-  // must not change, so this always runs regardless of desktopLandingActive),
-  // then, only while the landing is still active, sets desktopFieldProgress
-  // and desktopCardProgress to 1 directly (skipping any intermediate value)
-  // with the CSS transition enabled (desktopFocusLive false) so
-  // recedeProgress/cardFocusProgress's consumers ease there over
-  // tuning.fieldRecedeDuration rather than snapping — reusing that same
-  // knob rather than adding a new one, since
-  // it's already the duration both the field wrapper below and
-  // EmotionDrawer's focus variant use for every OTHER settle transition
-  // (U3's committed-drag case included) — a separate knob here would risk
-  // the two trigger paths visibly settling at different speeds, which is
-  // exactly the kind of divergence R9 asks this unit to avoid. Clears
-  // desktopLandingActive after that same duration, matching U3's
-  // commit-settle timing pattern exactly, so EmotionDrawer only swaps out of
-  // 'focus' once the transition has actually had time to arrive.
+  // review-fix (product direction, 2nd pass): mints the pin as always
+  // (today's unconditional behavior — must not change), and, only while the
+  // landing is still active, focuses the field (setDesktopFieldProgress(1))
+  // so the just-dropped pin is visible against a clear field — but no
+  // longer touches desktopCardProgress or schedules a settle. Same reasoning
+  // as handleDepartureDragProgress above: revealing the rail is no longer
+  // an automatic consequence of dropping a pin, from either trigger path —
+  // only the landing card's own Save button (handleLandingSave below) ends
+  // the landing now.
   const handleFieldPress = useCallback((entry: PinEntry) => {
     handlePinRelease(entry);
     if (desktopLandingActive) {
       setDesktopFocusLive(false);
       setDesktopFieldProgress(1);
-      // review-fix: U4 has no live 'drag' phase to hold the card still
-      // during (R8 — "keyed to the press itself rather than a drag phase"),
-      // so field and card settle together in this one discrete jump, same
-      // as before this change. The field-stays-put-during-drag fix above
-      // only applies to U3's drag path, which is the only one with a
-      // "during" to speak of.
-      setDesktopCardProgress(1);
-      // U5: same tracked-timeout treatment as U3's commit branch above,
-      // via the same scheduleLandingSettle helper.
-      scheduleLandingSettle();
     }
-  }, [handlePinRelease, desktopLandingActive, scheduleLandingSettle]);
+  }, [handlePinRelease, desktopLandingActive]);
+
+  // review-fix (product direction, 2nd pass): the landing's own way to end
+  // itself — a Save button rendered on the front-and-center card (wired via
+  // EmotionDrawer's `onLandingSave`, called instead of the ordinary `onDone`
+  // only while `isFocus`). Deliberately NOT `handleDone`/`handleRecord`:
+  // those route through `setView('complete')` (the append-path's
+  // celebration screen, DefinitionCardSequence + ConstellationReplay) —
+  // this save is the opposite of a celebration moment, it's the doorway
+  // into the ordinary field+rail app the user is about to land in, so it
+  // stays on `view === 'field'` and drives the same reveal-rail/animate-
+  // card-to-the-right transition U3/U4 used to trigger automatically.
+  // Mirrors `handleRecord`'s append branch (record + clear pins/selection)
+  // minus `setLastEntry`/`setView('complete')` — same precedent
+  // `handleRecord`'s own draftId/reopen branch already established for
+  // "record without the celebration screen." A landing save is always a
+  // genuinely new entry (the landing only ever shows for a first-time or
+  // returning desktop user's own fresh check-in, never a reopen), so there
+  // is no draftId branch to mirror here.
+  const handleLandingSave = useCallback(() => {
+    if (pins.length === 0) return;
+    record(pins, sessionStartRef.current, entrySource);
+    setPins([]);
+    setSelectedPinId(null);
+    setDesktopCardProgress(1);
+    scheduleLandingSettle();
+  }, [pins, record, entrySource, scheduleLandingSettle]);
 
   // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // breakpoint and interruption resilience): resolves the landing state
@@ -674,9 +682,9 @@ export default function App() {
   // reason to leave a stale mid-drag value sitting in state once nothing
   // consumes it as fresh). desktopLandingActive itself is never set true
   // again after mount, by any path (see its own comment above: the mount's
-  // lazy initializer is the only place it's ever set true; U3's commit
-  // branch, U4's press branch, and this effect are the only three places
-  // that ever clear it) — so unlike these two progress values, there is no
+  // lazy initializer is the only place it's ever set true; handleLandingSave
+  // and this effect are the only two places that ever clear it) — so unlike
+  // these two progress values, there is no
   // later desktop session in the same page load that could read a stale
   // value back in; this isn't guarding against desktopLandingActive
   // re-arming (it can't), just against dangling progress values nothing
@@ -688,10 +696,10 @@ export default function App() {
   // already unmounted in favor of 'sheet'.
   //
   // A separate, dedicated effect just below (not folded in here) cancels
-  // U3's committed-drag settle timeout or U4's press settle timeout if
-  // either is still pending — reachable whenever the resize lands inside
-  // the tuning.fieldRecedeDuration-second window between a commit/press
-  // and that timeout's own scheduled setDesktopLandingActive(false). Left
+  // handleLandingSave's settle timeout if it's still pending — reachable
+  // whenever the resize lands inside the tuning.fieldRecedeDuration-second
+  // window between a Save click and that timeout's own scheduled
+  // setDesktopLandingActive(false). Left
   // uncancelled, the stale timeout would still fire later and call
   // setDesktopLandingActive(false) again — harmless today, since this
   // block has already set it false and desktopLandingActive is never
@@ -948,8 +956,11 @@ export default function App() {
       }}
     >
       {/* Quiet rail backdrop — present on desktop so the right region reads as
-          an intentional plane even before a pin is placed */}
-      {sideBySide && (
+          an intentional plane even before a pin is placed. review-fix:
+          also gated on railRevealed — nothing to back during the desktop
+          landing, when the field spans the full width covering this same
+          area anyway (see fieldWidth's own comment). */}
+      {sideBySide && railRevealed && (
         <div
           style={{
             position: 'absolute',
@@ -1000,9 +1011,14 @@ export default function App() {
           // the pointer instead of tracking it directly; re-enabled the
           // instant the drag settles (release/cancel), which is exactly
           // when a transition should ease the value to its settled outcome.
+          // review-fix: `width` added to this same transition so the
+          // rail-reveal (fieldWidth flipping once railRevealed goes true,
+          // on handleLandingSave) eases in lockstep with the field's own
+          // recede/return and with EmotionDrawer's focus-card animation —
+          // all three read the same tuning.fieldRecedeDuration.
           transition: reducedMotion || desktopFocusLive
             ? 'none'
-            : `transform ${tuning.fieldRecedeDuration}s ease-out, filter ${tuning.fieldRecedeDuration}s ease-out`,
+            : `transform ${tuning.fieldRecedeDuration}s ease-out, filter ${tuning.fieldRecedeDuration}s ease-out, width ${tuning.fieldRecedeDuration}s ease-out`,
         }}
         onPointerDownCapture={(e) => {
           // While the passive, nothing-to-add mirror is EXPANDED (showMirror:
@@ -1102,7 +1118,16 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {showDemo && (
+            {/* review-fix (product direction, 2nd pass): suppressed during
+                the desktop landing — FirstRunDemo renders its own welcome
+                content into the rail area, which no longer exists while
+                desktopLandingActive (the field spans the full screen), and
+                the front-and-center card is now itself the first-time
+                welcome experience on desktop, making this a redundant,
+                colliding second one. showDemo's own value is untouched
+                (still drives axisEmphasis below) — only this render is
+                gated. */}
+            {showDemo && !desktopLandingActive && (
               <FirstRunDemo fieldWidth={fieldWidth} variant={sideBySide ? 'rail' : 'sheet'} />
             )}
           </AnimatePresence>
@@ -1139,6 +1164,7 @@ export default function App() {
                 onReopen={handleReopen}
                 onDepart={handleDepart}
                 onDepartureDragProgress={handleDepartureDragProgress}
+                onLandingSave={handleLandingSave}
                 cardFocusProgress={desktopCardProgress}
                 anchor={anchorPin}
                 anchorLabel={previousCheckInLabel}
