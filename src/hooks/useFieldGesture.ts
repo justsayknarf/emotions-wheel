@@ -19,7 +19,10 @@ interface Options {
   onGestureActiveChange?: (active: boolean) => void;
 }
 
-function pixelToCoord(
+// Exported for scripts/test-field-gesture.ts (U1): this repo has no
+// component-test harness, so the coordinate-normalization math is exercised
+// directly as pure logic rather than only live in the app.
+export function pixelToCoord(
   px: number,
   py: number,
   rect: DOMRect,
@@ -96,9 +99,22 @@ export function useFieldGesture({
   }
 
   function getCoord(e: React.PointerEvent) {
+    // `size` (ResizeObserver-derived, see EmotionField.tsx) only gates
+    // whether the field has been measured at all yet — it must NOT supply
+    // the normalization divisor below. ResizeObserver's contentRect never
+    // reflects a CSS `transform: scale()` on the container (or an ancestor
+    // of it, e.g. U1's recede wrapper in App.tsx), so once any partial
+    // recede is applied, `size` goes stale relative to the transform while
+    // `rect` (from getBoundingClientRect, read fresh on every gesture) does
+    // not. Dividing by the stale `size` here while the offset comes from
+    // `rect` would desync and misplace the coordinate — see
+    // scripts/test-field-gesture.ts for the reproduction. Reading
+    // rect.width/rect.height live, from this same rect, keeps the offset and
+    // the divisor mutually consistent under any transform.
     if (size.width === 0 || size.height === 0) return null;
     const rect = containerRef.current!.getBoundingClientRect();
-    return pixelToCoord(e.clientX, e.clientY, rect, size.width, size.height);
+    if (rect.width === 0 || rect.height === 0) return null;
+    return pixelToCoord(e.clientX, e.clientY, rect, rect.width, rect.height);
   }
 
   function fireFirstInteraction() {

@@ -85,6 +85,15 @@ interface Props {
   departureTracePlay?: number;
   departureTraceFrom?: { x: number; y: number } | null;
   departureTraceTo?: { x: number; y: number } | null;
+  // U1: how far the field is receded (0 = focused/today's rail, 1 = fully
+  // receded behind the front-and-center card). The actual scale/blur
+  // transform is applied one level up, on the App.tsx wrapper this
+  // component's containerRef sits inside (so it stays in sync with
+  // getBoundingClientRect — see useFieldGesture.ts) — this prop only drives
+  // the field's own pointer/hover affordance (R5: it must keep reading as
+  // directly pressable once visually backgrounded), not the transform
+  // itself. Left at its default (0) until U2-U5 wire real state through.
+  recedeProgress?: number;
 }
 
 export function EmotionField({
@@ -103,6 +112,7 @@ export function EmotionField({
   departureTracePlay = 0,
   departureTraceFrom = null,
   departureTraceTo = null,
+  recedeProgress = 0,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -116,6 +126,13 @@ export function EmotionField({
     y: (toPercent(-c.y) / 100) * size.height,
   });
 
+  // U1: this stays the source of truth for layout math (word/pin positions,
+  // fan geometry, etc. below) — it is NOT used for gesture-time coordinate
+  // normalization any more (see useFieldGesture.ts's getCoord), because
+  // ResizeObserver's contentRect never reflects a CSS transform applied to
+  // this element or an ancestor of it (U1's recede wrapper in App.tsx), so
+  // it would go stale relative to the transform-aware getBoundingClientRect
+  // gesture math reads instead.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -154,7 +171,7 @@ export function EmotionField({
     onPinRelease(entry);
   }, [onPinRelease, onPinSelect, pins, recordedPins, size]);
 
-  const { isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
+  const { isPressed, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
     size,
     onRelease: handleRelease,
@@ -162,6 +179,12 @@ export function EmotionField({
     hasInteracted,
     onGestureActiveChange,
   });
+  // U1: hover-only (no active press) — the receded field's pointer/hover
+  // affordance should read as "backgrounded but reachable," not fight with
+  // an in-flight press/drag. isRevealed is isPressed || isHovering
+  // internally (useFieldGesture.ts), so this recovers the hover-only half
+  // without widening that hook's own return shape.
+  const isHoveringOnly = isRevealed && !isPressed;
 
   const selectedIds = useMemo(
     () => new Set(pins.flatMap((p) => p.recognizedWords)),
@@ -382,7 +405,18 @@ export function EmotionField({
       onPointerUp={handlers.onPointerUp}
       onPointerCancel={handlers.onPointerCancel}
       className="relative w-full h-full overflow-hidden"
-      style={{ touchAction: 'none', overscrollBehavior: 'none', cursor: 'crosshair' }}
+      style={{
+        touchAction: 'none',
+        overscrollBehavior: 'none',
+        // U1/R5: once receded, the field must keep reading as directly
+        // pressable rather than decorative background — a pointer cursor
+        // (replacing the ordinary crosshair) plus a subtle inset highlight
+        // on hover. Both stay inert while recedeProgress is 0 (today's rail,
+        // the only state U1 ships with — U2-U5 drive it above 0).
+        cursor: recedeProgress > 0 ? 'pointer' : 'crosshair',
+        boxShadow: recedeProgress > 0 && isHoveringOnly ? 'inset 0 0 0 1px var(--ui-gold-dim)' : 'none',
+        transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
+      }}
     >
       {/* Ambient watercolor aura — the deepest layer, pure background mood */}
       <FieldAura />

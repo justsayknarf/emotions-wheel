@@ -1,4 +1,6 @@
 import type { DiaryEntry, PinEntry } from '../types';
+import type { Emotion } from './emotions';
+import { getRegionDescription } from './regions';
 import { startOfDay } from '../utils/formatDate';
 
 // Pure logic for the departure mark (docs/plans/2026-08-24-001-feat-departure-mark-plan.md).
@@ -10,10 +12,32 @@ import { startOfDay } from '../utils/formatDate';
  * Which pin today departs from — the previous check-in's newest pin. Matches
  * resolveActiveSelection's own case-4 fallback (src/data/checkIn.ts) so the
  * card and the field can never disagree about which pin is the anchor (LC2).
+ *
+ * U2 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): when
+ * there's no previous check-in at all, this now returns a synthetic pin at
+ * the neutral center of both axes (`id: 'neutral-anchor'`) rather than null
+ * — the desktop landing's neutral-centered first-time variant (R2) departs
+ * from this same synthetic pin the same way a returning user's card departs
+ * from their own last entry. `emotions` is only needed for this synthetic
+ * case's `regionDescription` (getRegionDescription's own signature); a real
+ * previousCheckIn's own anchor pin already carries its own stored
+ * regionDescription and ignores it. The empty-pins case (a previousCheckIn
+ * that somehow holds zero pins — unreachable via the UI, since Save is
+ * disabled at zero pins) is left returning null, unchanged from before this
+ * unit: only the *no previousCheckIn* case gained the synthetic pin.
  */
-export function departureAnchor(previousCheckIn: DiaryEntry | null): PinEntry | null {
-  if (!previousCheckIn || previousCheckIn.pins.length === 0) return null;
-  return previousCheckIn.pins[previousCheckIn.pins.length - 1];
+export function departureAnchor(previousCheckIn: DiaryEntry | null, emotions: Emotion[]): PinEntry | null {
+  if (previousCheckIn) {
+    if (previousCheckIn.pins.length === 0) return null;
+    return previousCheckIn.pins[previousCheckIn.pins.length - 1];
+  }
+  return {
+    id: 'neutral-anchor',
+    x: 0,
+    y: 0,
+    recognizedWords: [],
+    regionDescription: getRegionDescription(0, 0, emotions),
+  };
 }
 
 /**
@@ -75,6 +99,29 @@ const MUCH_EDGE = 0.62;
  */
 export function hasNotableDelta(from: { x: number; y: number }, to: { x: number; y: number }): boolean {
   return Math.abs(to.x - from.x) >= NAME_THRESHOLD || Math.abs(to.y - from.y) >= NAME_THRESHOLD;
+}
+
+/**
+ * U3 (drag-triggered progressive transition,
+ * docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): how far a
+ * departure-card slider has traveled from the anchor's own value on one axis
+ * (`origin` — the same value the departure card's tick mark already draws
+ * at, `origin={pin.x}`/`origin={pin.y}` in CoordinateCard.tsx), normalized
+ * to 0..1 against `fullTravel`. `fullTravel` is deliberately a fixed
+ * fraction of the full -1..1 track (CoordinateCard's own
+ * `DEPARTURE_DRAG_TRAVEL`, currently 1) rather than the track's own full
+ * end-to-end span — requiring the whole track's length to reach full
+ * progress would make the transition feel unreachable for an ordinary drag.
+ * Shared by CoordinateCard's dragDeparture/commitDeparture (the live,
+ * per-frame value reported every drag frame) and cancelDeparture (which
+ * reports the PEAK of this same function reached across the gesture, not
+ * just wherever the thumb ended up when the browser cancelled it — see its
+ * own comment). Pure so it's exercised directly here rather than only live
+ * in a drag; this repo has no test runner beyond these scripts.
+ */
+export function departureDragProgress(origin: number, current: number, fullTravel: number): number {
+  if (fullTravel <= 0) return current === origin ? 0 : 1;
+  return Math.max(0, Math.min(1, Math.abs(current - origin) / fullTravel));
 }
 
 function band(delta: number): 'little' | 'plain' | 'much' | null {

@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
 import { isDepartureEligible } from '../../data/departure';
+import { useRevealTuning } from '../../config/revealTuning';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
 import { formatRelative } from '../../utils/formatDate';
 import type { DiaryEntry, PinEntry } from '../../types';
@@ -39,7 +40,15 @@ const MICRO_LABEL: React.CSSProperties = {
   color: 'var(--ui-text-3)',
 };
 
-type Variant = 'sheet' | 'rail';
+// U2 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): a
+// third variant, 'focus' — the desktop landing's front-and-center card.
+// Reuses every prop and handler 'rail' already has (Save/Discard/history/
+// reopen chrome, the departure card's pre-positioned sliders); only its
+// final positioning/sizing branch near the bottom of this file differs from
+// 'rail's — see isFocus/isSheet below for how the two share 'rail's content
+// structure while excluding the mobile sheet's own peek/collapse/drag-shrink
+// mechanics.
+type Variant = 'sheet' | 'rail' | 'focus';
 
 interface Props {
   pins: PinEntry[];
@@ -70,6 +79,13 @@ interface Props {
   // Tunable timings (seconds) for the card's word dissolve on a coordinate commit.
   dissolve?: { fadeOut: number; fadeIn: number; hold: number };
   onDone: () => void;
+  // review-fix (product direction, 2nd pass): the 'focus' variant's own
+  // ending — actionBar's Save button calls this instead of `onDone` while
+  // `isFocus`, so the landing's own persist+reveal-rail flow
+  // (App.tsx's handleLandingSave) fires instead of the ordinary
+  // record-and-celebrate path. Optional and unused by 'rail'/'sheet',
+  // which keep calling `onDone` exactly as before.
+  onLandingSave?: () => void;
   onClear: () => void;
   // Reopen the previous check-in (by its entry id) into the draft, expanding
   // only the specific pin that was clicked — its siblings move into the
@@ -80,6 +96,27 @@ interface Props {
   // (its newest pin) — fired by that one card's pre-positioned sliders when
   // the draft is empty. Never touches the anchor itself (R2/R3).
   onDepart: (x: number, y: number) => void;
+  // U3 (drag-triggered progressive transition,
+  // docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): the
+  // departure card's own drag-progress signal (CoordinateCard's
+  // dragDeparture/commitDeparture/cancelDeparture), threaded straight
+  // through to App.tsx. Only ever wired to the departure card while
+  // `isFocus` (see cardList below) — the rail's own departure card isn't
+  // receded and has nothing to progress toward, so it's left undefined
+  // there, same as the mobile sheet.
+  onDepartureDragProgress?: (progress: number, phase: 'drag' | 'commit' | 'cancel') => void;
+  // U3: how far the 'focus' variant's own position/size has settled toward
+  // the rail (0 = resting/centered, 1 = rail). Ignored by 'rail'/'sheet'
+  // (neither is receded); defaults to 0 so those callers don't need to pass
+  // it. review-fix: deliberately NOT the same live value that drives App's
+  // recedeProgress during a drag — App only updates this prop on release
+  // (commit/cancel), never while a drag is in flight, so the card holds
+  // still (only the field recedes into view) while the user's finger is
+  // still on a departure slider inside it. Always animates with the normal
+  // eased CSS transition below; there is no "live, no-easing" state for the
+  // card to be in anymore (see `focusInstant`, which no longer branches on
+  // anything drag-related — only reduced-motion).
+  cardFocusProgress?: number;
   // U3/R9: the same anchor coordinate + relative-day label, resolved once
   // in App (departureAnchor/relativeDayLabel) and threaded into each
   // *draft* card's own anchor tick + delta — not the previous check-in's
@@ -134,9 +171,12 @@ export function EmotionDrawer({
   onAdjustDraft,
   dissolve,
   onDone,
+  onLandingSave,
   onClear,
   onReopen,
   onDepart,
+  onDepartureDragProgress,
+  cardFocusProgress = 0,
   anchor,
   anchorLabel,
   isReopened,
@@ -154,7 +194,35 @@ export function EmotionDrawer({
   const reversedPins = [...pins].reverse();
   const reversedPreviousPins = [...previousPins].reverse();
   const isRail = variant === 'rail';
+  // U2: 'focus' shares 'rail's content structure (group headers, the
+  // previous/draft split, never hiding history behind a draft) — it only
+  // differs in the final positioning branch below. `isSheet` is the mobile
+  // bottom sheet specifically, the only variant with peek/collapse and
+  // drag-shrink chrome; `isPanelLayout` (`!isSheet`) is the two variants
+  // that share 'rail's content decisions.
+  const isFocus = variant === 'focus';
+  const isSheet = !isRail && !isFocus;
+  const isPanelLayout = !isSheet;
   const reduce = useReducedMotion();
+  // U3: only consulted by the 'focus' return branch below (its
+  // fieldRecedeDuration keeps the card's own settle transition in sync with
+  // the field's — see that branch's own comment) — reading it
+  // unconditionally here, rather than only within `if (isFocus)`, keeps
+  // this a plain hook call rather than one gated behind a runtime
+  // condition, which hook-order rules require anyway.
+  const tuning = useRevealTuning();
+  // U2: on mount as 'focus', move focus onto the card's own root so the next
+  // Tab press lands on the card's first focusable descendant (the departure
+  // card's Reopen link, or the draft actionBar's Discard/Save once a pin is
+  // dropped) rather than wherever focus happened to be — consistent with
+  // the front-and-center card being the primary landing element. Only ever
+  // attached to the 'focus' return branch's root below; harmless (never
+  // fires) on the other two branches since `focusRootRef.current` stays
+  // null there.
+  const focusRootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isFocus) focusRootRef.current?.focus();
+  }, [isFocus]);
   // U3: the sheet's peek <-> expand toggle used to be two separate
   // `motion.div` returns, each replaying its own mount-only enter
   // animation on toggle, so the height change between them snapped
@@ -190,12 +258,16 @@ export function EmotionDrawer({
   const sheetActionBarRef = useRef<HTMLDivElement>(null);
   // Mirrors the old isPeeked=false condition: body (action bar + card
   // list, or editingSection while isReopened) is showing. Never true for
-  // the rail, which has no peek/collapse concept.
-  const sheetBodyVisible = !isRail && (isReopened || expanded);
+  // the rail or the focus card (U2), neither of which has a peek/collapse
+  // concept — only the mobile sheet does.
+  const sheetBodyVisible = isSheet && (isReopened || expanded);
   // Shared precondition for every sheet-only, non-reopened derivation below
   // (dragShrinkActive, hideHistory, handleAlreadyShowsTime) — named once
-  // rather than repeated per condition.
-  const isDraftSheet = !isRail && !isReopened;
+  // rather than repeated per condition. U2: scoped to `isSheet` (not
+  // `!isRail`) so the focus card doesn't inherit the mobile sheet's
+  // drag-shrink/history-hiding behavior — it shares 'rail's content
+  // decisions instead (isPanelLayout above).
+  const isDraftSheet = isSheet && !isReopened;
   // R7-R10: while a slider drag is active on the sheet's ordinary draft-cards
   // path, hide everything but the actively-dragged card so more of the
   // field shows through. Derived at render, not stored state —
@@ -204,7 +276,8 @@ export function EmotionDrawer({
   useLayoutEffect(() => {
     // isReopened renders at a static height (see the sheet return below)
     // — it never toggles isPeeked, so it never needs this measurement.
-    if (isRail || isReopened) return;
+    // U2: same for the focus card — it has no peek/collapse either.
+    if (!isSheet || isReopened) return;
     const measure = () => {
       const handleHeight = sheetHandleRef.current?.offsetHeight ?? PEEK_BAR_HEIGHT;
       if (!sheetBodyVisible) {
@@ -247,7 +320,7 @@ export function EmotionDrawer({
     // continuously during a slider drag or word pick, and retriggering
     // this measurement for each one would double-animate the same visual
     // change CoordinateCard already animates internally.
-  }, [isRail, isReopened, sheetBodyVisible, dragShrinkActive, pins.length, scrollRef]);
+  }, [isSheet, isReopened, sheetBodyVisible, dragShrinkActive, pins.length, scrollRef]);
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
@@ -261,6 +334,16 @@ export function EmotionDrawer({
   // matching departureAnchor's own fallback (src/data/departure.ts) so this
   // card and the field's anchor ring can't disagree about which pin it is.
   const anchorPinId = previousPins.length > 0 ? previousPins[previousPins.length - 1].id : null;
+  // Desktop-check-in-focus plan's own U2 (distinct from the "U2/KTD1" label
+  // just above, which is the earlier departure-mark plan's unit): the
+  // neutral-centered first-time landing (R2). `isDepartureEligible` above
+  // always requires a real `previousCheckIn` (every other caller of it needs
+  // one to depart *from*), so it's structurally false whenever there is no
+  // previous check-in at all — this is the separate condition for that case,
+  // gating the synthetic (0, 0) anchor card in cardList below. Focus-only:
+  // 'rail'/'sheet' never had anywhere to show a card with no previous
+  // check-in and no draft pins, and still don't outside the landing.
+  const neutralDepartureEligible = isFocus && !isReopened && pins.length === 0 && !previousCheckIn;
   // Once a fresh draft has pins on the sheet, previous-check-in content
   // (the returning-summary block and the previous check-in's read-only
   // cards) hides so the draft renders as the top and only content —
@@ -330,9 +413,10 @@ export function EmotionDrawer({
         padding: '11px 16px',
         // On the sheet, this is now the sheet's bottom-most element (U2) —
         // it needs the safe-area-bottom accommodation cardList used to
-        // provide when it was last. The rail has no safe-area inset to
+        // provide when it was last. Neither the rail nor the focus card
+        // (desktop-only, U2 desktop-check-in-focus) has a safe-area inset to
         // account for.
-        paddingBottom: isRail ? '11px' : 'max(11px, env(safe-area-inset-bottom))',
+        paddingBottom: isPanelLayout ? '11px' : 'max(11px, env(safe-area-inset-bottom))',
         // Both variants now render this after `cardList` (U2), so a top
         // border separates it from the scrollable content above rather
         // than a bottom border that would sit at the sheet's own edge.
@@ -368,7 +452,12 @@ export function EmotionDrawer({
         <span />
       )}
       <button
-        onClick={onDone}
+        // review-fix (product direction, 2nd pass): the 'focus' variant's
+        // own Save ends the landing (reveal rail + animate this card to the
+        // right) instead of the ordinary record-and-celebrate path — see
+        // onLandingSave's own prop comment. 'rail'/'sheet' keep calling
+        // onDone exactly as before.
+        onClick={isFocus && onLandingSave ? onLandingSave : onDone}
         disabled={!canSave}
         style={{
           background: canSave ? 'var(--ui-gold)' : 'var(--ui-border)',
@@ -411,6 +500,21 @@ export function EmotionDrawer({
   const visibleDraftPins = dragShrinkActive
     ? reversedPins.filter((pin) => pin.id === draggingPinId)
     : reversedPins;
+  // Review fix (P1, anchor-tick leak): `anchor` is departureAnchor's
+  // synthetic (0, 0) neutral pin (src/data/departure.ts) whenever there's no
+  // real previousCheckIn — that pin exists only to feed the
+  // neutralDepartureEligible departure card below (which reads `anchor`
+  // directly, unfiltered). An ordinary draft card below must never receive
+  // it as its comparison anchor: CoordinateCard/AxisSlider render the anchor
+  // tick whenever `anchorValue !== undefined`, with no dependency on
+  // anchorLabel, so the synthetic pin's always-defined (0, 0) coordinate was
+  // drawing an unlabeled tick on every axis of every draft card for any
+  // first-time user (mobile and new-tab included, not just this desktop
+  // landing). `previousCheckIn` truthiness is the same condition
+  // departureAnchor itself branches on to decide real-vs-synthetic, so it's
+  // the correct signal here too, with no new prop needed.
+  const realAnchor = previousCheckIn ? anchor : null;
+
   const draftCards = (
     <AnimatePresence initial={false}>
       {visibleDraftPins.map((pin) => (
@@ -434,7 +538,7 @@ export function EmotionDrawer({
             onAdjust={onAdjust}
             onAdjustDraft={onAdjustDraft}
             dissolve={dissolve}
-            anchor={anchor}
+            anchor={realAnchor}
             anchorLabel={anchorLabel}
           />
         </motion.div>
@@ -581,7 +685,7 @@ export function EmotionDrawer({
           the gold cards, and the local Discard Edit / Update Check-in row
           already say "you're editing this" without the label itself having
           to change. */}
-      {isRail && (
+      {isPanelLayout && (
         <div style={{ ...groupHeaderStyle, padding: '10px 12px 2px' }}>
           {`Previous check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
         </div>
@@ -613,7 +717,7 @@ export function EmotionDrawer({
         // own editingActionBar (inside editingSection, rendered in this
         // same slot) has no safe-area padding of its own, so this list
         // still needs to provide it when reopened.
-        paddingBottom: !isRail && isReopened ? 'max(16px, env(safe-area-inset-bottom))' : 8,
+        paddingBottom: isSheet && isReopened ? 'max(16px, env(safe-area-inset-bottom))' : 8,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
@@ -638,10 +742,51 @@ export function EmotionDrawer({
         editingSection
       ) : (
         <>
-          {isRail && previousPins.length > 0 && (
+          {isPanelLayout && previousPins.length > 0 && (
             <div style={groupHeaderStyle}>
               {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
             </div>
+          )}
+          {/* U2 (desktop-check-in-focus): the neutral-centered first-time
+              landing (R2) — no previousCheckIn, so `previousPins` above is
+              empty and the mapped list below never runs. `anchor` is
+              departureAnchor's synthetic (0, 0) pin (App.tsx), resolved the
+              same way for a first-time user as a returning one's own anchor.
+              No group header (there is no "previous check-in" to label) and
+              no reopen destination (there is no entry to reopen into) — Save
+              reads disabled rather than a working-but-nonsensical link. */}
+          {neutralDepartureEligible && anchor && (
+            <motion.div
+              key={anchor.id}
+              layout
+              data-pin-id={anchor.id}
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+            >
+              <CoordinateCard
+                pin={anchor}
+                isSelected={anchor.id === selectedPinId}
+                isEntering={false}
+                onSelect={() => onSelectPin(anchor.id)}
+                onRecognize={onRecognize}
+                onDerecognize={onDerecognize}
+                // Departure mode renders no remove/recognize controls —
+                // unreachable, kept only to satisfy the prop's type, same as
+                // the real-anchor read-only cards below.
+                onRemove={() => {}}
+                onAdjust={onAdjust}
+                onAdjustDraft={onAdjustDraft}
+                dissolve={dissolve}
+                readOnly
+                reopenDisabled
+                departure
+                onDepart={onDepart}
+                // U3: only the focus card is receded/has anything to
+                // progress toward — see the prop's own doc comment.
+                onDepartureDragProgress={isFocus ? onDepartureDragProgress : undefined}
+              />
+            </motion.div>
           )}
           {!hideHistory && previousPins.length > 0 && (
             <AnimatePresence initial={false}>
@@ -679,13 +824,16 @@ export function EmotionDrawer({
                     // draft, stays the plain read-only summary above.
                     departure={departureEligible && pin.id === anchorPinId}
                     onDepart={onDepart}
+                    // U3: only the focus card is receded/has anything to
+                    // progress toward — see the prop's own doc comment.
+                    onDepartureDragProgress={isFocus ? onDepartureDragProgress : undefined}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
           )}
 
-          {isRail && (
+          {isPanelLayout && (
             <div style={groupHeaderStyle}>
               {`Draft check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
             </div>
@@ -719,7 +867,16 @@ export function EmotionDrawer({
         // isReopened case above). Explicit 'auto' lets `top`/`bottom` (in
         // `style` below) govern the height again, as they always did
         // before the sheet's animated height existed.
-        animate={{ x: 0, height: 'auto' }}
+        //
+        // Review fix (P1, scale leak): `scale`/`opacity` are set explicitly
+        // here for the same reason `height: 'auto'` is above — the 'focus'
+        // branch's own `animate` (below) interpolates `scale` down toward
+        // ~0.92 during its recede state and always targets `opacity: 1`;
+        // omitting either key here left framer's last-applied inline value
+        // in place on this reused DOM node, freezing the rail permanently
+        // shrunk at whatever scale the focus card last animated to when a
+        // drag-commit/field-press/breakpoint resize swapped 'focus' -> 'rail'.
+        animate={{ x: 0, height: 'auto', scale: 1, opacity: 1 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
         style={{
@@ -736,6 +893,92 @@ export function EmotionDrawer({
         {cardList}
         {/* Never renders while isReopened — editingSection above owns its
             own Discard Edit / Update Check-in row instead. */}
+        {!isReopened && actionBar}
+      </motion.div>
+    );
+  }
+
+  // Focus (U2, docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md):
+  // the desktop landing's front-and-center card — same cardList/actionBar
+  // content as 'rail' above (isPanelLayout keeps their group headers and
+  // history-visibility identical), positioned as a centered overlay instead
+  // of a docked side rail. `tabIndex={-1}` + the mount-focus effect above
+  // make this the keyboard landing point (R1/R2's card is the primary
+  // element) without adding a stop of its own to the page's ordinary tab
+  // sequence — the very next Tab reaches the card's own first focusable
+  // descendant (the departure card's Reopen link, or Discard/Save once a
+  // pin lands), not wherever focus happened to be before the landing mounted.
+  //
+  // U3 (drag-triggered progressive transition): `cardFocusProgress` (0 =
+  // resting centered overlay, 1 = about to swap to 'rail' — App.tsx clears
+  // desktopLandingActive once the settle transition below has had time to
+  // finish, so this never has to literally land on 'rail's own layout
+  // pixel-for-pixel, just visibly move toward it — see the plan's own U3
+  // scope note: "proportionate... not pixel-perfect") drives a plain,
+  // continuous lerp of this card's own translate offset / width /
+  // border-radius. Framer's own `animate` keeps its original job here —
+  // mount/exit opacity + a scale "pop" — but its `scale` target is now fed
+  // from the SAME progress (`focusScale`).
+  //
+  // review-fix: `cardFocusProgress` only ever changes on release now (App's
+  // handleDepartureDragProgress sets it on 'commit'/'cancel', never on
+  // 'drag') — R7's "the layout eases toward today's side-rail arrangement"
+  // used to be read as "field AND card move together, live, during the
+  // drag," but that made the card resize/reposition under the user's own
+  // finger while they were still dragging a slider mounted on it (reported
+  // live: "the slider is fighting the drag"). The card now holds its
+  // resting position/size for the whole drag — only the field recedes into
+  // view during that phase — and animates to the rail in one eased motion
+  // only after release. Because of that, there is no longer a "live,
+  // no-easing" state for the card to be in — `focusInstant` below no longer
+  // branches on drag-liveness, only reduced-motion, and the CSS `transition`
+  // is always active for this card's own position/size interpolation. The
+  // position/size offset itself is still carried on the CSS `translate`
+  // property — distinct from `transform`, so it composes independently of
+  // framer's own `transform` output (which owns `scale` via `animate`)
+  // rather than colliding with it, the same way a second `transform` source
+  // would.
+  if (isFocus) {
+    const focusP = Math.max(0, Math.min(1, cardFocusProgress));
+    const lerp = (a: number, b: number) => a + (b - a) * focusP;
+    // % of the card's own width/height — drifts from dead-center toward the
+    // upper-right, roughly where 'rail' docks (top-right, full height).
+    const focusTranslateX = lerp(-50, 20);
+    const focusTranslateY = lerp(-50, -44);
+    const focusScale = lerp(1, 0.92);
+    const focusWidthPx = lerp(420, 372); // eases toward RAIL_WIDTH's own ~340-420px clamp range
+    const focusRadius = lerp(16, 0); // 'rail' docks flush — no rounding
+    const focusInstant = reduce;
+
+    return (
+      <motion.div
+        ref={focusRootRef}
+        tabIndex={-1}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: focusScale }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={focusInstant ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
+        style={{
+          ...shared,
+          top: '50%',
+          left: '50%',
+          translate: `${focusTranslateX}% ${focusTranslateY}%`,
+          width: `min(${focusWidthPx}px, 92vw)`,
+          maxHeight: '86vh',
+          borderRadius: focusRadius,
+          border: '1px solid var(--ui-border)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
+          outline: 'none',
+          touchAction: 'pan-y',
+          transition: focusInstant
+            ? 'none'
+            : `translate ${tuning.fieldRecedeDuration}s ease-out, width ${tuning.fieldRecedeDuration}s ease-out, border-radius ${tuning.fieldRecedeDuration}s ease-out`,
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {cardList}
+        {/* Never renders while isReopened — editingSection above owns its
+            own Discard Edit / Update Check-in row instead, same as 'rail'. */}
         {!isReopened && actionBar}
       </motion.div>
     );
@@ -840,6 +1083,14 @@ export function EmotionDrawer({
         // freeze the container at that stale pixel value instead of
         // sizing to the static `maxHeight: '46vh'` below.
         height: isReopened ? 'auto' : sheetHeight ?? (sheetBodyVisible ? undefined : PEEK_BAR_HEIGHT),
+        // Review fix (P1, scale leak): same reasoning as `height` just
+        // above, and as the 'rail' branch's own `animate` — the 'focus'
+        // branch interpolates `scale` toward ~0.92 and always targets
+        // `opacity: 1`; setting both explicitly here keeps a
+        // 'focus' -> 'sheet' swap (a breakpoint-crossing resize mid-landing)
+        // from freezing this tray at focus's last-animated scale.
+        scale: 1,
+        opacity: 1,
       }}
       exit={{ y: '100%' }}
       transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}

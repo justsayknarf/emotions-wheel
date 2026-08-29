@@ -40,14 +40,29 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
       const rect = plane.getBoundingClientRect();
       const px = (toPercent(pin.x) / 100) * rect.width;
       const py = (toPercent(-pin.y) / 100) * rect.height;
-      // Endpoint x is the rail's left edge (the field plane's right edge).
-      const ex = rect.width;
+      // Fallback endpoint (no card found yet): the field plane's right
+      // edge, which is where the rail — and the card inside it — normally
+      // sit immediately adjacent to. Overridden below whenever the actual
+      // card element is found, which is the common case.
+      let ex = rect.width;
       let ey = rect.height * 0.3;
       const rail = railRef.current;
       const card = rail?.querySelector(`[data-pin-id="${selectedPinId}"]`) as HTMLElement | null;
       if (rail && card) {
         const c = card.getBoundingClientRect();
         const railRect = rail.getBoundingClientRect();
+        // review-fix: x used to always be the field plane's right edge —
+        // correct only when the card genuinely lives in a rail flush
+        // against that edge. The desktop landing's front-and-center card
+        // floats centered instead (no rail reserved), so that assumption
+        // put the thread's endpoint at the screen's far edge, nowhere near
+        // the card, instead of hidden. Use the card's own near edge —
+        // whichever side (left or right) is actually closer to the pin —
+        // so the thread reads as entering the card from wherever it really
+        // sits, correct for both a rail-docked card and a centered one.
+        const cardLeft = c.left - rect.left;
+        const cardRight = c.right - rect.left;
+        ex = Math.abs(px - cardLeft) <= Math.abs(px - cardRight) ? cardLeft : cardRight;
         const raw = c.top - rect.top + c.height / 2;
         // Clamp to the rail's visible range so a scrolled-out selected card
         // pulls the thread to the top/bottom edge instead of off-screen.

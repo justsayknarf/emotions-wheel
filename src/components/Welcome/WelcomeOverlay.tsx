@@ -13,6 +13,12 @@ interface Props {
 // a dialog. pointerEvents: none, so a touch falls straight through to the field
 // (App tears the overlay down on that same touch). Mount/unmount is driven by
 // AnimatePresence at the call site.
+//
+// Anchored to the top rather than dead-center: the desktop landing's focus
+// card (EmotionDrawer's 'focus' variant) also centers on the field, at
+// zIndex 40 — a vertically-centered cue at zIndex 35 rendered directly behind
+// it, invisible for the whole landing. Top-center clears the card regardless
+// of its height, and sits above it (zIndex 45) so it's never occluded.
 export function WelcomeOverlay({ cue, fieldCenterLeft, exitDuration }: Props) {
   const reduce = useReducedMotion();
 
@@ -20,12 +26,12 @@ export function WelcomeOverlay({ cue, fieldCenterLeft, exitDuration }: Props) {
     <div
       style={{
         position: 'absolute',
-        top: '50%',
+        top: 64,
         left: fieldCenterLeft,
-        transform: 'translate(-50%, -50%)',
+        transform: 'translateX(-50%)',
         textAlign: 'center',
         pointerEvents: 'none',
-        zIndex: 35,
+        zIndex: 45,
         maxWidth: '80%',
       }}
     >
@@ -43,7 +49,7 @@ export function WelcomeOverlay({ cue, fieldCenterLeft, exitDuration }: Props) {
         style={{
           margin: 0,
           fontFamily: FIELD_FONT,
-          fontSize: 22,
+          fontSize: 30,
           fontWeight: 300,
           lineHeight: 1.35,
           letterSpacing: '0.01em',
