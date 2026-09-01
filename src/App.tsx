@@ -106,8 +106,8 @@ export default function App() {
   // would silently fall back to 'web'. resolveSessionEntrySource caches the
   // first resolution in sessionStorage precisely so that fallback doesn't
   // happen on a same-tab refresh — otherwise a refreshed new-tab session would
-  // wrongly show the desktop landing (U2 excludes 'new-tab' from it) instead
-  // of jumping straight to the rail.
+  // wrongly drop into the rail (U2 below requires 'new-tab' for the desktop
+  // landing) instead of staying front-and-center.
   const [entrySource] = useState<DiaryEntry['source']>(() => resolveSessionEntrySource(window.location.search));
 
   // Grounding welcome: a cue shown at the start of each check-in. `nonce` lets
@@ -140,19 +140,29 @@ export default function App() {
   // synchronously) and `entries` (a lazy localStorage read in useDiary,
   // above) are both already resolved by this first render, so "previousCheckIn
   // resolution complete" is already satisfied here — nothing waits on a
-  // later effect. Excludes 'new-tab' sessions (R4/AE6) so this plan stays
-  // correct standalone, independent of whether the sibling new-tab plan has
-  // shipped. Being one-shot-at-mount, rather than derived, is what keeps
-  // completing the very first check-in mid-session from re-triggering the
-  // landing for the entry just recorded — `previousCheckIn` changing
-  // afterward has no effect on this flag. U3 adds one way to clear it: the
-  // drag transition (handleDepartureDragProgress below) clears it once a
-  // committed drag's settle transition has had time to finish. U4 adds a
-  // second, parallel way: a direct field press (handleFieldPress below)
-  // clears it on the same settle-duration timing, once its own discrete
-  // jump-to-focused transition has had time to finish. U5 will add the
-  // remaining way (a breakpoint crossing out of desktop).
-  const [desktopLandingActive, setDesktopLandingActive] = useState(() => sideBySide && entrySource !== 'new-tab');
+  // later effect.
+  //
+  // review-fix (product direction): this plan's R4/AE6 originally excluded
+  // 'new-tab' sessions from the landing, reserving it for a separately-planned
+  // "sliders-only-no-field" new-tab treatment (docs/plans/
+  // 2026-08-26-001-feat-newtab-minimal-ritual-plan.md) that hadn't shipped
+  // yet. That plan direction has since reversed: the front-and-center landing
+  // built here IS the new-tab treatment — opening a tab via the extension is
+  // exactly the moment this card should be front-and-center — while an
+  // ordinary direct/bookmarked visit ('web') keeps today's rail. So the flag
+  // now requires 'new-tab' rather than excluding it.
+  //
+  // Being one-shot-at-mount, rather than derived, is what keeps completing
+  // the very first check-in mid-session from re-triggering the landing for
+  // the entry just recorded — `previousCheckIn` changing afterward has no
+  // effect on this flag. U3 adds one way to clear it: the drag transition
+  // (handleDepartureDragProgress below) clears it once a committed drag's
+  // settle transition has had time to finish. U4 adds a second, parallel
+  // way: a direct field press (handleFieldPress below) clears it on the same
+  // settle-duration timing, once its own discrete jump-to-focused transition
+  // has had time to finish. U5 will add the remaining way (a breakpoint
+  // crossing out of desktop).
+  const [desktopLandingActive, setDesktopLandingActive] = useState(() => sideBySide && entrySource === 'new-tab');
 
   // U2: which variant EmotionDrawer renders — 'focus' while the landing flag
   // above is active, else the ordinary sideBySide-driven 'rail'/'sheet' split
