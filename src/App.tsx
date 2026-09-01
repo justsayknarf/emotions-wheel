@@ -7,7 +7,7 @@ import { nearestTagIds, getRegionDescription } from './data/regions';
 import { adjustPin, withOrigin } from './data/pins';
 import { derivePreviousCheckIn, resolveActiveSelection } from './data/checkIn';
 import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/departure';
-import { resolveEntrySource } from './data/source';
+import { resolveSessionEntrySource } from './data/source';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
@@ -103,8 +103,12 @@ export default function App() {
   // once at boot via a lazy initializer, same as welcomeCue below, rather than
   // recomputed at render: the query param gets stripped from the URL right
   // after (see the mount effect below), so re-deriving later in the session
-  // would silently fall back to 'web'.
-  const [entrySource] = useState<DiaryEntry['source']>(() => resolveEntrySource(window.location.search));
+  // would silently fall back to 'web'. resolveSessionEntrySource caches the
+  // first resolution in sessionStorage precisely so that fallback doesn't
+  // happen on a same-tab refresh — otherwise a refreshed new-tab session would
+  // wrongly show the desktop landing (U2 excludes 'new-tab' from it) instead
+  // of jumping straight to the rail.
+  const [entrySource] = useState<DiaryEntry['source']>(() => resolveSessionEntrySource(window.location.search));
 
   // Grounding welcome: a cue shown at the start of each check-in. `nonce` lets
   // the auto-dissolve timer restart when a new check-in re-opens the welcome
