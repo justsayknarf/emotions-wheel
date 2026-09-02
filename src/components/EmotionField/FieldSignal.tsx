@@ -9,8 +9,8 @@
 
 const STILL_CENTER =
   'radial-gradient(circle at 50% 50%, ' +
-  'rgba(237,232,223,0.055) 0%, ' +
-  'rgba(237,232,223,0.02) 7%, ' +
+  'rgba(237,232,223,0.035) 0%, ' +
+  'rgba(237,232,223,0.012) 7%, ' +
   'rgba(237,232,223,0) 15%)';
 
 const INTENSITY_GRADIENT =
