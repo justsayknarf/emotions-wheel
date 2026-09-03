@@ -10,6 +10,7 @@ import { relativeDayLabel, departureAnchor, isDepartureEligible } from './data/d
 import { resolveSessionEntrySource } from './data/source';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
+import { ShaderBackground } from './components/ShaderBackground/ShaderBackground';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
 import { SessionComplete } from './components/SessionComplete';
@@ -969,6 +970,11 @@ export default function App() {
         }
       }}
     >
+      {/* Experimental (feat/shader-gradient-background): animated shader
+          gradient behind everything else — sits beneath the rail backdrop
+          (zIndex 1) and field (zIndex 2) at the implicit zIndex 0. */}
+      <ShaderBackground />
+
       {/* Quiet rail backdrop — present on desktop so the right region reads as
           an intentional plane even before a pin is placed. review-fix:
           also gated on railRevealed — nothing to back during the desktop
