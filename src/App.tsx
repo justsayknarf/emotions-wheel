@@ -117,6 +117,12 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [welcomeCue, setWelcomeCue] = useState(() => nextCue().cue);
   const [welcomeFast, setWelcomeFast] = useState(false);
+  // The focus card's live measured top edge (EmotionDrawer's
+  // onFocusCardTopChange), so WelcomeOverlay can anchor just above its
+  // actual rendered position instead of a fixed guess at its height. Null
+  // until measured (first paint) or whenever no focus card is mounted —
+  // WelcomeOverlay falls back to a fixed offset in either case.
+  const [focusCardTop, setFocusCardTop] = useState<number | null>(null);
   const [welcomeNonce, setWelcomeNonce] = useState(0);
 
   // The axis pulse is a separate lifecycle from the welcome message: it begins
@@ -1006,6 +1012,7 @@ export default function App() {
                 key="welcome"
                 cue={welcomeCue}
                 fieldCenterLeft={fieldCenterLeft}
+                cardTop={focusCardTop}
                 exitDuration={welcomeFast ? WELCOME_EXIT_SNAP : WELCOME_EXIT_CALM}
               />
             )}
@@ -1111,6 +1118,7 @@ export default function App() {
                 expanded={mirrorExpanded}
                 onToggle={() => setMirrorExpanded((v) => !v)}
                 draggingPinId={draggingPinId}
+                onFocusCardTopChange={setFocusCardTop}
               />
             )}
           </AnimatePresence>
