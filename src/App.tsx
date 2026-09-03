@@ -436,6 +436,16 @@ export default function App() {
     // reaches `pins` here, so no pin ever appears on the field or the card
     // list for it.
     if (draftId !== null) return;
+    // docs/plans/2026-09-03-001-feat-single-pin-checkin-plan.md, U1: a
+    // check-in holds exactly one pin. Once one exists, a further mint
+    // (field press or departure-slider release) relocates it in place
+    // instead of appending a second — mirroring handleAdjustPin's own
+    // quiet update below (no fanfare, no departure-trace re-fire, no
+    // second pin ever visible in the card list).
+    if (pins.length > 0) {
+      setPins((prev) => (prev.length > 0 ? [adjustPin(prev[0], entry.x, entry.y)] : prev));
+      return;
+    }
     // R6: any mint while the landing state applies is a departure from the
     // anchor — both gestures the plan describes (dragging a departure
     // slider via handleDepart below, or pressing the field directly) end
