@@ -1012,7 +1012,14 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {showHint && (
+            {/* Suppressed during the desktop landing, same reasoning as
+                showDemo just below: the front-and-center card (EmotionDrawer's
+                'focus' variant / DepartureFloat) is itself the first-time
+                welcome on desktop, so this hint would otherwise render behind
+                it at a lower zIndex — a redundant, partially-visible second
+                "how are you feeling" prompt bleeding through the frosted
+                card. */}
+            {showHint && !desktopLandingActive && (
               <div
                 key="hint"
                 style={{

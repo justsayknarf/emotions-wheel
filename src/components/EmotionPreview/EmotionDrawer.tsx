@@ -555,6 +555,7 @@ export function EmotionDrawer({
       <DepartureFloat
         ref={focusRootRef}
         anchor={neutralDepartureEligible ? anchor! : previousPins[previousPins.length - 1]}
+        firstTime={neutralDepartureEligible}
         onDepart={onDepart}
         onDepartureDrag={onDepartureDrag}
       />
