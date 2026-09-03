@@ -78,23 +78,11 @@ interface Props {
   // never starts a new reopen. Rendered disabled rather than hidden, per the
   // plan's "renders disabled until the draft is recorded or discarded."
   reopenDisabled?: boolean;
-  // U2/R1-R4: the landing state for the previous check-in's anchor pin only
-  // (readOnly && showMirror, resolved by the caller) — pre-positioned,
-  // interactive sliders that mint a *new* draft pin rather than editing this
-  // one. Only meaningful alongside readOnly; ignored otherwise. LC1: Reopen
-  // relocates to a plain link below the sliders in this mode, and the
-  // header's top-right corner renders nothing — nothing button-shaped
-  // competes with the continuous control.
-  departure?: boolean;
-  // Fires once, on release of the first departure slider drag (or omitted
-  // entirely if the user reopens instead) — mints the new draft pin at the
-  // committed coordinate. Only meaningful alongside `departure`.
-  onDepart?: (x: number, y: number) => void;
   // U3/R9: the previous check-in's anchor coordinate and its relative-day
   // label, for the draft card's own anchor tick + plain-language delta.
-  // Only rendered on the ordinary editable body (not readOnly/departure —
-  // Reopen's flow compares against a *different*, older check-in, which is
-  // out of this unit's scope). Null/omitted when there's no previous
+  // Only rendered on the ordinary editable body (not readOnly — Reopen's
+  // flow compares against a *different*, older check-in, which is out of
+  // this unit's scope). Null/omitted when there's no previous
   // check-in, which leaves the card exactly as it was before this unit.
   anchor?: { x: number; y: number } | null;
   anchorLabel?: string | null;
@@ -108,7 +96,7 @@ interface Props {
   frosted?: boolean;
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, anchor = null, anchorLabel = null, frosted = false }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, anchor = null, anchorLabel = null, frosted = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -248,10 +236,10 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     const base = draftRef.current ?? { x: pin.x, y: pin.y };
     return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
   };
-  // The local drag-state bookkeeping shared by every axis interaction below
-  // (ordinary adjustment and departure alike) — kept in these two functions
-  // so the four call sites differ only in which external callback fires,
-  // not in how draftRef/draft/draggingAxis get set or cleared.
+  // The local drag-state bookkeeping shared by the axis interactions below —
+  // kept in these two functions so the call sites differ only in which
+  // external callback fires, not in how draftRef/draft/draggingAxis get set
+  // or cleared.
   const setLiveDraft = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
     draftRef.current = next;
@@ -284,38 +272,6 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     clearLiveDraft();
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
-  };
-
-  // U2: departure mode's own drag/commit pair — shares the same local
-  // draft/draggingAxis bookkeeping above (so the thumb still follows the
-  // pointer smoothly) but never calls onAdjust or onAdjustDraft: `pin` here
-  // is the anchor, a recorded pin outside the draft array, and there is no
-  // draft pin yet for the field's live ghost to key on. The card's own
-  // thumb is the only live feedback until release, when onDepart mints the
-  // real pin — see App's handleDepart.
-  //
-  // Used to also report a live 0-1 drag-progress value (onDepartureDragProgress)
-  // to drive a field recede/un-recede transform — removed (along with that
-  // prop) once nothing anywhere ever called this branch with isFocus true
-  // any more: docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md's
-  // DepartureFloat now owns the isFocus pre-mint moment entirely, and the
-  // field no longer recedes at all in that landing (see App.tsx's
-  // recedeProgress). This branch (used only by the ordinary 'rail'/'sheet'
-  // departure-mark card, docs/plans/2026-08-24-001-feat-departure-mark-plan.md)
-  // never had anything to progress toward in the first place.
-  const dragDeparture = (axis: 'x' | 'y', v: number) => {
-    setLiveDraft(axis, v);
-  };
-  const commitDeparture = (axis: 'x' | 'y', v: number) => {
-    const next = nextFrom(axis, v);
-    clearLiveDraft();
-    onDepart?.(next.x, next.y);
-  };
-  // Departure-only cancel — distinct from the shared `cancelAxis` the
-  // ordinary adjust sliders use (onCancel below is wired separately per
-  // slider).
-  const cancelDeparture = () => {
-    clearLiveDraft();
   };
 
   return (
@@ -384,18 +340,11 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         >
           Emotional State
         </span>
-        {readOnly && departure ? (
-          // LC1: departure mode's corner carries no control at all — Reopen
-          // lives below the sliders instead (see the departure body below).
-          // Nothing button-shaped sits next to the continuous control.
-          null
-        ) : readOnly ? (
+        {readOnly ? (
           // The reopen/expand control (R22) — see reopenLabel above for what
-          // distinguishes the two uses. Rendered here for every readOnly
-          // card except departure mode (branch above, LC1 — the button
-          // relocates to a link there instead); reopenDisabled only
-          // disables it, per the plan's "renders disabled until the draft
-          // is recorded or discarded."
+          // distinguishes the two uses. reopenDisabled only disables it, per
+          // the plan's "renders disabled until the draft is recorded or
+          // discarded."
           <button
             onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
             disabled={reopenDisabled}
@@ -439,69 +388,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         )}
       </div>
 
-      {readOnly && departure ? (
-        /* Departure body (U2/R1-R4): pre-positioned sliders, live and
-           interactive, in the recorded hue — touching one mints a *new*
-           draft pin (onDepart) rather than editing this one. No Save, no
-           Remove, no recognize/derecognize; the caption stays the same
-           plain relational line the ordinary read-only card shows. Reopen
-           relocates below as a plain link (LC1) — still the same
-           onReopen/reopenDisabled wiring, only its position changes. */
-        <div style={{ padding: '10px 14px 14px' }}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ display: 'flex', flexDirection: 'column', gap: 13, marginBottom: 15 }}
-          >
-            <AxisSlider
-              labelLow="Calm"
-              labelHigh="Activated"
-              value={curX}
-              origin={pin.x}
-              accent="recorded"
-              onGrab={onSelect}
-              onDrag={(v) => dragDeparture('x', v)}
-              onCommit={(v) => commitDeparture('x', v)}
-              onCancel={cancelDeparture}
-              opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
-              reducedMotion={!!reduced}
-            />
-            <AxisSlider
-              labelLow="Negative"
-              labelHigh="Positive"
-              value={curY}
-              origin={pin.y}
-              accent="recorded"
-              onGrab={onSelect}
-              onDrag={(v) => dragDeparture('y', v)}
-              onCommit={(v) => commitDeparture('y', v)}
-              onCancel={cancelDeparture}
-              opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
-              reducedMotion={!!reduced}
-            />
-          </div>
-          <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontSize: 13.5, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
-            {pin.regionDescription.relational}
-          </p>
-          <button
-            onClick={(e) => { e.stopPropagation(); onReopen?.(); }}
-            disabled={reopenDisabled}
-            style={{
-              display: 'block',
-              marginTop: 13,
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              color: reopenDisabled ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
-              fontSize: 11,
-              letterSpacing: '0.01em',
-              textAlign: 'left',
-              cursor: reopenDisabled ? 'default' : 'pointer',
-            }}
-          >
-            reopen this entry instead →
-          </button>
-        </div>
-      ) : readOnly ? (
+      {readOnly ? (
         /* Read-only body: no sliders (R5), no tap-to-recognize, and never
            expands — a recorded card is always exactly this one-line summary.
            It used to reveal a fuller caption on tap, but that caption reused
