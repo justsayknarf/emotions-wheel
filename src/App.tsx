@@ -156,14 +156,17 @@ export default function App() {
   // Being one-shot-at-mount, rather than derived, is what keeps completing
   // the very first check-in mid-session from re-triggering the landing for
   // the entry just recorded — `previousCheckIn` changing afterward has no
-  // effect on this flag. U3 adds one way to clear it: the drag transition
-  // (handleDepartureDragProgress below) clears it once a committed drag's
-  // settle transition has had time to finish. U4 adds a second, parallel
-  // way: a direct field press (handleFieldPress below) clears it on the same
-  // settle-duration timing, once its own discrete jump-to-focused transition
-  // has had time to finish. U5 will add the remaining way (a breakpoint
-  // crossing out of desktop).
-  const [desktopLandingActive, setDesktopLandingActive] = useState(() => sideBySide && entrySource === 'new-tab');
+  // effect on this flag. Cleared exactly two ways: handleLandingSave below
+  // (the landing's own Save button, via scheduleLandingSettle), and the U5
+  // breakpoint-reconciliation block further down (a resize crossing out of
+  // desktop mid-landing).
+  // review-fix (2026-09-02, newtab-departure-float): no longer gated on
+  // `sideBySide` — this landing now applies to every new-tab session
+  // regardless of viewport width (docs/plans/2026-09-02-001-feat-newtab-
+  // departure-float-plan.md, U1). `drawerVariant` below already checks
+  // this flag before `sideBySide`, so a mobile-width new-tab session
+  // resolves into it without any further change there.
+  const [desktopLandingActive, setDesktopLandingActive] = useState(() => entrySource === 'new-tab');
 
   // U2: which variant EmotionDrawer renders — 'focus' while the landing flag
   // above is active, else the ordinary sideBySide-driven 'rail'/'sheet' split
@@ -174,39 +177,25 @@ export default function App() {
       ? 'rail'
       : 'sheet';
 
-  // U3 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
-  // drag-triggered progressive transition): how far a departure-card slider
-  // drag has progressed toward focused/rail (0 = still fully receded — the
-  // landing's resting state — 1 = focused/rail). Drives `recedeProgress`
-  // below ONLY. Driven two ways by handleDepartureDragProgress below: a live
-  // 'drag' phase call sets it directly, every frame, with no easing
-  // (desktopFocusLive true suppresses the CSS transition wherever this
-  // value is applied); a 'commit'/'cancel' phase call settles it to a fixed
-  // target (0 or 1), and re-enables the CSS transition so the *visible*
-  // change eases there — this state itself never animates, only its
-  // consumers' CSS does (matching the field wrapper's own transition-toggle
-  // pattern from U1).
-  const [desktopFieldProgress, setDesktopFieldProgress] = useState(0);
-  // review-fix: the front-and-center card's OWN position/size no longer
-  // shares desktopFieldProgress. It used to — R7's "the layout eases toward
-  // today's side-rail arrangement as the drag progresses" read as "field AND
-  // card move together, live, during the drag" — but live-testing showed why
-  // that's wrong: the card's `focusWidthPx`/translate lerp (EmotionDrawer's
-  // 'focus' branch) changing continuously while the user's finger is still
-  // on the departure slider inside that same card visibly resizes/repositions
-  // the slider track under the pointer mid-drag, which reads as "the slider
-  // is fighting the drag." The card must hold still (only the field recedes
-  // into view) while a drag is in flight, and only animate to the rail
-  // AFTER release — so this is a separate value that `handleDepartureDragProgress`
-  // below deliberately does NOT touch on 'drag', only on 'commit'/'cancel'.
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, "full
+  // continuity" follow-up: how far the front-and-center card's OWN
+  // position/size has settled toward the rail (0 = resting/centered, 1 =
+  // rail) — driven only by handleLandingSave (Save), below. This used to
+  // share a sibling value, desktopFieldProgress, that live-tracked a
+  // departure-card slider drag to progressively un-blur/un-shrink the field
+  // as the drag advanced — removed along with handleDepartureDragProgress
+  // (see recedeProgress below): DepartureFloat's own departureDraft-driven
+  // reveal (EmotionField.tsx) fully replaced that mechanism, and the field
+  // no longer recedes at any point in this landing, pre-mint or post-mint,
+  // so there is nothing left for a live drag-progress value to drive.
   const [desktopCardProgress, setDesktopCardProgress] = useState(0);
-  // Whether a departure drag is being actively live-tracked right now — see
-  // desktopFieldProgress above. Read by the field wrapper's own transition
-  // string below to suppress its CSS transition during a live drag (the field
-  // should track the pointer directly, not lag behind an eased transition).
-  // No longer threaded to EmotionDrawer — the card doesn't live-track at all
-  // now, so it has no "instant vs eased" distinction to make during a drag.
-  const [desktopFocusLive, setDesktopFocusLive] = useState(false);
+
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U4: the
+  // live coordinate while a DepartureFloat slider is dragged (pre-mint
+  // only) — null once released or cancelled. Fed to EmotionField's
+  // departureDraft prop, which folds it into the same proximity/dwell
+  // reveal machinery a field hover already drives.
+  const [departureDraftCoord, setDepartureDraftCoord] = useState<{ x: number; y: number } | null>(null);
 
   // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // breakpoint and interruption resilience): tracks the settle timeout
@@ -222,21 +211,18 @@ export default function App() {
   // rendering.
   const landingSettleTimeoutRef = useRef<number | null>(null);
 
-  // U1: how far the field is receded behind the front-and-center card (0 =
-  // focused/today's rail, 1 = fully receded). U3 replaces U2's binary
-  // placeholder (`desktopLandingActive ? 1 : 0`) with the continuous
-  // drag-progress mapping — still 1 at the landing's resting state (progress
-  // 0), easing toward 0 as a departure drag advances. Collapses to 0
-  // outright once desktopLandingActive itself clears (a committed drag's
-  // settle transition has finished) — the recede mechanism has nothing left
-  // to apply once EmotionDrawer has swapped to 'rail' for real. U4 adds its
-  // own trigger onto the SAME desktopFieldProgress value rather than a
-  // parallel one (handleFieldPress below jumps it straight to 1, with the
-  // CSS transition enabled, on a direct field press) — R9's "no divergent
-  // downstream state between the two trigger paths" is exactly why this
-  // stays one value with two ways to set it rather than two. U5 adds the
-  // remaining trigger (breakpoint-interruption handling).
-  const recedeProgress = desktopLandingActive ? 1 - desktopFieldProgress : 0;
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, "full
+  // continuity" follow-up: the field no longer recedes (blurs/scales down)
+  // at any point in this landing, pre-mint or post-mint — committing a pin
+  // used to hand off into the field receding behind an opaque post-mint
+  // card, which read as a regression back to the exact "wall in front of
+  // the field" problem the departure-float landing exists to fix. Always 0
+  // now; kept as a named value (rather than inlined at each of its two
+  // consumers below) so `EmotionField`'s `recedeProgress` prop and the
+  // field wrapper's transform/filter stay meaningful, reusable plumbing —
+  // wired up and correct — for any future feature that wants a receded
+  // field, without this landing being the thing driving it.
+  const recedeProgress = 0;
 
   // Seed the session clock on mount (kept out of render to stay pure); each new
   // session/interaction resets it in its own handler.
@@ -500,38 +486,6 @@ export default function App() {
     });
   }, [handlePinRelease]);
 
-  // U3 (drag-triggered progressive transition): fired continuously during a
-  // departure-card slider drag (phase 'drag') and once more on release or
-  // cancel (phase 'commit'/'cancel') by CoordinateCard's dragDeparture/
-  // commitDeparture/cancelDeparture, threaded through EmotionDrawer — new
-  // plumbing, not adjustDraft/draggingPinId (Key Technical Decisions: this
-  // drag branch never calls onAdjustDraft, so those never fire for it).
-  // 'drag' just mirrors the live value straight into desktopFieldProgress
-  // (the field only — see its declaration comment for why the card no
-  // longer shares this) with no easing (desktopFocusLive true disables the
-  // field's CSS transition while this is happening).
-  //
-  // review-fix: 'commit'/'cancel' settle unconditionally on their phase —
-  // NOT on a distance/progress threshold. `commitDeparture` in
-  // CoordinateCard.tsx mints a real pin on ANY release, including a plain
-  // click with zero movement (this is the pre-existing departure-mark
-  // gesture's own semantics, unrelated to this plan — AE3/R5's "touching a
-  // slider... records"). The original threshold-gated design here assumed
-  // a drag could be "released short" and mean "changed my mind, nothing
-  // happened" — false for this gesture: every 'commit' call has already
-  // minted a pin by the time this fires. Gating the LANDING transition on
-  // a separate distance threshold let the two diverge: a plain click on
-  // the slider committed a new draft pin (real check-in data) while the
-  // threshold check said "not committed," leaving the field stuck receded
-  // behind an ever-growing merged previous+draft card that never
-  // transitioned to the rail — reproduced live: a zero-movement click
-  // left `desktopLandingActive` true and the field's transform at
-  // `scale(0.92)`/`blur(6px)` indefinitely, with a real draft pin already
-  // recorded underneath. Fixed: 'commit' always settles to focused (a pin
-  // was always minted, so the landing must always complete); 'cancel'
-  // always reverts to receded (cancelDeparture never mints a pin, so
-  // there's nothing new to show). `focusDragCommitThreshold` no longer
-  // drives this decision — see its own removal below.
   // review-fix (product direction, 2nd pass): desktopLandingActive no
   // longer clears on a commit at all — dropping a pin (drag or press) only
   // focuses the field now, never the rail/card. It clears exclusively via
@@ -572,33 +526,6 @@ export default function App() {
     }, settleDurationMs);
   }, [tuning.fieldRecedeDuration]);
 
-  const handleDepartureDragProgress = useCallback((progress: number, phase: 'drag' | 'commit' | 'cancel') => {
-    if (phase === 'drag') {
-      // review-fix: only the field live-tracks. desktopCardProgress is
-      // deliberately left untouched here — the card holds its resting
-      // position/size for the entire drag (see its own declaration comment).
-      setDesktopFocusLive(true);
-      setDesktopFieldProgress(progress);
-      return;
-    }
-    setDesktopFocusLive(false);
-    // review-fix: phase alone decides the outcome now, not a progress
-    // threshold — see the comment above this callback for why. `progress`
-    // is still accepted as a parameter (CoordinateCard still reports it)
-    // but is intentionally unused here.
-    const committed = phase === 'commit';
-    setDesktopFieldProgress(committed ? 1 : 0);
-    // review-fix (product direction, 2nd pass): committing a departure drag
-    // no longer touches desktopCardProgress or schedules the rail/card
-    // settle at all. Minting a pin (which commitDeparture in
-    // CoordinateCard.tsx already did, unconditionally, before this callback
-    // even fires) still focuses the field so the user can see where it
-    // landed — that's the setDesktopFieldProgress(1) above — but the card
-    // stays centered and the landing stays active until the user explicitly
-    // ends it via the card's own Save button (handleLandingSave below).
-    // Dropping a pin is no longer, by itself, a reason to reveal the rail.
-  }, []);
-
   // U4 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // press-triggered discrete transition, R8): wraps handlePinRelease for
   // presses that originate on the field itself (EmotionField's onPinRelease
@@ -606,21 +533,22 @@ export default function App() {
   // is left calling it directly, unwrapped.
   //
   // review-fix (product direction, 2nd pass): mints the pin as always
-  // (today's unconditional behavior — must not change), and, only while the
-  // landing is still active, focuses the field (setDesktopFieldProgress(1))
-  // so the just-dropped pin is visible against a clear field — but no
-  // longer touches desktopCardProgress or schedules a settle. Same reasoning
-  // as handleDepartureDragProgress above: revealing the rail is no longer
-  // an automatic consequence of dropping a pin, from either trigger path —
-  // only the landing card's own Save button (handleLandingSave below) ends
-  // the landing now.
+  // (today's unconditional behavior — must not change). Revealing the rail
+  // is not an automatic consequence of dropping a pin, from either trigger
+  // path — only the landing card's own Save button (handleLandingSave
+  // below) ends the landing. (The field-focusing side effect this used to
+  // have — un-blurring/scaling the field back up on a press — is gone along
+  // with the recede mechanism itself: docs/plans/2026-09-02-001-feat-
+  // newtab-departure-float-plan.md's "full continuity" follow-up, see
+  // recedeProgress's own comment — there's nothing left to focus.)
   const handleFieldPress = useCallback((entry: PinEntry) => {
+    // review-fix (2026-09-02, newtab-departure-float, KTD8): a direct field
+    // press no longer mints during the pre-mint departure-float landing —
+    // the slider is the only commit path there now. Unaffected everywhere
+    // else (post-mint, or outside this landing entirely).
+    if (desktopLandingActive && pins.length === 0) return;
     handlePinRelease(entry);
-    if (desktopLandingActive) {
-      setDesktopFocusLive(false);
-      setDesktopFieldProgress(1);
-    }
-  }, [handlePinRelease, desktopLandingActive]);
+  }, [handlePinRelease, desktopLandingActive, pins.length]);
 
   // review-fix (product direction, 2nd pass): the landing's own way to end
   // itself — a Save button rendered on the front-and-center card (wired via
@@ -682,33 +610,22 @@ export default function App() {
   // paint where drawerVariant reads the stale desktopLandingActive before
   // the effect's setState catches up, since effects run after render
   // commits. Adjusting during render lets desktopLandingActive/
-  // desktopFieldProgress/desktopCardProgress/desktopFocusLive already be
-  // resolved-false by the same render drawerVariant/recedeProgress are
-  // computed in below, so there is no stale frame to flash at all.
+  // desktopCardProgress already be resolved-false by the same render
+  // drawerVariant is computed in below, so there is no stale frame to flash
+  // at all.
   //
-  // desktopFieldProgress/desktopCardProgress are reset to 0 too, even
-  // though recedeProgress's own formula above (`desktopLandingActive ? 1 -
-  // desktopFieldProgress : 0`) already evaluates to 0 the instant
-  // desktopLandingActive is false, regardless of desktopFieldProgress's
-  // value — so this reset isn't required for recedeProgress's own
-  // correctness. It's done anyway because desktopCardProgress is also
-  // passed straight through as EmotionDrawer's cardFocusProgress regardless
-  // of variant (ignored by 'sheet', which never reads it — but there's no
-  // reason to leave a stale mid-drag value sitting in state once nothing
-  // consumes it as fresh). desktopLandingActive itself is never set true
-  // again after mount, by any path (see its own comment above: the mount's
-  // lazy initializer is the only place it's ever set true; handleLandingSave
-  // and this effect are the only two places that ever clear it) — so unlike
-  // these two progress values, there is no
-  // later desktop session in the same page load that could read a stale
-  // value back in; this isn't guarding against desktopLandingActive
-  // re-arming (it can't), just against dangling progress values nothing
-  // needs anymore.
-  //
-  // desktopFocusLive is cleared too, so nothing is left mid-drag-tracking
-  // (its CSS-transition-suppressing role, read by the field wrapper's own
-  // transition string below) once the 'focus' card that was reading it has
-  // already unmounted in favor of 'sheet'.
+  // desktopCardProgress is reset to 0 too — it's passed straight through as
+  // EmotionDrawer's cardFocusProgress regardless of variant (ignored by
+  // 'sheet', which never reads it — but there's no reason to leave a stale
+  // mid-drag value sitting in state once nothing consumes it as fresh).
+  // desktopLandingActive itself is never set true again after mount, by any
+  // path (see its own comment above: the mount's lazy initializer is the
+  // only place it's ever set true; handleLandingSave and this effect are
+  // the only two places that ever clear it) — so unlike this progress
+  // value, there is no later desktop session in the same page load that
+  // could read a stale value back in; this isn't guarding against
+  // desktopLandingActive re-arming (it can't), just against a dangling
+  // progress value nothing needs anymore.
   //
   // A separate, dedicated effect just below (not folded in here) cancels
   // handleLandingSave's settle timeout if it's still pending — reachable
@@ -734,10 +651,9 @@ export default function App() {
   // releases an element's pointer capture automatically when that element
   // is removed from the DOM (no pointercancel is dispatched to a node
   // that's already gone, and none is needed — nothing here calls back into
-  // it). The drag's only App-level state, desktopFieldProgress/
-  // desktopCardProgress/desktopFocusLive, is exactly what this block already
-  // resets regardless of whether the abandoned gesture's own commit/cancel
-  // ever fires. (A
+  // it). The drag's only remaining App-level state, desktopCardProgress, is
+  // exactly what this block already resets regardless of whether the
+  // abandoned gesture's own commit/cancel ever fires. (A
   // separate, pre-existing gap was noticed while checking this: an
   // ordinary, already-minted draft pin's slider — not the departure
   // card's — writes to adjustDraft/draggingPinId, App-level state this
@@ -752,9 +668,7 @@ export default function App() {
     setSideBySideWasActive(sideBySide);
     if (!sideBySide && desktopLandingActive) {
       setDesktopLandingActive(false);
-      setDesktopFieldProgress(0);
       setDesktopCardProgress(0);
-      setDesktopFocusLive(false);
     }
   }
   // The ref-touching half of the same U5 reconciliation (see the long
@@ -1025,18 +939,15 @@ export default function App() {
           // for the same reason: layering a per-key transition override on
           // top of a separate spring animate didn't take reliably). Reduced
           // motion collapses straight to the target value instead of easing.
-          // U3: also 'none' while desktopFocusLive (a departure drag is
-          // actively being live-tracked) — recedeProgress is changing every
-          // frame in that state, and a CSS transition would add lag behind
-          // the pointer instead of tracking it directly; re-enabled the
-          // instant the drag settles (release/cancel), which is exactly
-          // when a transition should ease the value to its settled outcome.
           // review-fix: `width` added to this same transition so the
           // rail-reveal (fieldWidth flipping once railRevealed goes true,
-          // on handleLandingSave) eases in lockstep with the field's own
-          // recede/return and with EmotionDrawer's focus-card animation —
-          // all three read the same tuning.fieldRecedeDuration.
-          transition: reducedMotion || desktopFocusLive
+          // on handleLandingSave) eases in lockstep with EmotionDrawer's
+          // focus-card animation — both read the same tuning.fieldRecedeDuration.
+          // (The live-drag "suppress the transition" branch this used to
+          // have, desktopFocusLive, is gone with the mechanism that drove
+          // it — recedeProgress no longer changes at all, ever, for this
+          // landing; see its own comment.)
+          transition: reducedMotion
             ? 'none'
             : `transform ${tuning.fieldRecedeDuration}s ease-out, filter ${tuning.fieldRecedeDuration}s ease-out, width ${tuning.fieldRecedeDuration}s ease-out`,
         }}
@@ -1079,6 +990,8 @@ export default function App() {
           departureTraceFrom={departureTraceFrom}
           departureTraceTo={departureTraceTo}
           recedeProgress={recedeProgress}
+          departureDraft={departureDraftCoord}
+          dropDisabled={desktopLandingActive && pins.length === 0}
         />
       </div>
 
@@ -1183,7 +1096,7 @@ export default function App() {
                 onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
                 onDepart={handleDepart}
-                onDepartureDragProgress={handleDepartureDragProgress}
+                onDepartureDrag={setDepartureDraftCoord}
                 onLandingSave={handleLandingSave}
                 cardFocusProgress={desktopCardProgress}
                 anchor={anchorPin}

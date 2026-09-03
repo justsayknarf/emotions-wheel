@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
-import { describeDelta, hasNotableDelta, departureDragProgress } from '../../data/departure';
+import { describeDelta, hasNotableDelta } from '../../data/departure';
+import { AxisSlider } from './AxisSlider';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -22,19 +23,21 @@ const CARD_DRAG_BORDER = 'none';
 // to this opacity — the axis actually being dragged stays at 1.
 const CARD_DRAG_CONTENT_OPACITY = 0.3;
 
-// U3 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
-// drag-triggered progressive transition): how far (in this card's own
-// -1..1 coordinate space — the same one `pct()`/the departure tick's
-// `origin` prop already use) a departure slider must travel from the
-// anchor's own value on that axis before the drag-progress signal below
-// (departureDragProgress) reports 1. Deliberately a fixed fraction of the
-// track's range, not its full -2..2 end-to-end span — requiring the whole
-// track's length to reach full progress would make the transition feel
-// unreachable for an ordinary drag gesture. Not itself a tunable knob
-// (unlike the commit-threshold *decision* made against this progress in
-// App.tsx, RevealTuning's focusDragCommitThreshold) — this is a geometric
-// constant of the drag gesture, not a feel/timing knob.
-const DEPARTURE_DRAG_TRAVEL = 1;
+// docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, "full
+// continuity" follow-up (round 3): the card's resting background/blur when
+// `frosted` — a genuine middle glass layer, strictly between the panel
+// behind it (EmotionDrawer's own `shared` style, rgba(13,15,20,0.42)/
+// blur(18px)) and fully opaque, so stacking panel-then-card reads as two
+// depths of glass rather than "translucent chrome around an opaque box."
+// (An earlier value here, 0.74, was opaque enough that the card only ever
+// visibly read as glass during CARD_DRAG_BACKGROUND's own much-more-
+// transparent drag state — this is deliberately lighter so the effect is
+// legible at rest too.) Only applies at rest — CARD_DRAG_BACKGROUND above
+// (already much more transparent, no blur) is unchanged for both frosted
+// and non-frosted cards, so an active per-card drag still shows the field
+// clearly through it.
+const CARD_FROSTED_BACKGROUND = 'rgba(22,24,32,0.56)';
+const CARD_FROSTED_BACKDROP_FILTER = 'blur(12px) saturate(1.1)';
 
 interface Props {
   pin: PinEntry;
@@ -87,19 +90,6 @@ interface Props {
   // entirely if the user reopens instead) — mints the new draft pin at the
   // committed coordinate. Only meaningful alongside `departure`.
   onDepart?: (x: number, y: number) => void;
-  // U3 (drag-triggered progressive transition): a NEW drag-progress signal
-  // out of this same departure gesture — distinct from onAdjustDraft/
-  // onAdjust, which this branch never calls (see the plan's Key Technical
-  // Decisions: dragDeparture/commitDeparture only ever call onDepart, on
-  // release). Fired continuously during the drag ('drag', one call per
-  // frame) and once more on release or cancel ('commit'/'cancel') — a
-  // cancel reports the PEAK progress reached during the gesture, not
-  // wherever the thumb happened to end up when the browser took it away
-  // (see cancelDeparture below). Only meaningful alongside `departure`; the
-  // caller (EmotionDrawer) only wires this while its own variant is
-  // 'focus' — the rail's departure card isn't receded and has nothing to
-  // progress toward.
-  onDepartureDragProgress?: (progress: number, phase: 'drag' | 'commit' | 'cancel') => void;
   // U3/R9: the previous check-in's anchor coordinate and its relative-day
   // label, for the draft card's own anchor tick + plain-language delta.
   // Only rendered on the ordinary editable body (not readOnly/departure —
@@ -108,200 +98,17 @@ interface Props {
   // check-in, which leaves the card exactly as it was before this unit.
   anchor?: { x: number; y: number } | null;
   anchorLabel?: string | null;
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, "full
+  // continuity" follow-up (round 2): frosted-glass resting background
+  // instead of the ordinary solid `--ui-surface` — set only by EmotionDrawer
+  // while its own panel is also frosted (isFocus), so the card and the
+  // chrome around it read as one consistent glass surface rather than an
+  // opaque box sitting inside a translucent one. Defaults to false, which
+  // reproduces today's exact 'rail'/'sheet' look — unaffected by this.
+  frosted?: boolean;
 }
 
-const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
-// Coordinate [-1, 1] → [0%, 100%] across a full-width slider track.
-const pct = (v: number) => ((v + 1) / 2) * 100;
-
-const endLabelStyle = {
-  fontSize: 8,
-  fontWeight: 500,
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase' as const,
-  color: 'var(--ui-text-3)',
-};
-
-// A single draggable axis. Reports the value live while dragging (onDrag) and
-// once more on release (onCommit) — the card commits on release. The origin tick
-// marks where the pin was first dropped, so travel from the felt drop is visible.
-// A gesture the user never finished (onCancel) reverts instead of committing.
-// Thumb/fill tones per accent — gold for an editable draft pin, recorded for
-// the departure card's pre-mint sliders (U2): this coordinate isn't yours
-// yet, so it borrows the same cool hue the field already uses for a
-// recorded pin (R11) rather than the warm gold every other slider gets.
-const ACCENT = {
-  gold: {
-    fill: 'rgba(201,168,124,0.12)',
-    thumb: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
-    ring: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
-  },
-  recorded: {
-    fill: 'rgba(124,147,168,0.12)',
-    thumb: 'radial-gradient(circle at 40% 35%, #c3ceda, var(--ui-recorded) 62%)',
-    ring: '0 0 0 4px rgba(124,147,168,0.12), 0 2px 8px rgba(124,147,168,0.35)',
-  },
-} as const;
-
-function AxisSlider({
-  labelLow,
-  labelHigh,
-  value,
-  origin,
-  accent = 'gold',
-  anchorValue,
-  anchorLabel,
-  onGrab,
-  onDrag,
-  onCommit,
-  onCancel,
-  opacity = 1,
-  reducedMotion = false,
-}: {
-  labelLow: string;
-  labelHigh: string;
-  value: number;
-  origin: number;
-  accent?: 'gold' | 'recorded';
-  // U3/R9: the previous check-in's anchor value on this axis, rendered as a
-  // second tick distinct from the origin tick above — recorded-dim rather
-  // than text-3, and carrying `anchorLabel` (e.g. "TUE") so the two ticks
-  // read as different *kinds* of thing, not two of the same. Omitted when
-  // there's no previous check-in to compare against.
-  anchorValue?: number;
-  anchorLabel?: string;
-  onGrab?: () => void;
-  onDrag: (v: number) => void;
-  onCommit: (v: number) => void;
-  onCancel: () => void;
-  // Faded while a sibling axis on this same card is the one being dragged
-  // (see CoordinateCard's `draggingAxis`) — the axis actually being touched
-  // stays at 1 so the user always has a clear, undimmed target.
-  opacity?: number;
-  reducedMotion?: boolean;
-}) {
-  const tone = ACCENT[accent];
-  const trackRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-
-  const valueAt = (clientX: number) => {
-    const r = trackRef.current?.getBoundingClientRect();
-    if (!r || r.width === 0) return value;
-    return clampUnit(((clientX - r.left) / r.width) * 2 - 1);
-  };
-  const p = pct(value);
-
-  return (
-    <div style={{ opacity, transition: reducedMotion ? 'none' : 'opacity 0.25s ease-out' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={endLabelStyle}>{labelLow}</span>
-        <span style={endLabelStyle}>{labelHigh}</span>
-      </div>
-      <div
-        ref={trackRef}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          // Select this pin as the drag begins so the field's adjust ghost/travel
-          // overlay anchors to the pin actually being moved (not whichever card
-          // happened to be selected).
-          onGrab?.();
-          draggingRef.current = true;
-          trackRef.current?.setPointerCapture(e.pointerId);
-          onDrag(valueAt(e.clientX));
-        }}
-        onPointerMove={(e) => { if (draggingRef.current) onDrag(valueAt(e.clientX)); }}
-        onPointerUp={(e) => {
-          if (!draggingRef.current) return;
-          draggingRef.current = false;
-          trackRef.current?.releasePointerCapture(e.pointerId);
-          onCommit(valueAt(e.clientX));
-        }}
-        onPointerCancel={() => {
-          if (!draggingRef.current) return;
-          draggingRef.current = false;
-          // The browser took the gesture away — a notification, the OS reading
-          // the drag as a system swipe, a palm on the glass. The user never let
-          // go, so there is nothing to commit: revert rather than record a
-          // coordinate they didn't choose.
-          onCancel();
-        }}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'relative',
-          height: 5,
-          borderRadius: 3,
-          background: 'rgba(237,232,223,0.09)',
-          cursor: 'pointer',
-          touchAction: 'none',
-        }}
-      >
-        {/* fill runs from the center out to the thumb */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            borderRadius: 3,
-            background: tone.fill,
-            left: value >= 0 ? '50%' : `${p}%`,
-            right: value >= 0 ? `${100 - p}%` : '50%',
-          }}
-        />
-        {/* origin tick — where this pin was dropped */}
-        <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--ui-text-3)', left: `${pct(origin)}%` }} />
-        {/* anchor tick — the previous check-in's own value on this axis
-            (U3/R9). recorded-dim + a label, deliberately not styled like the
-            plain origin tick above: two ticks that looked like the same kind
-            of mark is exactly the overload the field-side decisions (U4/U5)
-            were made to avoid. Renders even when it coincides with the
-            origin tick — nothing doubles, since the origin tick never
-            carries a label of its own. */}
-        {anchorValue !== undefined && (
-          <>
-            <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1.5, background: 'var(--ui-recorded-dim)', left: `${pct(anchorValue)}%` }} />
-            {anchorLabel && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -14,
-                  left: `${pct(anchorValue)}%`,
-                  transform: 'translateX(-50%)',
-                  fontSize: 7,
-                  fontWeight: 600,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: 'var(--ui-recorded)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {anchorLabel}
-              </span>
-            )}
-          </>
-        )}
-        {/* thumb */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            width: 15,
-            height: 15,
-            marginTop: -7.5,
-            marginLeft: -7.5,
-            borderRadius: '50%',
-            background: tone.thumb,
-            boxShadow: tone.ring,
-            left: `${p}%`,
-            touchAction: 'none',
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, onDepartureDragProgress, anchor = null, anchorLabel = null }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, departure = false, onDepart, anchor = null, anchorLabel = null, frosted = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -487,51 +294,28 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // thumb is the only live feedback until release, when onDepart mints the
   // real pin — see App's handleDepart.
   //
-  // U3: also reports drag progress (onDepartureDragProgress) alongside that
-  // existing behavior — unrelated to onAdjustDraft, purely additive.
-  // `departureGestureActiveRef`/`maxDepartureProgressRef` are refs rather
-  // than state: they only need to be correct *within* this same drag
-  // gesture's synchronous pointer-event callbacks, and a ref sidesteps any
-  // question of whether a `draggingAxis` state read here reflects the prior
-  // event's committed render (React's batching) or not.
-  const departureGestureActiveRef = useRef(false);
-  const maxDepartureProgressRef = useRef(0);
+  // Used to also report a live 0-1 drag-progress value (onDepartureDragProgress)
+  // to drive a field recede/un-recede transform — removed (along with that
+  // prop) once nothing anywhere ever called this branch with isFocus true
+  // any more: docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md's
+  // DepartureFloat now owns the isFocus pre-mint moment entirely, and the
+  // field no longer recedes at all in that landing (see App.tsx's
+  // recedeProgress). This branch (used only by the ordinary 'rail'/'sheet'
+  // departure-mark card, docs/plans/2026-08-24-001-feat-departure-mark-plan.md)
+  // never had anything to progress toward in the first place.
   const dragDeparture = (axis: 'x' | 'y', v: number) => {
-    const origin = axis === 'x' ? pin.x : pin.y;
-    const progress = departureDragProgress(origin, v, DEPARTURE_DRAG_TRAVEL);
     setLiveDraft(axis, v);
-    if (!departureGestureActiveRef.current) {
-      departureGestureActiveRef.current = true;
-      maxDepartureProgressRef.current = progress;
-    } else {
-      maxDepartureProgressRef.current = Math.max(maxDepartureProgressRef.current, progress);
-    }
-    onDepartureDragProgress?.(progress, 'drag');
   };
   const commitDeparture = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
-    const origin = axis === 'x' ? pin.x : pin.y;
-    const progress = departureDragProgress(origin, v, DEPARTURE_DRAG_TRAVEL);
     clearLiveDraft();
     onDepart?.(next.x, next.y);
-    onDepartureDragProgress?.(progress, 'commit');
-    departureGestureActiveRef.current = false;
-    maxDepartureProgressRef.current = 0;
   };
   // Departure-only cancel — distinct from the shared `cancelAxis` the
   // ordinary adjust sliders use (onCancel below is wired separately per
-  // slider). Reports the PEAK progress reached during this drag, not
-  // wherever the thumb ended up when the browser yanked the gesture away: a
-  // drag that already crossed the commit threshold and was then cancelled
-  // must still complete to focused/rail (Key Technical Decisions), which
-  // reading only the final, possibly-reverted position would silently
-  // undo.
+  // slider).
   const cancelDeparture = () => {
-    const progress = maxDepartureProgressRef.current;
     clearLiveDraft();
-    onDepartureDragProgress?.(progress, 'cancel');
-    departureGestureActiveRef.current = false;
-    maxDepartureProgressRef.current = 0;
   };
 
   return (
@@ -542,18 +326,35 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         // the tray's own background-fade treatment so the field reads
         // through the card's body too, not just around it. The active
         // slider stays undimmed via its own `opacity` prop below, since CSS
-        // opacity on this outer div would fade it too.
-        background: draggingAxis !== null ? CARD_DRAG_BACKGROUND : 'var(--ui-surface)',
+        // opacity on this outer div would fade it too. `frosted`'s resting
+        // background/blur only ever applies here, not during a drag — the
+        // already-transparent CARD_DRAG_BACKGROUND does its job either way.
+        background: draggingAxis !== null
+          ? CARD_DRAG_BACKGROUND
+          : frosted ? CARD_FROSTED_BACKGROUND : 'var(--ui-surface)',
+        backdropFilter: draggingAxis === null && frosted ? CARD_FROSTED_BACKDROP_FILTER : undefined,
+        WebkitBackdropFilter: draggingAxis === null && frosted ? CARD_FROSTED_BACKDROP_FILTER : undefined,
+        // Frosted (the centered, no-rail landing): the selected-state
+        // accent border/glow is dropped entirely — round 4 of this same
+        // follow-up. A gold outline reads fine as "this is the card the
+        // rail is pointing at" when it's one of several docked side by
+        // side, but centered and alone it has nothing to distinguish
+        // itself FROM, so it just reads as visual noise on the glass. The
+        // border stays the plain neutral one always; selection still
+        // drives everything else (the field's own pin emphasis, the
+        // tether) unaffected.
         border: draggingAxis !== null
           ? CARD_DRAG_BORDER
-          : `1px solid ${showSelected ? accentDim : 'var(--ui-border)'}`,
+          : frosted
+            ? '1px solid var(--ui-border)'
+            : `1px solid ${showSelected ? accentDim : 'var(--ui-border)'}`,
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
-        // showSelected's own ring (`0 0 0 1px accentDim`) would otherwise
-        // outline the card the same way the border did — drop it too while
-        // dragging, since the card is almost always selected at that point.
-        boxShadow: draggingAxis !== null
+        // Non-frosted (unchanged): showSelected's own ring (`0 0 0 1px
+        // accentDim`) doubles the border, plus a gold-only glow regardless
+        // of accent — dropped both while dragging, same as before.
+        boxShadow: draggingAxis !== null || frosted
           ? 'none'
           : showSelected
             ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)`

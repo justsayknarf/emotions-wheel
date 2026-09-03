@@ -70,9 +70,11 @@ interface Props {
   // The pin whose card is currently selected in the tray — rendered larger and
   // brighter so the card↔point link reads both ways.
   emphasizedPinId?: string | null;
-  // The live coordinate while the selected pin's card slider is being dragged —
-  // shown as a ghost preview + a dashed line from the pin, so a card-driven
-  // adjustment reads on the field before it commits.
+  // The live coordinate while the selected pin's card slider is being
+  // dragged — null once released or cancelled. Shares one glow-marker
+  // treatment with departureDraft below (see `liveDraft`) rather than its
+  // own dashed-travel-line/origin-ring overlay, which this used to render
+  // alone.
   adjustDraft?: { x: number; y: number } | null;
   // Fires once a field press-and-drag (placing or selecting a pin) crosses
   // the tap/drag movement threshold, and again with `false` on release or
@@ -94,6 +96,21 @@ interface Props {
   // directly pressable once visually backgrounded), not the transform
   // itself. Left at its default (0) until U2-U5 wire real state through.
   recedeProgress?: number;
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U4: the
+  // live coordinate while a DepartureFloat slider is being dragged (field
+  // preview only, pre-mint) — null once released or cancelled. Feeds the
+  // same proximity/dwell reveal machinery a pointer hover already drives,
+  // and renders a small glow marker — the same one `adjustDraft` above now
+  // shares (see `liveDraft`). A drag is treated as press-equivalent, not
+  // hover-equivalent — no dwell delay.
+  departureDraft?: { x: number; y: number } | null;
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U4: true
+  // while a direct field press is a deliberate no-op (the pre-mint
+  // departure-float landing, where the slider is the only commit path) —
+  // suppresses the same "directly pressable" affordance recedeProgress
+  // drives below, so the cursor/hover ring don't imply a click here would
+  // do something.
+  dropDisabled?: boolean;
 }
 
 export function EmotionField({
@@ -113,6 +130,8 @@ export function EmotionField({
   departureTraceFrom = null,
   departureTraceTo = null,
   recedeProgress = 0,
+  departureDraft = null,
+  dropDisabled = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -190,7 +209,32 @@ export function EmotionField({
     () => new Set(pins.flatMap((p) => p.recognizedWords)),
     [pins],
   );
-  const proximity = useProximity(surfaceEmotions, revealCenter, isRevealed, selectedIds);
+  // Follow-up to docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md:
+  // one unified "live glow" coordinate for both slider-driven drags this
+  // field ever reacts to — a pre-mint DepartureFloat drag (departureDraft)
+  // and an ordinary post-mint adjust-slider drag on an already-selected pin
+  // (adjustDraft). The two are mutually exclusive by construction (a
+  // DepartureFloat drag only ever happens pre-mint, pins.length === 0; an
+  // adjust drag only ever happens on an existing pin) — never both truthy
+  // at once — so a single value with one glow-marker treatment can drive
+  // every reveal/render site below instead of each prop getting its own
+  // parallel mechanism (previously: a glow for departureDraft, a dashed
+  // travel-line + origin ring for adjustDraft). `liveDraftAccent` is the
+  // only place the two still diverge — gold for adjusting a pin that's
+  // already yours, the cool recorded hue for a coordinate that isn't yet.
+  const liveDraft = departureDraft ?? adjustDraft;
+  const liveDraftAccent: 'gold' | 'recorded' = departureDraft ? 'recorded' : 'gold';
+  // A departure/adjust drag takes over as the reveal center whenever it's
+  // active — press-equivalent (not hover-equivalent), same as the field's
+  // own onPointerDown already treats a real press. liveDraft and a field
+  // hover can't collide in practice: DepartureFloat's own DOM sits outside
+  // the field container (rendered by EmotionDrawer, a sibling), so a
+  // pointerdown on a slider track never reaches this field's own pointer
+  // handlers at all; an adjust-slider drag is driven from inside the same
+  // tray, same story.
+  const revealAnchor = liveDraft ?? revealCenter;
+  const revealActive = liveDraft !== null || isRevealed;
+  const proximity = useProximity(surfaceEmotions, revealAnchor, revealActive, selectedIds);
 
   // The two emotions the selected card names ("between X and Y") — the nearest
   // pair, within range, to the emphasized pin. Recomputed from the pin itself
@@ -224,7 +268,26 @@ export function EmotionField({
   // we fall back to the full constellation.
   const deepOpacityMap = useMemo(() => {
     const map = new Map<string, number>();
-    const source = emphasizedPinId ? pins.filter((p) => p.id === emphasizedPinId) : pins;
+    // The live coordinate joins the reveal source exactly like a pin would
+    // — immediate (no dwell delay), since a drag is a deliberate gesture,
+    // not passive hovering. A bare {x,y} is fine here: the loop below only
+    // ever reads `.x`/`.y` off each entry. An adjust drag REPLACES the
+    // emphasized pin's own (stale, pre-drag) position rather than adding
+    // to it — the live position is what's actually near the cursor's
+    // target right now; revealing near both would read as two competing
+    // reveal centers for what's really one continuous gesture.
+    const source: Array<{ x: number; y: number }> = [];
+    if (emphasizedPinId) {
+      if (adjustDraft) {
+        source.push(adjustDraft);
+      } else {
+        const emphasizedPin = pins.find((p) => p.id === emphasizedPinId);
+        if (emphasizedPin) source.push(emphasizedPin);
+      }
+    } else {
+      source.push(...pins);
+    }
+    if (departureDraft) source.push(departureDraft);
     for (const pin of source) {
       const eligible: Array<{ id: string; t: number; dist: number }> = [];
       for (const e of deepEmotions) {
@@ -239,7 +302,7 @@ export function EmotionField({
       }
     }
     return map;
-  }, [pins, emphasizedPinId]);
+  }, [pins, emphasizedPinId, adjustDraft, departureDraft]);
 
   // Dwell-based proximity for deep emotions — follows cursor, transient
   const dwellOpacityMap = useMemo(() => {
@@ -278,13 +341,18 @@ export function EmotionField({
   // Live cursor proximity for the revealed deep words, so they react to the
   // cursor (size + colour) the way surface anchors do. Only the scale/nearness
   // are used — a deep word's visibility stays reveal-driven, not cursor-driven.
-  const deepProximity = useProximity(revealedDeep, revealCenter, isRevealed, selectedIds);
+  // Same revealAnchor/revealActive substitution as the surface-word
+  // proximity above (now liveDraft-driven) — without it, a deep word
+  // revealed via a departure/adjust drag (deepOpacityMap, above) would
+  // never react to the live coordinate's proximity, unlike every other
+  // reveal trigger in the app.
+  const deepProximity = useProximity(revealedDeep, revealAnchor, revealActive, selectedIds);
 
   // Reveal foci in pixel space: the dwell centre (when dwelling) and the
-  // emphasized pin. Each revealed word fans out of its nearest focus — scoped to
-  // the selected pin so the fan matches the words we actually reveal (above),
-  // and no other pin pulls a label toward it. Full constellation when nothing
-  // is emphasized.
+  // emphasized pin/live draft. Each revealed word fans out of its nearest
+  // focus — scoped to the selected pin so the fan matches the words we
+  // actually reveal (above), and no other pin pulls a label toward it.
+  // Full constellation when nothing is emphasized.
   const fociPx = useMemo(() => {
     if (size.width === 0) return [] as Array<{ x: number; y: number }>;
     const toPx = (c: { x: number; y: number }) => ({
@@ -293,10 +361,26 @@ export function EmotionField({
     });
     const arr: Array<{ x: number; y: number }> = [];
     if (dwellCenter) arr.push(toPx(dwellCenter));
-    const source = emphasizedPinId ? pins.filter((p) => p.id === emphasizedPinId) : pins;
-    for (const p of source) arr.push(toPx(p));
+    // Without this, a deep word revealed by a departure drag (no pin, no
+    // dwell) has no focus to fan out from — computeRadialFan handles an
+    // empty foci list by leaving every movable box at zero offset, so the
+    // fan-out would silently degrade for this one reveal path only.
+    if (departureDraft) arr.push(toPx(departureDraft));
+    // Same live-position substitution as deepOpacityMap above — an adjust
+    // drag fans out from where the pin actually is right now, not its
+    // stale pre-drag position.
+    if (emphasizedPinId) {
+      if (adjustDraft) {
+        arr.push(toPx(adjustDraft));
+      } else {
+        const emphasizedPin = pins.find((p) => p.id === emphasizedPinId);
+        if (emphasizedPin) arr.push(toPx(emphasizedPin));
+      }
+    } else {
+      for (const p of pins) arr.push(toPx(p));
+    }
     return arr;
-  }, [dwellCenter, pins, emphasizedPinId, size.width, size.height]);
+  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, size.width, size.height]);
 
   // Lay the revealed labels out as a fan around their nearest focus: each rides
   // a ray out of the cursor/pin, with a no-crossing pass so their tethers never
@@ -413,8 +497,12 @@ export function EmotionField({
         // (replacing the ordinary crosshair) plus a subtle inset highlight
         // on hover. Both stay inert while recedeProgress is 0 (today's rail,
         // the only state U1 ships with — U2-U5 drive it above 0).
-        cursor: recedeProgress > 0 ? 'pointer' : 'crosshair',
-        boxShadow: recedeProgress > 0 && isHoveringOnly ? 'inset 0 0 0 1px var(--ui-gold-dim)' : 'none',
+        // U4: dropDisabled also backgrounds the pointer affordance — a
+        // direct press is a deliberate no-op during the pre-mint
+        // departure-float landing, so neither the crosshair cursor nor the
+        // gold "clickable" hover ring should imply otherwise.
+        cursor: recedeProgress > 0 || dropDisabled ? 'pointer' : 'crosshair',
+        boxShadow: (recedeProgress > 0 || dropDisabled) && isHoveringOnly ? 'inset 0 0 0 1px var(--ui-gold-dim)' : 'none',
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}
     >
@@ -632,52 +720,38 @@ export function EmotionField({
             );
           })}
 
-          {/* Adjust overlay — the selected pin's drop anchor, a travel line to
-              where it sits now, and a ghost preview at the live slider draft.
-              Live-only (R8): rendering is gated on `adjustDraft` alone, not on
-              whether the pin has moved from its origin, so the whole overlay —
-              travel line, origin ring, ghost line, ghost ring — appears only
-              while a drag is in flight and disappears entirely on release.
-              Control feedback has no job after release; a persistent version
-              of this is exactly the dashed-stroke overload the design removes
-              (KTD3). `pin.origin` itself is untouched — still stamped at birth
-              and still carried in the diary record. */}
-          {(() => {
-            const emphasized = emphasizedPinId ? pins.find((p) => p.id === emphasizedPinId) : null;
-            if (!emphasized || !adjustDraft || size.width === 0) return null;
-            const origin = emphasized.origin ?? { x: emphasized.x, y: emphasized.y };
-            const px = (toPercent(emphasized.x) / 100) * size.width;
-            const py = (toPercent(-emphasized.y) / 100) * size.height;
-            const ox = (toPercent(origin.x) / 100) * size.width;
-            const oy = (toPercent(-origin.y) / 100) * size.height;
-            const gx = (toPercent(adjustDraft.x) / 100) * size.width;
-            const gy = (toPercent(-adjustDraft.y) / 100) * size.height;
+          {/* Live-drag glow — the one mechanism for both slider-driven drags
+              this field reacts to: a soft marker at the live coordinate
+              while a DepartureFloat slider (pre-mint) or an ordinary
+              adjust-slider (post-mint, on an already-selected pin) is
+              dragged. Replaces two previously-separate treatments — this
+              same glow for departureDraft, plus a travel line/origin
+              ring/dashed ghost line for adjustDraft — with one: liveDraft
+              is never both at once (see its own declaration), so one
+              marker, keyed to liveDraftAccent's hue, covers either case.
+              No travel line, no origin ring for the adjust case either
+              now — the glow's own motion already reads as movement. */}
+          {liveDraft && (() => {
+            const { x: gx, y: gy } = toFieldPx(liveDraft);
+            const glowBackground = liveDraftAccent === 'recorded'
+              ? 'radial-gradient(circle, rgba(124,147,168,0.45) 0%, rgba(124,147,168,0.18) 42%, transparent 72%)'
+              : 'radial-gradient(circle, rgba(240,217,181,0.5) 0%, rgba(201,168,124,0.2) 42%, transparent 72%)';
             return (
-              <>
-                <svg
-                  style={{ position: 'absolute', inset: 0, width: size.width, height: size.height, pointerEvents: 'none', zIndex: 8, overflow: 'visible' }}
-                  aria-hidden="true"
-                >
-                  <line x1={ox} y1={oy} x2={px} y2={py} stroke="rgba(201, 168, 124, 0.3)" strokeWidth={1} />
-                  <line x1={px} y1={py} x2={gx} y2={gy} stroke="rgba(201, 168, 124, 0.5)" strokeWidth={1} strokeDasharray="3 3" />
-                  <circle cx={gx} cy={gy} r={5} fill="none" stroke="rgba(201, 168, 124, 0.6)" strokeWidth={1} strokeDasharray="3 2" />
-                </svg>
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: ox,
-                    top: oy,
-                    width: 11,
-                    height: 11,
-                    marginLeft: -5.5,
-                    marginTop: -5.5,
-                    borderRadius: '50%',
-                    border: '1px solid rgba(237, 232, 223, 0.35)',
-                    pointerEvents: 'none',
-                    zIndex: 8,
-                  }}
-                />
-              </>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: gx,
+                  top: gy,
+                  transform: 'translate(-50%, -50%)',
+                  width: 130,
+                  height: 130,
+                  borderRadius: '50%',
+                  background: glowBackground,
+                  filter: 'blur(2px)',
+                  pointerEvents: 'none',
+                  zIndex: 4,
+                }}
+              />
             );
           })()}
 
