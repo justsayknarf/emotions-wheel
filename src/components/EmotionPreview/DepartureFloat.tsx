@@ -28,10 +28,18 @@ interface Props {
   // onDepartureDragProgress — that prop is unrelated to this one and stays
   // wired to the ordinary rail/sheet departure-mark card exactly as before.
   onDepartureDrag?: (coord: { x: number; y: number } | null) => void;
+  // True when `anchor` is the synthetic (0,0) neutral pin rather than a real
+  // previous check-in (EmotionDrawer's own neutralDepartureEligible). A
+  // returning user's anchor.regionDescription.relational is genuine context
+  // ("last time you were near X") — but for a brand-new user it's always the
+  // same fixed description of the untouched center point, which reads as an
+  // opaque, unexplained label rather than anything they did. Swaps the
+  // caption for a plain instruction in that case only.
+  firstTime?: boolean;
 }
 
 export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function DepartureFloat(
-  { anchor, onDepart, onDepartureDrag },
+  { anchor, onDepart, onDepartureDrag, firstTime = false },
   ref,
 ) {
   const reduced = useReducedMotion();
@@ -149,7 +157,7 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
             transition: 'opacity 0.2s ease',
           }}
         >
-          {anchor.regionDescription.relational}
+          {firstTime ? 'Move the sliders to match how you feel.' : anchor.regionDescription.relational}
         </p>
       </div>
     </div>
