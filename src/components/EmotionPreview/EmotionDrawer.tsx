@@ -166,6 +166,13 @@ interface Props {
   // it) and never applies while isReopened (matching R1-R3's exclusion) —
   // see dragShrinkActive below.
   draggingPinId?: string | null;
+  // U2 follow-up (welcome-cue/focus-card overlap fix): reports the 'focus'
+  // card's live top edge in pixels, relative to the shared positioned
+  // ancestor both it and WelcomeOverlay are placed in (App.tsx's root
+  // `position: relative` div) — so the welcome cue can anchor itself just
+  // above the card's *actual* rendered top instead of a fixed guess. Fires
+  // null when the 'focus' branch isn't mounted (nothing to clear against).
+  onFocusCardTopChange?: (top: number | null) => void;
 }
 
 export function EmotionDrawer({
@@ -196,6 +203,7 @@ export function EmotionDrawer({
   onSelectPin,
   enteringPinId,
   scrollRef,
+  onFocusCardTopChange,
   expanded = false,
   onToggle,
   draggingPinId = null,
@@ -233,6 +241,34 @@ export function EmotionDrawer({
   useEffect(() => {
     if (isFocus) focusRootRef.current?.focus();
   }, [isFocus]);
+  // Report the focus card's live top edge (viewport px, converted to the
+  // shared `position: relative` ancestor's own coordinate space) so
+  // WelcomeOverlay can anchor above it instead of guessing a fixed offset —
+  // see onFocusCardTopChange's own doc comment. Re-measures on every layout
+  // pass a size/position change could plausibly cause (mount, viewport
+  // resize, DepartureFloat <-> draft-card swap, cardFocusProgress's rail
+  // ease); doesn't track that ease frame-by-frame since the welcome cue is
+  // normally long gone by the time a pin drop starts it.
+  useLayoutEffect(() => {
+    if (!isFocus || !onFocusCardTopChange) return;
+    const node = focusRootRef.current;
+    if (!node) return;
+    const measure = () => {
+      const ancestor = node.offsetParent as HTMLElement | null;
+      const cardRect = node.getBoundingClientRect();
+      const originTop = ancestor ? ancestor.getBoundingClientRect().top : 0;
+      onFocusCardTopChange(cardRect.top - originTop);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      onFocusCardTopChange(null);
+    };
+  }, [isFocus, onFocusCardTopChange, cardFocusProgress]);
   // U3: the sheet's peek <-> expand toggle used to be two separate
   // `motion.div` returns, each replaying its own mount-only enter
   // animation on toggle, so the height change between them snapped
