@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
+import { DepartureFloat } from './DepartureFloat';
 import { isDepartureEligible } from '../../data/departure';
 import { useRevealTuning } from '../../config/revealTuning';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
@@ -96,15 +97,16 @@ interface Props {
   // (its newest pin) — fired by that one card's pre-positioned sliders when
   // the draft is empty. Never touches the anchor itself (R2/R3).
   onDepart: (x: number, y: number) => void;
-  // U3 (drag-triggered progressive transition,
-  // docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md): the
-  // departure card's own drag-progress signal (CoordinateCard's
-  // dragDeparture/commitDeparture/cancelDeparture), threaded straight
-  // through to App.tsx. Only ever wired to the departure card while
-  // `isFocus` (see cardList below) — the rail's own departure card isn't
-  // receded and has nothing to progress toward, so it's left undefined
-  // there, same as the mobile sheet.
-  onDepartureDragProgress?: (progress: number, phase: 'drag' | 'commit' | 'cancel') => void;
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U5: the
+  // live coordinate while the pre-mint DepartureFloat landing's own slider
+  // is dragged. Only meaningful for the new pre-mint branch below. (This
+  // used to sit alongside a sibling callback, onDepartureDragProgress,
+  // threaded to CoordinateCard's own departure body — removed as part of
+  // the "full continuity" follow-up to this same plan: the departure card
+  // that callback drove progress for is now unreachable while isFocus, see
+  // that branch's own comment, so nothing anywhere ever passed it a real
+  // value any more.)
+  onDepartureDrag?: (coord: { x: number; y: number } | null) => void;
   // U3: how far the 'focus' variant's own position/size has settled toward
   // the rail (0 = resting/centered, 1 = rail). Ignored by 'rail'/'sheet'
   // (neither is receded); defaults to 0 so those callers don't need to pass
@@ -175,7 +177,7 @@ export function EmotionDrawer({
   onClear,
   onReopen,
   onDepart,
-  onDepartureDragProgress,
+  onDepartureDrag,
   cardFocusProgress = 0,
   anchor,
   anchorLabel,
@@ -396,10 +398,18 @@ export function EmotionDrawer({
           {summaryTimeLabel}
         </span>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        <div style={MICRO_LABEL}>Recent rhythm</div>
-        <RhythmStrip entries={entries} />
-      </div>
+      {/* docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, "full
+          continuity" follow-up (round 6): dropped for the centered post-mint
+          card specifically — the time label above stays (product direction:
+          revisit its phrasing later, but keep it for now), everything else
+          in this landing is meant to be just the draft and its Save/Discard
+          choice. 'rail'/'sheet' keep the rhythm strip exactly as before. */}
+      {!isFocus && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <div style={MICRO_LABEL}>Recent rhythm</div>
+          <RhythmStrip entries={entries} />
+        </div>
+      )}
     </div>
   );
 
@@ -515,6 +525,35 @@ export function EmotionDrawer({
   // the correct signal here too, with no new prop needed.
   const realAnchor = previousCheckIn ? anchor : null;
 
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U5: the
+  // pre-mint departure-float landing — a card-less pair of sliders on a
+  // frosted strip, replacing the opaque `shared` panel entirely for this
+  // one moment. Checked before any of the panel content below is built
+  // (cardList/actionBar), so none of it is constructed only to be
+  // discarded. The instant a pin mints (pins.length > 0), this stops
+  // matching and the ordinary `isFocus` branch further below takes over
+  // completely unchanged — same opaque panel, same cardList/actionBar,
+  // same recedeProgress behind it. No hooks are declared after this point
+  // in the component, so an early return here is safe.
+  //
+  // No `onReopen` passed here (round 5 of this same follow-up): centered
+  // and alone, this landing has nothing to distinguish "reopen instead"
+  // from — that CTA stays meaningful on the rail's own departure-mark card
+  // (below, in cardList), which is one docked option among others. The
+  // previous check-in itself is still reachable once this landing hands
+  // off post-mint: its read-only card (with its own Reopen button) keeps
+  // rendering in cardList throughout.
+  if (isFocus && pins.length === 0 && (neutralDepartureEligible || departureEligible)) {
+    return (
+      <DepartureFloat
+        ref={focusRootRef}
+        anchor={neutralDepartureEligible ? anchor! : previousPins[previousPins.length - 1]}
+        onDepart={onDepart}
+        onDepartureDrag={onDepartureDrag}
+      />
+    );
+  }
+
   const draftCards = (
     <AnimatePresence initial={false}>
       {visibleDraftPins.map((pin) => (
@@ -540,6 +579,7 @@ export function EmotionDrawer({
             dissolve={dissolve}
             anchor={realAnchor}
             anchorLabel={anchorLabel}
+            frosted={isFocus}
           />
         </motion.div>
       ))}
@@ -579,6 +619,7 @@ export function EmotionDrawer({
                 onAdjust={onAdjust}
                 onAdjustDraft={onAdjustDraft}
                 dissolve={dissolve}
+                frosted={isFocus}
               />
             ) : (
               <CoordinateCard
@@ -595,6 +636,7 @@ export function EmotionDrawer({
                 onAdjust={onAdjust}
                 onAdjustDraft={onAdjustDraft}
                 dissolve={dissolve}
+                frosted={isFocus}
                 readOnly
                 onReopen={() => onExpandPin(pin.id)}
                 reopenLabel="Edit"
@@ -742,53 +784,27 @@ export function EmotionDrawer({
         editingSection
       ) : (
         <>
-          {isPanelLayout && previousPins.length > 0 && (
+          {isPanelLayout && !isFocus && previousPins.length > 0 && (
             <div style={groupHeaderStyle}>
               {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
             </div>
           )}
-          {/* U2 (desktop-check-in-focus): the neutral-centered first-time
-              landing (R2) — no previousCheckIn, so `previousPins` above is
-              empty and the mapped list below never runs. `anchor` is
-              departureAnchor's synthetic (0, 0) pin (App.tsx), resolved the
-              same way for a first-time user as a returning one's own anchor.
-              No group header (there is no "previous check-in" to label) and
-              no reopen destination (there is no entry to reopen into) — Save
-              reads disabled rather than a working-but-nonsensical link. */}
-          {neutralDepartureEligible && anchor && (
-            <motion.div
-              key={anchor.id}
-              layout
-              data-pin-id={anchor.id}
-              initial={{ opacity: 0, y: -10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            >
-              <CoordinateCard
-                pin={anchor}
-                isSelected={anchor.id === selectedPinId}
-                isEntering={false}
-                onSelect={() => onSelectPin(anchor.id)}
-                onRecognize={onRecognize}
-                onDerecognize={onDerecognize}
-                // Departure mode renders no remove/recognize controls —
-                // unreachable, kept only to satisfy the prop's type, same as
-                // the real-anchor read-only cards below.
-                onRemove={() => {}}
-                onAdjust={onAdjust}
-                onAdjustDraft={onAdjustDraft}
-                dissolve={dissolve}
-                readOnly
-                reopenDisabled
-                departure
-                onDepart={onDepart}
-                // U3: only the focus card is receded/has anything to
-                // progress toward — see the prop's own doc comment.
-                onDepartureDragProgress={isFocus ? onDepartureDragProgress : undefined}
-              />
-            </motion.div>
-          )}
-          {!hideHistory && previousPins.length > 0 && (
+          {/* docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md:
+              the neutral-centered first-time departure card that used to
+              render here (U2 of the desktop-check-in-focus plan, R2) is
+              gone — `neutralDepartureEligible` structurally requires
+              `isFocus`, and every state where it's true is now caught by
+              the early return above, before cardList is ever built. It
+              stays computed (used there) purely so this comment can say,
+              accurately, that this block never runs. */}
+          {/* Round 6 of the same follow-up: the previous check-in's own
+              card is dropped entirely from the centered post-mint view too
+              — this landing is meant to show only the draft and its
+              Save/Discard choice. 'rail'/'sheet' are unaffected (`!isFocus`
+              is always true there); reopening the previous check-in is
+              simply not offered from this screen any more — it stays
+              reachable from the rail/sheet the same way it always has. */}
+          {!hideHistory && !isFocus && previousPins.length > 0 && (
             <AnimatePresence initial={false}>
               {reversedPreviousPins.map((pin) => (
                 <motion.div
@@ -814,6 +830,7 @@ export function EmotionDrawer({
                     onAdjust={onAdjust}
                     onAdjustDraft={onAdjustDraft}
                     dissolve={dissolve}
+                    frosted={isFocus}
                     readOnly
                     onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
                     reopenDisabled={canSave}
@@ -824,16 +841,18 @@ export function EmotionDrawer({
                     // draft, stays the plain read-only summary above.
                     departure={departureEligible && pin.id === anchorPinId}
                     onDepart={onDepart}
-                    // U3: only the focus card is receded/has anything to
-                    // progress toward — see the prop's own doc comment.
-                    onDepartureDragProgress={isFocus ? onDepartureDragProgress : undefined}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
           )}
 
-          {isPanelLayout && (
+          {/* Round 6: the "Draft check-in" label is dropped too when
+              centered — with the previous check-in and rhythm strip both
+              gone, the draft card is the only thing left on screen; a
+              group header labeling it as one of several groups no longer
+              matches what's actually there. 'rail'/'sheet' keep it. */}
+          {isPanelLayout && !isFocus && (
             <div style={groupHeaderStyle}>
               {`Draft check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
             </div>
@@ -844,10 +863,23 @@ export function EmotionDrawer({
     </div>
   );
 
+  // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, "full
+  // continuity" follow-up: the post-mint 'focus' panel is now frosted, not
+  // opaque — the same resting values DepartureFloat.tsx uses for its own
+  // strip, so committing a pin doesn't hand off into the field vanishing
+  // behind a solid wall again, undoing the whole point of the pre-mint
+  // landing. 'rail'/'sheet' keep today's opaque, near-solid panel
+  // unchanged — neither is part of this landing, and 'sheet' in particular
+  // sits over a field that isn't meant to read as legible chrome-behind-glass.
+  // Each individual CoordinateCard inside cardList keeps its own solid
+  // `--ui-surface` background regardless (unaffected by this), so the
+  // actual review content (recognize/derecognize, tags) stays exactly as
+  // legible as it always was — only the surrounding chrome (header gutter,
+  // action bar) now shows the field through.
   const shared: React.CSSProperties = {
     position: 'absolute',
-    background: 'rgba(12, 14, 18, 0.97)',
-    backdropFilter: 'blur(20px)',
+    background: isFocus ? 'rgba(13,15,20,0.42)' : 'rgba(12, 14, 18, 0.97)',
+    backdropFilter: isFocus ? 'blur(18px) saturate(1.15)' : 'blur(20px)',
     display: 'flex',
     flexDirection: 'column',
     zIndex: 40,
