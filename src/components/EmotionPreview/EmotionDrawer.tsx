@@ -94,8 +94,16 @@ interface Props {
   // until individually expanded via onExpandPin.
   onReopen: (entryId: string, pinId: string) => void;
   // U2: mints a new draft pin departing from the previous check-in's anchor
-  // (its newest pin) — fired by that one card's pre-positioned sliders when
-  // the draft is empty. Never touches the anchor itself (R2/R3).
+  // (its newest pin) — fired by the pre-mint DepartureFloat landing's own
+  // sliders when the draft is empty. Never touches the anchor itself
+  // (R2/R3). The rail/sheet previous-check-in card used to offer this same
+  // departure via its own pre-positioned sliders too (the original
+  // docs/plans/2026-08-24-001-feat-departure-mark-plan.md); that treatment
+  // is gone (see departureEligible/anchorPinId's removal below) — an
+  // ordinary rail/sheet visit always has the full field to plant a fresh
+  // pin on directly, so the previous check-in's card there stays the plain
+  // read-only summary (named words included) instead of doubling as a
+  // departure control.
   onDepart: (x: number, y: number) => void;
   // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U5: the
   // live coordinate while the pre-mint DepartureFloat landing's own slider
@@ -330,12 +338,11 @@ export function EmotionDrawer({
   // U2/KTD1: the landing state. Matches App's `showMirror` exactly (this
   // component only ever mounts within that same view); derived locally via
   // the shared predicate rather than threaded as its own prop, since every
-  // piece it needs is already here.
+  // piece it needs is already here. Only feeds the isFocus pre-mint
+  // DepartureFloat branch below now — the rail/sheet card it used to also
+  // drive (anchorPinId, now removed) no longer offers the departure
+  // treatment; see onDepart's own prop comment above for why.
   const departureEligible = isDepartureEligible(isReopened, pins.length, previousCheckIn);
-  // The pin departure sliders apply to (LC2) — the check-in's newest pin,
-  // matching departureAnchor's own fallback (src/data/departure.ts) so this
-  // card and the field's anchor ring can't disagree about which pin it is.
-  const anchorPinId = previousPins.length > 0 ? previousPins[previousPins.length - 1].id : null;
   // Desktop-check-in-focus plan's own U2 (distinct from the "U2/KTD1" label
   // just above, which is the earlier departure-mark plan's unit): the
   // neutral-centered first-time landing (R2). `isDepartureEligible` above
@@ -834,13 +841,6 @@ export function EmotionDrawer({
                     readOnly
                     onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
                     reopenDisabled={canSave}
-                    // U2: only the anchor gets the departure presentation,
-                    // and only while the landing state applies — a sibling
-                    // pin in a multi-pin check-in, or this same anchor while
-                    // the rail keeps history visible alongside an active
-                    // draft, stays the plain read-only summary above.
-                    departure={departureEligible && pin.id === anchorPinId}
-                    onDepart={onDepart}
                   />
                 </motion.div>
               ))}
