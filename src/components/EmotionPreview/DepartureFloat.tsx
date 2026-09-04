@@ -1,5 +1,5 @@
 import { forwardRef, useRef, useState } from 'react';
-import { useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { AxisSlider } from './AxisSlider';
 import type { PinEntry } from '../../types';
 
@@ -83,14 +83,25 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
   const dragging = draggingAxis !== null;
 
   return (
-    <div
+    <motion.div
       ref={ref}
       tabIndex={-1}
+      // Mirrors EmotionDrawer's own post-mint focus-card entrance (opacity
+      // 0 -> 1, scale 0.96 -> 1) so this landing always animates in — on
+      // the very first mount, and again whenever it remounts after a
+      // discarded draft hands the panel back to it (EmotionDrawer's
+      // isFocus/pins.length===0 branch swap has no AnimatePresence around
+      // it, so only this component's own mount animation can cover that
+      // return trip).
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
       style={{
         position: 'absolute',
         top: '50%',
         left: '50%',
-        transform: 'translate(-50%, -50%)',
+        translate: '-50% -50%',
         width: 'min(380px, 92vw)',
         zIndex: 40,
         outline: 'none',
@@ -160,6 +171,6 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
           {firstTime ? 'Move the sliders to match how you feel.' : anchor.regionDescription.relational}
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 });
