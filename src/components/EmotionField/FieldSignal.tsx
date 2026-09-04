@@ -9,15 +9,15 @@
 
 const STILL_CENTER =
   'radial-gradient(circle at 50% 50%, ' +
-  'rgba(237,232,223,0.025) 0%, ' +
-  'rgba(237,232,223,0.01) 7%, ' +
+  'rgba(237,232,223,0.0125) 0%, ' +
+  'rgba(237,232,223,0.005) 7%, ' +
   'rgba(237,232,223,0) 15%)';
 
 const INTENSITY_GRADIENT =
   'radial-gradient(circle at 50% 50%, ' +
   'rgba(201,168,124,0) 32%, ' +
-  'rgba(201,168,124,0.018) 72%, ' +
-  'rgba(201,168,124,0.04) 100%)';
+  'rgba(201,168,124,0.009) 72%, ' +
+  'rgba(201,168,124,0.02) 100%)';
 
 const layer: React.CSSProperties = {
   position: 'absolute',

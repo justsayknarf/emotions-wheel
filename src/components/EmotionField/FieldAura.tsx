@@ -37,10 +37,10 @@ interface Blob {
 // they drift out of phase, the bloom slowly wanders. Low-alpha throughout so it
 // stays ambience, not a light show.
 const BLOBS: Blob[] = [
-  { color: 'rgba(201,168,124,0.17)', size: 72, left: 47, top: 46, dx: 12, dy: -9, scale: 1.12, dur: 21, delay: 0 },
-  { color: 'rgba(212,146,116,0.13)', size: 58, left: 57, top: 41, dx: -13, dy: 10, scale: 1.15, dur: 25, delay: 1.7 },
-  { color: 'rgba(140,158,205,0.11)', size: 62, left: 55, top: 60, dx: 11, dy: 12, scale: 1.13, dur: 29, delay: 3.4 },
-  { color: 'rgba(176,150,196,0.09)', size: 54, left: 42, top: 57, dx: -9, dy: -8, scale: 1.18, dur: 17, delay: 0.9 },
+  { color: 'rgba(201,168,124,0.085)', size: 72, left: 47, top: 46, dx: 12, dy: -9, scale: 1.12, dur: 21, delay: 0 },
+  { color: 'rgba(212,146,116,0.065)', size: 58, left: 57, top: 41, dx: -13, dy: 10, scale: 1.15, dur: 25, delay: 1.7 },
+  { color: 'rgba(140,158,205,0.055)', size: 62, left: 55, top: 60, dx: 11, dy: 12, scale: 1.13, dur: 29, delay: 3.4 },
+  { color: 'rgba(176,150,196,0.045)', size: 54, left: 42, top: 57, dx: -9, dy: -8, scale: 1.18, dur: 17, delay: 0.9 },
 ];
 
 // Max cursor-lean, in px. Kept subtle — the aura acknowledges the cursor without
