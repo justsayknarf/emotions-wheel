@@ -373,9 +373,18 @@ export default function App() {
   // EmotionDrawer, since App.tsx already owns both the `showMirror`-derived
   // boolean this keys on and the `mirrorExpanded` state it resets.
   const [mirrorWasShown, setMirrorWasShown] = useState(false);
+  // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+  // U3: consumed by handleLandingSave below — set right before a first-
+  // ever new-tab save's record() call, so the very showMirror transition
+  // that save triggers is exempted from this reset just once, instead of
+  // immediately re-collapsing the mirrorExpanded=true that save just set.
+  // Every later transition (a second check-in, leaving and returning) has
+  // the ref back at false and collapses exactly as before.
+  const firstEverLandingSaveRef = useRef(false);
   if (showMirror !== mirrorWasShown) {
     setMirrorWasShown(showMirror);
-    if (showMirror && mirrorExpanded) setMirrorExpanded(false);
+    if (showMirror && mirrorExpanded && !firstEverLandingSaveRef.current) setMirrorExpanded(false);
+    firstEverLandingSaveRef.current = false;
   }
   // Resolve the active check-in and its selected pin together, at render,
   // rather than storing "which check-in is active" as a second piece of
@@ -605,12 +614,25 @@ export default function App() {
   // is no draftId branch to mirror here.
   const handleLandingSave = useCallback(() => {
     if (pins.length === 0) return;
+    // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+    // U3: mirrors the ordinary mint path's own setMirrorExpanded(true)
+    // (handlePinRelease above) so a first-ever new-tab save doesn't leave
+    // the post-save mirror peeked/collapsed on a mobile-width session —
+    // 'rail' has no peek/collapse, so this is a no-op there. Gated to
+    // entries.length === 0 (checked pre-save) so it fires only for this
+    // narrow first-ever case, not every landing save. Also arms
+    // firstEverLandingSaveRef (above) so the mirrorWasShown reset that
+    // runs on the very next render doesn't immediately undo this.
+    if (entries.length === 0) {
+      setMirrorExpanded(true);
+      firstEverLandingSaveRef.current = true;
+    }
     record(pins, sessionStartRef.current, entrySource);
     setPins([]);
     setSelectedPinId(null);
     setDesktopCardProgress(1);
     scheduleLandingSettle();
-  }, [pins, record, entrySource, scheduleLandingSettle]);
+  }, [pins, record, entrySource, scheduleLandingSettle, entries.length]);
 
   // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // breakpoint and interruption resilience): resolves the landing state

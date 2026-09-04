@@ -379,16 +379,18 @@ export function EmotionDrawer({
   // drive (anchorPinId, now removed) no longer offers the departure
   // treatment; see onDepart's own prop comment above for why.
   const departureEligible = isDepartureEligible(isReopened, pins.length, previousCheckIn);
-  // Desktop-check-in-focus plan's own U2 (distinct from the "U2/KTD1" label
-  // just above, which is the earlier departure-mark plan's unit): the
-  // neutral-centered first-time landing (R2). `isDepartureEligible` above
-  // always requires a real `previousCheckIn` (every other caller of it needs
-  // one to depart *from*), so it's structurally false whenever there is no
-  // previous check-in at all — this is the separate condition for that case,
-  // gating the synthetic (0, 0) anchor card in cardList below. Focus-only:
-  // 'rail'/'sheet' never had anywhere to show a card with no previous
-  // check-in and no draft pins, and still don't outside the landing.
-  const neutralDepartureEligible = isFocus && !isReopened && pins.length === 0 && !previousCheckIn;
+  // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+  // U2 (superseding the desktop-check-in-focus plan's own neutral-first-
+  // time-landing condition, which this subsumes): true for a first-ever
+  // new-tab session's *entire* pre-save life — before a pin exists (the
+  // neutral (0, 0) landing) and all the way through mint/adjust/Save (the
+  // "one continuous card" follow-up below keeps DepartureFloat mounted for
+  // that whole stretch, rather than handing off to a differently-sized
+  // card the instant a pin lands). Reproduces the origin document's
+  // `desktopLandingActive && entries.length === 0` exactly, since
+  // previousCheckIn is null precisely when entries is empty
+  // (derivePreviousCheckIn).
+  const isFirstEverCheckIn = isFocus && !isReopened && !previousCheckIn;
   // Once a fresh draft has pins on the sheet, previous-check-in content
   // (the returning-summary block and the previous check-in's read-only
   // cards) hides so the draft renders as the top and only content —
@@ -421,6 +423,14 @@ export function EmotionDrawer({
   // correct even while previousCheckIn is excluding the entry being edited.
   const timeLabel = previousCheckIn ? formatRelative(previousCheckIn.timestamp) : null;
   const summaryTimeLabel = mostRecentEntry ? formatRelative(mostRecentEntry.timestamp) : null;
+  // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+  // U4: true only for the mirror showing a user's one-and-only entry, and
+  // only when that entry came from the new-tab landing (not a direct-visit
+  // first-timer's own save, which keeps today's "Reopen" wording — the
+  // origin document scopes this narrowly). Self-resetting: once a second
+  // entry exists, entries.length === 1 is false and the label reverts on
+  // its own, no manual flag to clear.
+  const firstEverEntryFromNewTab = entries.length === 1 && previousCheckIn?.source === 'new-tab';
   // On the sheet, a peek-style handle is showing (and already carries the
   // time) whenever the draft is empty and nothing is being edited — both the
   // peeked state and the manually-expanded-with-empty-draft state render
@@ -556,7 +566,7 @@ export function EmotionDrawer({
   // Review fix (P1, anchor-tick leak): `anchor` is departureAnchor's
   // synthetic (0, 0) neutral pin (src/data/departure.ts) whenever there's no
   // real previousCheckIn — that pin exists only to feed the
-  // neutralDepartureEligible departure card below (which reads `anchor`
+  // isFirstEverCheckIn departure card below (which reads `anchor`
   // directly, unfiltered). An ordinary draft card below must never receive
   // it as its comparison anchor: CoordinateCard/AxisSlider render the anchor
   // tick whenever `anchorValue !== undefined`, with no dependency on
@@ -573,27 +583,46 @@ export function EmotionDrawer({
   // frosted strip, replacing the opaque `shared` panel entirely for this
   // one moment. Checked before any of the panel content below is built
   // (cardList/actionBar), so none of it is constructed only to be
-  // discarded. The instant a pin mints (pins.length > 0), this stops
-  // matching and the ordinary `isFocus` branch further below takes over
-  // completely unchanged — same opaque panel, same cardList/actionBar,
-  // same recedeProgress behind it. No hooks are declared after this point
-  // in the component, so an early return here is safe.
+  // discarded. No hooks are declared after this point in the component, so
+  // an early return here is safe.
   //
-  // No `onReopen` passed here (round 5 of this same follow-up): centered
+  // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+  // "one continuous card" follow-up: for a *returning* user
+  // (departureEligible, not isFirstEverCheckIn), minting a pin still ends
+  // this branch exactly as before — the ordinary `isFocus` branch further
+  // below takes over completely unchanged, same opaque panel, same
+  // cardList/actionBar. For a first-ever session, though, this branch now
+  // keeps matching straight through mint/adjust/Save (isFirstEverCheckIn
+  // alone, no `pins.length === 0` clause) — DepartureFloat itself gains a
+  // `pin` prop and stays mounted, rather than handing off to a differently
+  // sized/padded card in EmotionDrawer's own panel the instant a pin
+  // lands. That handoff is exactly what a live screenshot showed reading
+  // as "a new component appeared" (width jumped 380px -> 420px, a header
+  // band appeared, Save/Discard's own padding reshaped the box) — keeping
+  // the same component mounted removes the jump by construction instead of
+  // hand-matching two containers' CSS and hoping they stay in sync.
+  //
+  // No `onReopen` passed here (round 5 of the original follow-up): centered
   // and alone, this landing has nothing to distinguish "reopen instead"
   // from — that CTA stays meaningful on the rail's own departure-mark card
   // (below, in cardList), which is one docked option among others. The
-  // previous check-in itself is still reachable once this landing hands
-  // off post-mint: its read-only card (with its own Reopen button) keeps
-  // rendering in cardList throughout.
-  if (isFocus && pins.length === 0 && (neutralDepartureEligible || departureEligible)) {
+  // previous check-in itself is still reachable once a *returning* user's
+  // landing hands off post-mint: its read-only card (with its own Reopen
+  // button) keeps rendering in cardList throughout. (Never reachable for a
+  // first-ever session anyway — there is no previous check-in yet.)
+  if (isFocus && (isFirstEverCheckIn || (pins.length === 0 && departureEligible))) {
     return (
       <DepartureFloat
         ref={focusRootRef}
-        anchor={neutralDepartureEligible ? anchor! : previousPins[previousPins.length - 1]}
-        firstTime={neutralDepartureEligible}
+        anchor={isFirstEverCheckIn ? anchor! : previousPins[previousPins.length - 1]}
+        pin={pins[0] ?? null}
+        firstTime={isFirstEverCheckIn}
         onDepart={onDepart}
         onDepartureDrag={onDepartureDrag}
+        onAdjust={onAdjust}
+        onAdjustDraft={onAdjustDraft}
+        onDiscard={onClear}
+        onSave={onLandingSave ?? onDone}
       />
     );
   }
@@ -836,11 +865,14 @@ export function EmotionDrawer({
           {/* docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md:
               the neutral-centered first-time departure card that used to
               render here (U2 of the desktop-check-in-focus plan, R2) is
-              gone — `neutralDepartureEligible` structurally requires
-              `isFocus`, and every state where it's true is now caught by
-              the early return above, before cardList is ever built. It
-              stays computed (used there) purely so this comment can say,
-              accurately, that this block never runs. */}
+              gone — `isFirstEverCheckIn` structurally requires `isFocus`,
+              and every state where it's true (now including the whole
+              post-mint session, not just pre-mint — see the
+              first-checkin-simplify plan's "one continuous card" follow-up
+              above) is caught by the early return above, before cardList
+              is ever built. It stays computed (used there) purely so this
+              comment can say, accurately, that this block never runs for a
+              first-ever session. */}
           {/* Round 6 of the same follow-up: the previous check-in's own
               card is dropped entirely from the centered post-mint view too
               — this landing is meant to show only the draft and its
@@ -877,6 +909,7 @@ export function EmotionDrawer({
                     frosted={isFocus}
                     readOnly
                     onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
+                    reopenLabel={firstEverEntryFromNewTab ? 'Add tags' : 'Reopen'}
                     reopenDisabled={canSave}
                   />
                 </motion.div>
