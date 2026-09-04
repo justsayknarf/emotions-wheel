@@ -1171,8 +1171,11 @@ export default function App() {
           {/* Pin-to-card thread — desktop only, follows the selected card.
               Not drawn when the active pin is only a fallback resolution
               (see tetherSuppressed above) — nothing has actually been
-              selected yet. */}
-          {sideBySide && selectedPin && !tetherSuppressed && (
+              selected yet. Also not drawn during the desktop landing's
+              'focus' variant: that card sits fixed front-and-center rather
+              than docked in the rail, so a thread to it never moves and only
+              reads as a stray line. */}
+          {sideBySide && selectedPin && !tetherSuppressed && drawerVariant !== 'focus' && (
             <Tether
               key={tetherKey}
               pin={selectedPin}
