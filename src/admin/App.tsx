@@ -8,6 +8,7 @@ import { AdminHeader } from './components/AdminHeader';
 import { AdminMap } from './components/AdminMap';
 import { AdminTable } from './components/AdminTable';
 import { AdminRevealTuning } from './components/AdminRevealTuning';
+import { AdminThemeSelector } from './components/AdminThemeSelector';
 import { generateId } from './lib/idgen';
 
 function initEmotions(): AdminEmotion[] {
@@ -124,6 +125,7 @@ export function AdminApp() {
         saveError={saveError}
         onSave={handleSave}
       />
+      <AdminThemeSelector />
       <AdminRevealTuning />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
         <AdminMap

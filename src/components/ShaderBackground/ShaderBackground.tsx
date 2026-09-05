@@ -1,4 +1,5 @@
 import { ShaderGradientCanvas, ShaderGradient } from '@shadergradient/react';
+import { useTheme } from '../../config/theme';
 
 // Experimental background layer (feat/shader-gradient-background) — an
 // animated shadergradient.co plane sitting behind the field/rail. Settings
@@ -8,7 +9,14 @@ import { ShaderGradientCanvas, ShaderGradient } from '@shadergradient/react';
 // controls, not to @shadergradient/react's actual GradientT prop type, so
 // they're dropped here. fov/pixelDensity are real props too, but they belong
 // on ShaderGradientCanvas, not ShaderGradient.
+//
+// color1/2/3 + brightness come from the active color theme (config/theme.ts)
+// rather than being hardcoded — the shader is the single biggest colored
+// surface in the app (full-bleed, behind a field that sets no background of
+// its own), so every theme retints it rather than leaving the original
+// indigo/plum/gray underneath whatever accent is picked.
 export function ShaderBackground() {
+  const { theme } = useTheme();
   return (
     <ShaderGradientCanvas
       style={{ position: 'absolute', inset: 0 }}
@@ -18,14 +26,14 @@ export function ShaderBackground() {
     >
       <ShaderGradient
         animate="on"
-        brightness={0.5}
+        brightness={theme.shader.brightness}
         cAzimuthAngle={180}
         cDistance={9.79}
         cPolarAngle={47}
         cameraZoom={9.09}
-        color1="#1e185c"
-        color2="#411a4b"
-        color3="#212121"
+        color1={theme.shader.color1}
+        color2={theme.shader.color2}
+        color3={theme.shader.color3}
         envPreset="city"
         grain="off"
         lightType="3d"
