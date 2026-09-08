@@ -13,7 +13,6 @@ import { EmotionField } from './components/EmotionField/EmotionField';
 import { ShaderBackground } from './components/ShaderBackground/ShaderBackground';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
-import { SessionComplete } from './components/SessionComplete';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
 import { WelcomeOverlay } from './components/Welcome/WelcomeOverlay';
@@ -75,7 +74,14 @@ function useOnboarding() {
 export default function App() {
   const [view, setView] = useState<AppView>('field');
   const [pins, setPins] = useState<PinEntry[]>([]);
-  const [lastEntry, setLastEntry] = useState<DiaryEntry | null>(null);
+  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+  // U1: the entry id a save most recently produced, in this page load only
+  // — never persisted, never explicitly cleared. It only ever matters
+  // compared against previousCheckIn.id (EmotionDrawer's own justSaved),
+  // which already changes out from under it on a reload, a newer save, or
+  // a reopen's temporary exclusion — so staleness resolves through that
+  // existing derivation rather than needing its own reset logic here.
+  const [justSavedEntryId, setJustSavedEntryId] = useState<string | null>(null);
   const sessionStartRef = useRef<number>(0);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const railScrollRef = useRef<HTMLDivElement>(null);
@@ -115,7 +121,7 @@ export default function App() {
   // the auto-dissolve timer restart when a new check-in re-opens the welcome
   // even if it was already showing. `fast` selects the snappy exit on skip.
   const [showWelcome, setShowWelcome] = useState(true);
-  const [welcomeCue, setWelcomeCue] = useState(() => nextCue().cue);
+  const [welcomeCue] = useState(() => nextCue().cue);
   const [welcomeFast, setWelcomeFast] = useState(false);
   // The focus card's live measured top edge (EmotionDrawer's
   // onFocusCardTopChange), so WelcomeOverlay can anchor just above its
@@ -123,13 +129,13 @@ export default function App() {
   // until measured (first paint) or whenever no focus card is mounted —
   // WelcomeOverlay falls back to a fixed offset in either case.
   const [focusCardTop, setFocusCardTop] = useState<number | null>(null);
-  const [welcomeNonce, setWelcomeNonce] = useState(0);
+  const [welcomeNonce] = useState(0);
 
   // The axis pulse is a separate lifecycle from the welcome message: it begins
   // at the same moment but holds the axis emphasis until its own sequence (the
   // two axes, one after the other) has finished, then releases independently.
   const [axisPulseOn, setAxisPulseOn] = useState(true);
-  const [axisPulseNonce, setAxisPulseNonce] = useState(0);
+  const [axisPulseNonce] = useState(0);
 
   const { entries, record, updateEntry } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
@@ -256,17 +262,6 @@ export default function App() {
   // Release the axis emphasis; the axes then fade out on their own (axisFade).
   const endAxisPulse = useCallback(() => setAxisPulseOn(false), []);
 
-  // Begin a check-in intro: the grounding cue and the axis pulse start together
-  // (fresh cue, both re-armed via their nonces) but dissolve independently.
-  const beginIntro = useCallback(() => {
-    setWelcomeCue(nextCue().cue);
-    setWelcomeFast(false);
-    setShowWelcome(true);
-    setWelcomeNonce((n) => n + 1);
-    setAxisPulseOn(true);
-    setAxisPulseNonce((n) => n + 1);
-  }, []);
-
   // Welcome message auto-dissolves on its own hold — independent of the axes.
   useEffect(() => {
     if (!showWelcome) return;
@@ -373,9 +368,31 @@ export default function App() {
   // EmotionDrawer, since App.tsx already owns both the `showMirror`-derived
   // boolean this keys on and the `mirrorExpanded` state it resets.
   const [mirrorWasShown, setMirrorWasShown] = useState(false);
+  // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+  // U3 (generalized by docs/plans/2026-09-04-002-feat-saved-checkin-
+  // confirmation-card-plan.md: every save now shows the confirmation
+  // card, not just a first-ever new-tab one). Detects "a save just landed
+  // on this exact render" by comparing justSavedEntryId against its own
+  // previous value — the standard store-the-previous-value-and-compare
+  // pattern (same shape as `mirrorWasShown` right below), rather than a
+  // separately-armed flag. `justSavedEntryId` already changes, in the
+  // same render, on every fresh save (both handleLandingSave and
+  // handleRecord set it right before clearing `pins`) — reusing it here
+  // means neither save handler needs to reach into this mirror-expand
+  // mechanism at all, unlike an earlier version of this that manually
+  // armed a dedicated ref/state from inside those callbacks. That
+  // version worked, but tripped react-hooks' preserve-manual-memoization
+  // check: a value read *and* conditionally set during render (this
+  // block) being *also* set from inside a `useCallback` is exactly the
+  // shape that check can't verify. Deriving "just saved" from a value
+  // already read-only from the callbacks' side avoids the conflict
+  // entirely, not just silences it.
+  const [prevJustSavedEntryId, setPrevJustSavedEntryId] = useState<string | null>(null);
+  const justLanded = justSavedEntryId !== prevJustSavedEntryId;
+  if (justLanded) setPrevJustSavedEntryId(justSavedEntryId);
   if (showMirror !== mirrorWasShown) {
     setMirrorWasShown(showMirror);
-    if (showMirror && mirrorExpanded) setMirrorExpanded(false);
+    if (showMirror && mirrorExpanded && !justLanded) setMirrorExpanded(false);
   }
   // Resolve the active check-in and its selected pin together, at render,
   // rather than storing "which check-in is active" as a second piece of
@@ -472,6 +489,15 @@ export default function App() {
       fireDepartureTrace(entry.x, entry.y);
       return;
     }
+    // Every fresh mint starts a new check-in's own session clock — restores
+    // what handleNewSession used to do explicitly (deleted alongside
+    // SessionComplete, docs/plans/2026-09-04-002-feat-saved-checkin-
+    // confirmation-card-plan.md) for "each new session/interaction resets
+    // it" (see sessionStartRef's own mount-effect comment). Without this,
+    // a second check-in saved later in the same page load would report
+    // sessionDurationMs measured from app-open (or the first-ever press),
+    // not from when this particular check-in actually began.
+    sessionStartRef.current = Date.now();
     // R6: any mint while the landing state applies is a departure from the
     // anchor — both gestures the plan describes (dragging a departure
     // slider via handleDepart below, or pressing the field directly) end
@@ -582,30 +608,60 @@ export default function App() {
     // press no longer mints during the pre-mint departure-float landing —
     // the slider is the only commit path there now. Unaffected everywhere
     // else (post-mint, or outside this landing entirely).
-    if (desktopLandingActive && pins.length === 0) return;
+    //
+    // bug fix (2026-09-08): `desktopLandingActive` alone isn't a reliable
+    // "still pre-mint" signal — handleLandingSave clears `pins` but doesn't
+    // flip `desktopLandingActive` false until scheduleLandingSettle's
+    // timeout fires (tuning.fieldRecedeDuration later, ~500ms by default),
+    // so for that whole window after Save, `desktopLandingActive &&
+    // pins.length === 0` was ALSO true — silently swallowing the very
+    // first field press of the user's next check-in (confirmed live: the
+    // press did nothing, and only a second press, after the window
+    // passed, minted). `desktopCardProgress` is the correct signal here —
+    // it's set to 1 synchronously inside handleLandingSave, at the exact
+    // moment Save fires, so it's already nonzero for the entire settle
+    // window `desktopLandingActive` is still lagging through. Guard on it
+    // being genuinely still 0 (true pre-mint) rather than gating on
+    // pins.length, which the very press being guarded is about to change
+    // anyway and so can't distinguish "before the first save" from "right
+    // after one."
+    if (desktopLandingActive && desktopCardProgress === 0 && pins.length === 0) return;
     handlePinRelease(entry);
-  }, [handlePinRelease, desktopLandingActive, pins.length]);
+  }, [handlePinRelease, desktopLandingActive, desktopCardProgress, pins.length]);
 
   // review-fix (product direction, 2nd pass): the landing's own way to end
   // itself — a Save button rendered on the front-and-center card (wired via
   // EmotionDrawer's `onLandingSave`, called instead of the ordinary `onDone`
-  // only while `isFocus`). Deliberately NOT `handleDone`/`handleRecord`:
-  // those route through `setView('complete')` (the append-path's
-  // celebration screen, DefinitionCardSequence + ConstellationReplay) —
-  // this save is the opposite of a celebration moment, it's the doorway
-  // into the ordinary field+rail app the user is about to land in, so it
-  // stays on `view === 'field'` and drives the same reveal-rail/animate-
-  // card-to-the-right transition U3/U4 used to trigger automatically.
-  // Mirrors `handleRecord`'s append branch (record + clear pins/selection)
-  // minus `setLastEntry`/`setView('complete')` — same precedent
-  // `handleRecord`'s own draftId/reopen branch already established for
-  // "record without the celebration screen." A landing save is always a
-  // genuinely new entry (the landing only ever shows for a first-time or
-  // returning desktop user's own fresh check-in, never a reopen), so there
-  // is no draftId branch to mirror here.
+  // only while `isFocus`). Deliberately NOT `handleDone`/`handleRecord`
+  // directly: both now land on the same `view === 'field'`, confirmation-
+  // card-showing outcome (docs/plans/2026-09-04-002-feat-saved-checkin-
+  // confirmation-card-plan.md retired the celebration screen they used to
+  // route through) — but only this landing save also needs to drive the
+  // reveal-rail/animate-card-to-the-right recede transition
+  // (`scheduleLandingSettle`, `desktopCardProgress`), since only it is
+  // receding away from the centered landing in the first place. Mirrors
+  // `handleRecord`'s append branch (record + clear pins/selection +
+  // justSavedEntryId) plus that recede-specific work. A landing save is
+  // always a genuinely new entry (the landing only ever shows for a
+  // first-time or returning desktop user's own fresh check-in, never a
+  // reopen), so there is no draftId branch to mirror here.
   const handleLandingSave = useCallback(() => {
     if (pins.length === 0) return;
-    record(pins, sessionStartRef.current, entrySource);
+    // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
+    // U3 (generalized, see `justLanded`'s own comment above): every
+    // landing save expands the mirror so the confirmation card doesn't
+    // render peeked/collapsed on a mobile-width session — 'rail' has no
+    // peek/collapse, so this is a no-op there. Setting justSavedEntryId
+    // below is what makes `justLanded` true on the resulting render,
+    // exempting this from the mirrorWasShown reset — no separate arming
+    // call needed here.
+    setMirrorExpanded(true);
+    // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+    // U1: marks this entry as the one the confirmation card (mini-map +
+    // "Today's check-in" + suggestions) should render for, once the rail
+    // reveals below.
+    const entry = record(pins, sessionStartRef.current, entrySource);
+    setJustSavedEntryId(entry.id);
     setPins([]);
     setSelectedPinId(null);
     setDesktopCardProgress(1);
@@ -846,11 +902,21 @@ export default function App() {
       setSelectedPinId(null);
       setDraftId(null);
       setExpandedPinIds(new Set());
-      // Deliberately no setLastEntry/setView('complete') here — saving a
-      // correction returns to the field with the updated check-in active
-      // (R25's "updates its existing record" is not a new completion moment),
-      // not the append path's celebration screen.
+      // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md:
+      // deliberately no setJustSavedEntryId here — draftId's own id is
+      // already whatever justSavedEntryId was set to by the original save
+      // that produced this entry (or it isn't, and this update shouldn't
+      // manufacture a confirmation moment for an entry from a past
+      // session). Either way this branch leaves it untouched.
     } else {
+      // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md:
+      // same mirror-expand as handleLandingSave — without it, an ordinary
+      // save on a mobile-width session would leave the new confirmation
+      // card peeked/collapsed instead of immediately visible. Setting
+      // justSavedEntryId below makes `justLanded` true on the resulting
+      // render (see its own comment above), exempting this from the
+      // mirrorWasShown reset — no separate arming call needed here.
+      setMirrorExpanded(true);
       const entry = record(pins, sessionStartRef.current, entrySource);
       // Clear the draft so the just-recorded entry becomes the previous
       // check-in through derivePreviousCheckIn (above) rather than through a
@@ -861,8 +927,12 @@ export default function App() {
       // longer exists in it.
       setPins([]);
       setSelectedPinId(null);
-      setLastEntry(entry);
-      setView('complete');
+      // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+      // U1/U2: no more setLastEntry/setView('complete') — this now lands
+      // on the same field view the landing path already does, where the
+      // confirmation card (mini-map + "Today's check-in" + suggestions)
+      // picks it up via justSavedEntryId, same as handleLandingSave.
+      setJustSavedEntryId(entry.id);
     }
   }, [pins, record, updateEntry, draftId, entrySource]);
 
@@ -890,6 +960,29 @@ export default function App() {
     setExpandedPinIds(new Set([pinId]));
   }, [entries, pins]);
 
+  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+  // U3: accepting a suggestion on the confirmation card (SavedCheckInSummary)
+  // recognizes a word against a pin that's already saved, outside the
+  // draft/reopen flow entirely — mirrors handleReopen's own entries.find
+  // lookup rather than routing through `pins`, since the pin being
+  // annotated isn't in the draft. updateEntryInList (src/data/checkIn.ts)
+  // already preserves the original timestamp/sessionDurationMs/source
+  // regardless of what's passed here. The `!includes` guard just keeps a
+  // stale double-accept from duplicating the id; the UI itself only ever
+  // offers accept on a not-yet-recognized candidate.
+  const handleRecognizeSaved = useCallback((entryId: string, pinId: string, emotionId: string) => {
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return;
+    updateEntry({
+      ...entry,
+      pins: entry.pins.map((p) =>
+        p.id === pinId && !p.recognizedWords.includes(emotionId)
+          ? { ...p, recognizedWords: [...p.recognizedWords, emotionId] }
+          : p,
+      ),
+    });
+  }, [entries, updateEntry]);
+
   // Bring one more sibling pin into edit mode within an already-active
   // reopen (the check-in is already in the draft — this never starts a new
   // reopen, just widens which of its cards render editable).
@@ -897,18 +990,6 @@ export default function App() {
     setExpandedPinIds((prev) => (prev.has(pinId) ? prev : new Set(prev).add(pinId)));
     setSelectedPinId(pinId);
   }, []);
-
-  const handleNewSession = useCallback(() => {
-    // Resets the draft, selection, and view. It does not touch the previous
-    // check-in — that's derived from storage (derivePreviousCheckIn above),
-    // not stored here, so it survives this reset and a reload alike.
-    setPins([]);
-    setSelectedPinId(null);
-    setLastEntry(null);
-    sessionStartRef.current = Date.now();
-    setView('field');
-    beginIntro();
-  }, [beginIntro]);
 
   const handleFirstInteraction = useCallback(() => {
     markInteracted();
@@ -1011,7 +1092,21 @@ export default function App() {
           // commonly expanded by default (R7/R11), and this guard must not
           // also intercept an ordinary pin-drop press; that gesture drives
           // its own peek instead (U3).
-          if (showMirror && mirrorExpanded) {
+          //
+          // bug fix (2026-09-08): also requires `!sideBySide` now — the
+          // mirror tray only ever visually covers the field on the mobile
+          // sheet layout (see `fieldBottom`'s own `!sideBySide && showMirror`
+          // above, which is what actually carves out room for it there). On
+          // desktop the rail is a fixed side panel that never overlays the
+          // field, yet `handleRecord`/`handleLandingSave` set
+          // `mirrorExpanded` true unconditionally on every save (needed for
+          // the mobile case), so `showMirror && mirrorExpanded` was true on
+          // desktop too, right after every ordinary save — silently eating
+          // the very next field press with nothing ever having covered
+          // anything to dismiss (confirmed live: the press after Save did
+          // nothing at all, not even reaching EmotionField's own gesture
+          // handlers, and the following press worked normally).
+          if (!sideBySide && showMirror && mirrorExpanded) {
             setMirrorExpanded(false);
             e.stopPropagation();
           }
@@ -1035,7 +1130,11 @@ export default function App() {
           departureTraceTo={departureTraceTo}
           recedeProgress={recedeProgress}
           departureDraft={departureDraftCoord}
-          dropDisabled={desktopLandingActive && pins.length === 0}
+          // Matches handleFieldPress's own guard exactly (see its 2026-09-08
+          // bug-fix comment) — otherwise the cursor/hover cue would keep
+          // reading "not clickable" through the post-save settle window
+          // even after the fix above made a press there work again.
+          dropDisabled={desktopLandingActive && desktopCardProgress === 0 && pins.length === 0}
         />
       </div>
 
@@ -1147,6 +1246,8 @@ export default function App() {
                 onDone={handleDone}
                 onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
+                justSavedEntryId={justSavedEntryId}
+                onRecognizeSaved={handleRecognizeSaved}
                 onDepart={handleDepart}
                 onDepartureDrag={setDepartureDraftCoord}
                 onLandingSave={handleLandingSave}
@@ -1174,8 +1275,23 @@ export default function App() {
               selected yet. Also not drawn during the desktop landing's
               'focus' variant: that card sits fixed front-and-center rather
               than docked in the rail, so a thread to it never moves and only
-              reads as a stray line. */}
-          {sideBySide && selectedPin && !tetherSuppressed && drawerVariant !== 'focus' && (
+              reads as a stray line.
+
+              Nor for the previous check-in generally (activeCheckIn ===
+              'previous'), even once explicitly selected — unlike
+              tetherSuppressed above, which only covers the unselected
+              fallback moment and still lets a real tap draw the thread.
+              Live use showed why that's the wrong call specifically for
+              the thread: the previous check-in's pin usually sits inside
+              the field's densest word cluster (it's often near where a
+              fresh check-in also lands), and a curved line cutting through
+              that cluster reads as noise, not information — the pin marker
+              and its highlighted words already say "this is the one," a
+              second, longer-range signal on top adds nothing. The
+              highlight/glow behavior itself (tetherSuppressed, above)
+              is unaffected — a click still lights up the previous
+              check-in's neighborhood; only the connecting line is gone. */}
+          {sideBySide && selectedPin && !tetherSuppressed && activeCheckIn !== 'previous' && drawerVariant !== 'focus' && (
             <Tether
               key={tetherKey}
               pin={selectedPin}
@@ -1218,22 +1334,6 @@ export default function App() {
             <DefinitionCardSequence
               selectedEmotions={[]}
               onRecord={handleRecord}
-            />
-          </motion.div>
-        )}
-
-        {view === 'complete' && lastEntry && (
-          <motion.div
-            key="complete"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
-          >
-            <SessionComplete
-              entry={lastEntry}
-              onNewSession={handleNewSession}
-              onViewHistory={() => setView('history')}
             />
           </motion.div>
         )}

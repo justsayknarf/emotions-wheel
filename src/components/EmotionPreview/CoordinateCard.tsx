@@ -299,11 +299,20 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         // border stays the plain neutral one always; selection still
         // drives everything else (the field's own pin emphasis, the
         // tether) unaffected.
+        //
+        // readOnly always gets the accentDim (recorded-dim) border, not
+        // just while selected — a previous check-in used to fall back to
+        // the near-invisible `--ui-border` whenever nothing happened to be
+        // selected (its usual resting state, e.g. tetherSuppressed's own
+        // unselected fallback), which read as blending into the rail
+        // rather than as its own card. A draft card keeps the existing
+        // selected-only border — it already reads as active via its own
+        // background/chrome, so it doesn't need this baseline emphasis.
         border: draggingAxis !== null
           ? CARD_DRAG_BORDER
           : frosted
             ? '1px solid var(--ui-border)'
-            : `1px solid ${showSelected ? accentDim : 'var(--ui-border)'}`,
+            : `1px solid ${showSelected || readOnly ? accentDim : 'var(--ui-border)'}`,
         borderRadius: 12,
         overflow: 'hidden',
         cursor: 'pointer',
