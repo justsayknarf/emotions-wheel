@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { CoordinateCard } from './CoordinateCard';
 import { DepartureFloat } from './DepartureFloat';
+import { SavedCheckInSummary } from './SavedCheckInSummary';
 import { isDepartureEligible } from '../../data/departure';
 import { useRevealTuning } from '../../config/revealTuning';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
@@ -83,9 +84,10 @@ interface Props {
   // review-fix (product direction, 2nd pass): the 'focus' variant's own
   // ending — actionBar's Save button calls this instead of `onDone` while
   // `isFocus`, so the landing's own persist+reveal-rail flow
-  // (App.tsx's handleLandingSave) fires instead of the ordinary
-  // record-and-celebrate path. Optional and unused by 'rail'/'sheet',
-  // which keep calling `onDone` exactly as before.
+  // (App.tsx's handleLandingSave) also drives the recede-to-rail
+  // transition `onDone`'s own ordinary save path doesn't need. Optional
+  // and unused by 'rail'/'sheet', which keep calling `onDone` exactly as
+  // before.
   onLandingSave?: () => void;
   onClear: () => void;
   // Reopen the previous check-in (by its entry id) into the draft, expanding
@@ -93,6 +95,13 @@ interface Props {
   // draft too (the check-in is still one save unit) but stay collapsed
   // until individually expanded via onExpandPin.
   onReopen: (entryId: string, pinId: string) => void;
+  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+  // U5: the entry id a save most recently produced (App.tsx's
+  // justSavedEntryId), and the write-through for accepting one of
+  // SavedCheckInSummary's suggestions against it. See `justSaved` below
+  // for how this gates which card renders.
+  justSavedEntryId: string | null;
+  onRecognizeSaved: (entryId: string, pinId: string, emotionId: string) => void;
   // U2: mints a new draft pin departing from the previous check-in's anchor
   // (its newest pin) — fired by the pre-mint DepartureFloat landing's own
   // sliders when the draft is empty. Never touches the anchor itself
@@ -191,6 +200,8 @@ export function EmotionDrawer({
   onLandingSave,
   onClear,
   onReopen,
+  justSavedEntryId,
+  onRecognizeSaved,
   onDepart,
   onDepartureDrag,
   cardFocusProgress = 0,
@@ -423,14 +434,16 @@ export function EmotionDrawer({
   // correct even while previousCheckIn is excluding the entry being edited.
   const timeLabel = previousCheckIn ? formatRelative(previousCheckIn.timestamp) : null;
   const summaryTimeLabel = mostRecentEntry ? formatRelative(mostRecentEntry.timestamp) : null;
-  // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
-  // U4: true only for the mirror showing a user's one-and-only entry, and
-  // only when that entry came from the new-tab landing (not a direct-visit
-  // first-timer's own save, which keeps today's "Reopen" wording — the
-  // origin document scopes this narrowly). Self-resetting: once a second
-  // entry exists, entries.length === 1 is false and the label reverts on
-  // its own, no manual flag to clear.
-  const firstEverEntryFromNewTab = entries.length === 1 && previousCheckIn?.source === 'new-tab';
+  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+  // U5 (supersedes the first-checkin-simplify plan's own
+  // firstEverEntryFromNewTab, narrower and now removed): true only for
+  // the mirror showing the entry a save most recently produced, in this
+  // page load — every other previous check-in (an older entry, or this
+  // same one after a reload) renders the ordinary read-only card exactly
+  // as before. `previousPins.length === 1` is defensive, not an expected
+  // branch: every entry `justSavedEntryId` can ever point to is
+  // single-pin under the shipped single-pin-checkin model.
+  const justSaved = !isFocus && previousCheckIn?.id === justSavedEntryId && previousPins.length === 1;
   // On the sheet, a peek-style handle is showing (and already carries the
   // time) whenever the draft is empty and nothing is being edited — both the
   // peeked state and the manually-expanded-with-empty-draft state render
@@ -859,7 +872,7 @@ export function EmotionDrawer({
         <>
           {isPanelLayout && !isFocus && previousPins.length > 0 && (
             <div style={groupHeaderStyle}>
-              {`Previous check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
+              {`${justSaved ? "Today's" : 'Previous'} check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
             </div>
           )}
           {/* docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md:
@@ -881,40 +894,80 @@ export function EmotionDrawer({
               simply not offered from this screen any more — it stays
               reachable from the rail/sheet the same way it always has. */}
           {!hideHistory && !isFocus && previousPins.length > 0 && (
-            <AnimatePresence initial={false}>
-              {reversedPreviousPins.map((pin) => (
-                <motion.div
-                  key={pin.id}
-                  layout
-                  data-pin-id={pin.id}
-                  initial={{ opacity: 0, y: -10, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
-                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-                >
-                  <CoordinateCard
-                    pin={pin}
-                    isSelected={pin.id === selectedPinId}
-                    isEntering={false}
-                    onSelect={() => onSelectPin(pin.id)}
-                    onRecognize={onRecognize}
-                    onDerecognize={onDerecognize}
-                    // A read-only card never renders the remove control —
-                    // this is unreachable, kept only to satisfy the prop's
-                    // type.
-                    onRemove={() => {}}
-                    onAdjust={onAdjust}
-                    onAdjustDraft={onAdjustDraft}
-                    dissolve={dissolve}
-                    frosted={isFocus}
-                    readOnly
-                    onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
-                    reopenLabel={firstEverEntryFromNewTab ? 'Add tags' : 'Reopen'}
-                    reopenDisabled={canSave}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            justSaved ? (
+              // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+              // U5: the confirmation card replaces the ordinary read-only
+              // CoordinateCard entirely for this one entry — mini-map,
+              // nearby-word suggestions, and its own "Add tags" fallback
+              // (reusing the same onReopen this card's ordinary branch
+              // already calls below).
+              <motion.div
+                key={previousPins[0].id}
+                layout
+                data-pin-id={previousPins[0].id}
+                initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+                transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+              >
+                <SavedCheckInSummary
+                  // Keyed by the pin's id AND its coordinate (not just the
+                  // wrapping motion.div above, and not the id alone) — on
+                  // 'rail', hideHistory never hides this block (it's
+                  // sheet-only), so this component can stay mounted at the
+                  // same tree position across a second save superseding
+                  // the first, or across a reopen-via-"Add tags" that
+                  // drags the pin somewhere new and updates the *same*
+                  // entry (handleRecord's draftId branch preserves both
+                  // the entry id and, per adjustPin, the pin's own id).
+                  // Keying on id alone would leave this mounted with its
+                  // candidates/dismissed local state (seeded once via a
+                  // lazy useState initializer) still describing the old
+                  // coordinate; including x/y forces a fresh mount — and a
+                  // fresh candidate list — whenever the coordinate itself
+                  // changes, not only when the entry does.
+                  key={`${previousPins[0].id}-${previousPins[0].x}-${previousPins[0].y}`}
+                  pin={previousPins[0]}
+                  onRecognize={(emotionId) => onRecognizeSaved(previousCheckIn!.id, previousPins[0].id, emotionId)}
+                  onReopen={() => onReopen(previousCheckIn!.id, previousPins[0].id)}
+                  reopenDisabled={canSave}
+                />
+              </motion.div>
+            ) : (
+              <AnimatePresence initial={false}>
+                {reversedPreviousPins.map((pin) => (
+                  <motion.div
+                    key={pin.id}
+                    layout
+                    data-pin-id={pin.id}
+                    initial={{ opacity: 0, y: -10, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                  >
+                    <CoordinateCard
+                      pin={pin}
+                      isSelected={pin.id === selectedPinId}
+                      isEntering={false}
+                      onSelect={() => onSelectPin(pin.id)}
+                      onRecognize={onRecognize}
+                      onDerecognize={onDerecognize}
+                      // A read-only card never renders the remove control —
+                      // this is unreachable, kept only to satisfy the prop's
+                      // type.
+                      onRemove={() => {}}
+                      onAdjust={onAdjust}
+                      onAdjustDraft={onAdjustDraft}
+                      dissolve={dissolve}
+                      frosted={isFocus}
+                      readOnly
+                      onReopen={() => onReopen(previousCheckIn!.id, pin.id)}
+                      reopenDisabled={canSave}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            )
           )}
 
           {/* Round 6: the "Draft check-in" label is dropped too when
@@ -1116,9 +1169,14 @@ export function EmotionDrawer({
   // draft-in-progress label once the draft has pins — so the handle never
   // misdescribes an active edit as history, for sighted and screen-reader
   // users alike (aria-label mirrors the visible text).
-  const peekMicroLabel = canSave ? 'Draft' : 'Last check-in';
+  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+  // U5: the sheet's handle button persists through both its peeked and
+  // expanded states (see its own comment below) — on mobile this is the
+  // only place "Today's check-in" needs saying, since the sheet variant
+  // never renders the panel-layout-only groupHeaderStyle text above.
+  const peekMicroLabel = canSave ? 'Draft' : justSaved ? "Today's check-in" : 'Last check-in';
   const peekDetailLabel = canSave ? `${pins.length} pin${pins.length === 1 ? '' : 's'}` : timeLabel;
-  const peekAriaSubject = canSave ? `draft, ${peekDetailLabel}` : 'last check-in';
+  const peekAriaSubject = canSave ? `draft, ${peekDetailLabel}` : justSaved ? "today's check-in" : 'last check-in';
   const handleButton = !isReopened && (
     <button
       ref={sheetHandleRef}
