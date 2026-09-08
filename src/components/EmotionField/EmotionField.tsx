@@ -192,7 +192,6 @@ export function EmotionField({
 
   const { isPressed, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
-    size,
     onRelease: handleRelease,
     onFirstInteraction,
     hasInteracted,

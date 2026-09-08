@@ -9,7 +9,6 @@ const GESTURE_MOVEMENT_THRESHOLD = 0.015; // in coordinate space (≈ 8px at typ
 
 interface Options {
   containerRef: React.RefObject<HTMLElement | null>;
-  size: { width: number; height: number };
   onRelease: (center: { x: number; y: number }) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
@@ -38,7 +37,6 @@ export function pixelToCoord(
 
 export function useFieldGesture({
   containerRef,
-  size,
   onRelease,
   onFirstInteraction,
   hasInteracted,
@@ -99,19 +97,25 @@ export function useFieldGesture({
   }
 
   function getCoord(e: React.PointerEvent) {
-    // `size` (ResizeObserver-derived, see EmotionField.tsx) only gates
-    // whether the field has been measured at all yet — it must NOT supply
-    // the normalization divisor below. ResizeObserver's contentRect never
-    // reflects a CSS `transform: scale()` on the container (or an ancestor
-    // of it, e.g. U1's recede wrapper in App.tsx), so once any partial
-    // recede is applied, `size` goes stale relative to the transform while
-    // `rect` (from getBoundingClientRect, read fresh on every gesture) does
-    // not. Dividing by the stale `size` here while the offset comes from
-    // `rect` would desync and misplace the coordinate — see
-    // scripts/test-field-gesture.ts for the reproduction. Reading
-    // rect.width/rect.height live, from this same rect, keeps the offset and
-    // the divisor mutually consistent under any transform.
-    if (size.width === 0 || size.height === 0) return null;
+    // Deliberately reads only `rect` (getBoundingClientRect, live on every
+    // gesture) rather than the `size` prop (ResizeObserver-derived, see
+    // EmotionField.tsx): ResizeObserver's contentRect never reflects a CSS
+    // `transform: scale()` on the container (or an ancestor of it, e.g. U1's
+    // recede wrapper in App.tsx), so once any partial recede is applied,
+    // `size` goes stale relative to the transform while `rect` does not.
+    // Dividing by the stale `size` here while the offset comes from `rect`
+    // would desync and misplace the coordinate — see
+    // scripts/test-field-gesture.ts for the reproduction.
+    //
+    // bug fix (2026-09-08): this used to also gate on `size.width === 0 ||
+    // size.height === 0` before ever reading `rect` — but `size` only
+    // populates once ResizeObserver's first (always-async) callback lands
+    // after mount, while `rect` is valid the instant the element is laid
+    // out (before that first callback can possibly fire). A press landing
+    // in that window — most easily hit when the tab was backgrounded, but
+    // possible on any slow-to-observe mount — was silently dropped: the
+    // very first tap on a fresh field did nothing. `rect` is what the math
+    // below actually uses, so it's also what gates readiness.
     const rect = containerRef.current!.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
     return pixelToCoord(e.clientX, e.clientY, rect, rect.width, rect.height);
@@ -147,8 +151,6 @@ export function useFieldGesture({
     },
 
     onPointerDown: (e: React.PointerEvent) => {
-      if (size.width === 0 || size.height === 0) return;
-
       e.currentTarget.setPointerCapture(e.pointerId);
 
       const coord = getCoord(e);

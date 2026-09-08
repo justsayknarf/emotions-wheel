@@ -608,9 +608,26 @@ export default function App() {
     // press no longer mints during the pre-mint departure-float landing —
     // the slider is the only commit path there now. Unaffected everywhere
     // else (post-mint, or outside this landing entirely).
-    if (desktopLandingActive && pins.length === 0) return;
+    //
+    // bug fix (2026-09-08): `desktopLandingActive` alone isn't a reliable
+    // "still pre-mint" signal — handleLandingSave clears `pins` but doesn't
+    // flip `desktopLandingActive` false until scheduleLandingSettle's
+    // timeout fires (tuning.fieldRecedeDuration later, ~500ms by default),
+    // so for that whole window after Save, `desktopLandingActive &&
+    // pins.length === 0` was ALSO true — silently swallowing the very
+    // first field press of the user's next check-in (confirmed live: the
+    // press did nothing, and only a second press, after the window
+    // passed, minted). `desktopCardProgress` is the correct signal here —
+    // it's set to 1 synchronously inside handleLandingSave, at the exact
+    // moment Save fires, so it's already nonzero for the entire settle
+    // window `desktopLandingActive` is still lagging through. Guard on it
+    // being genuinely still 0 (true pre-mint) rather than gating on
+    // pins.length, which the very press being guarded is about to change
+    // anyway and so can't distinguish "before the first save" from "right
+    // after one."
+    if (desktopLandingActive && desktopCardProgress === 0 && pins.length === 0) return;
     handlePinRelease(entry);
-  }, [handlePinRelease, desktopLandingActive, pins.length]);
+  }, [handlePinRelease, desktopLandingActive, desktopCardProgress, pins.length]);
 
   // review-fix (product direction, 2nd pass): the landing's own way to end
   // itself — a Save button rendered on the front-and-center card (wired via
@@ -1075,7 +1092,21 @@ export default function App() {
           // commonly expanded by default (R7/R11), and this guard must not
           // also intercept an ordinary pin-drop press; that gesture drives
           // its own peek instead (U3).
-          if (showMirror && mirrorExpanded) {
+          //
+          // bug fix (2026-09-08): also requires `!sideBySide` now — the
+          // mirror tray only ever visually covers the field on the mobile
+          // sheet layout (see `fieldBottom`'s own `!sideBySide && showMirror`
+          // above, which is what actually carves out room for it there). On
+          // desktop the rail is a fixed side panel that never overlays the
+          // field, yet `handleRecord`/`handleLandingSave` set
+          // `mirrorExpanded` true unconditionally on every save (needed for
+          // the mobile case), so `showMirror && mirrorExpanded` was true on
+          // desktop too, right after every ordinary save — silently eating
+          // the very next field press with nothing ever having covered
+          // anything to dismiss (confirmed live: the press after Save did
+          // nothing at all, not even reaching EmotionField's own gesture
+          // handlers, and the following press worked normally).
+          if (!sideBySide && showMirror && mirrorExpanded) {
             setMirrorExpanded(false);
             e.stopPropagation();
           }
@@ -1099,7 +1130,11 @@ export default function App() {
           departureTraceTo={departureTraceTo}
           recedeProgress={recedeProgress}
           departureDraft={departureDraftCoord}
-          dropDisabled={desktopLandingActive && pins.length === 0}
+          // Matches handleFieldPress's own guard exactly (see its 2026-09-08
+          // bug-fix comment) — otherwise the cursor/hover cue would keep
+          // reading "not clickable" through the post-save settle window
+          // even after the fix above made a press there work again.
+          dropDisabled={desktopLandingActive && desktopCardProgress === 0 && pins.length === 0}
         />
       </div>
 
