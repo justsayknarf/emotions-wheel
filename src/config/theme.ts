@@ -256,7 +256,11 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: mkShader({ color1: '#0D0F14', color2: '#26304A', color3: '#3D2E1C', brightness: 0.3 }),
+    // Tuned live in the admin theme page and folded in from
+    // docs/handoff/theme-settings.json (2026-09-10): a deeper, cooler
+    // color1/2 and higher brightness than the original pairing, plus the
+    // waterPlane shape instead of a flat plane.
+    shader: { ...mkShader({ color1: '#0d1314', color2: '#4a2639', color3: '#3D2E1C', brightness: 0.66 }), type: 'waterPlane' },
   },
   i: {
     label: 'I · Starry Night',
