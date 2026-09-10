@@ -59,6 +59,44 @@ export function adminSavePlugin(): Plugin {
           res.end(JSON.stringify({ error: message }));
         }
       });
+
+      // The admin theme page's "Save to file" button — writes a snapshot of
+      // whatever color theme + shader tuning is currently active to a JSON
+      // file under docs/handoff/, meant to be read back by Claude in a later
+      // session and promoted into config/theme.ts's actual defaults. The
+      // shape is owned by the client (AdminThemeSaveButton), not here — this
+      // just validates it's a plain object and writes it pretty-printed.
+      server.middlewares.use('/admin-api/save-theme', async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+
+        try {
+          const raw = await readBody(req);
+          const payload: unknown = JSON.parse(raw);
+
+          if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid payload: expected a JSON object' }));
+            return;
+          }
+
+          const root = server.config.root;
+          const dir = path.join(root, 'docs/handoff');
+          const filePath = path.join(dir, 'theme-settings.json');
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, path: 'docs/handoff/theme-settings.json' }));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: message }));
+        }
+      });
     },
   };
 }
