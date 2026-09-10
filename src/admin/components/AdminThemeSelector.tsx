@@ -1,4 +1,5 @@
 import { THEMES, DEFAULT_THEME_ID, useTheme, saveThemeId, type ThemeId } from '../../config/theme';
+import { AdminThemeSaveButton } from './AdminThemeSaveButton';
 
 // Lets Frank pick a color theme and see it live in the field, open in another
 // tab — the same "tune here, watch it there" pattern as AdminRevealTuning,
@@ -32,26 +33,28 @@ export function AdminThemeSelector() {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
         <span style={labelStyle}>Color theme</span>
         <span style={{ fontSize: 10, color: 'var(--ui-text-3)' }}>open the app in another tab to see it live</span>
-        {id !== DEFAULT_THEME_ID && (
-          <button
-            type="button"
-            onClick={() => saveThemeId(DEFAULT_THEME_ID)}
-            style={{
-              fontSize: 10,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              padding: '4px 10px',
-              borderRadius: 5,
-              border: '1px solid var(--ui-border)',
-              background: 'transparent',
-              color: 'var(--ui-text-1)',
-              cursor: 'pointer',
-              marginLeft: 'auto',
-            }}
-          >
-            Reset to shipped
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <AdminThemeSaveButton />
+          {id !== DEFAULT_THEME_ID && (
+            <button
+              type="button"
+              onClick={() => saveThemeId(DEFAULT_THEME_ID)}
+              style={{
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                padding: '4px 10px',
+                borderRadius: 5,
+                border: '1px solid var(--ui-border)',
+                background: 'transparent',
+                color: 'var(--ui-text-1)',
+                cursor: 'pointer',
+              }}
+            >
+              Reset to shipped
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

@@ -5,11 +5,12 @@ import { circumplexCustom } from '../data/frameworks/circumplex-custom';
 import { descriptions } from '../data/descriptions';
 import type { AdminEmotion } from './types';
 import { AdminHeader } from './components/AdminHeader';
-import { AdminMap } from './components/AdminMap';
-import { AdminTable } from './components/AdminTable';
+import { AdminNav } from './components/AdminNav';
 import { AdminRevealTuning } from './components/AdminRevealTuning';
-import { AdminThemeSelector } from './components/AdminThemeSelector';
+import { EmotionsPage } from './pages/EmotionsPage';
+import { ThemesPage } from './pages/ThemesPage';
 import { generateId } from './lib/idgen';
+import { useAdminRoute } from './lib/useAdminRoute';
 
 function initEmotions(): AdminEmotion[] {
   return circumplexCustom.emotions.map(e => ({
@@ -20,6 +21,7 @@ function initEmotions(): AdminEmotion[] {
 }
 
 export function AdminApp() {
+  const [route, navigate] = useAdminRoute();
   const [emotions, setEmotions] = useState<AdminEmotion[]>(initEmotions);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -125,29 +127,29 @@ export function AdminApp() {
         saveError={saveError}
         onSave={handleSave}
       />
-      <AdminThemeSelector />
-      <AdminRevealTuning />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        <AdminMap
-          emotions={emotions}
-          selectedId={selectedId}
-          visibleIds={visibleIds}
-          onSelect={setSelectedId}
-          onUpdate={updateEmotion}
-        />
-        <AdminTable
-          emotions={emotions}
-          selectedId={selectedId}
-          visibleIds={visibleIds}
-          depthFilter={depthFilter}
-          clusterFilter={clusterFilter}
-          onSelect={setSelectedId}
-          onUpdate={updateEmotion}
-          onAdd={addEmotion}
-          onRemove={removeEmotion}
-          onToggleDepth={toggleDepth}
-          onToggleCluster={toggleCluster}
-        />
+        <AdminNav route={route} onNavigate={navigate} />
+        {route === 'emotions' && (
+          <EmotionsPage
+            emotions={emotions}
+            selectedId={selectedId}
+            visibleIds={visibleIds}
+            depthFilter={depthFilter}
+            clusterFilter={clusterFilter}
+            onSelect={setSelectedId}
+            onUpdate={updateEmotion}
+            onAdd={addEmotion}
+            onRemove={removeEmotion}
+            onToggleDepth={toggleDepth}
+            onToggleCluster={toggleCluster}
+          />
+        )}
+        {route === 'reveal' && (
+          <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            <AdminRevealTuning />
+          </div>
+        )}
+        {route === 'themes' && <ThemesPage />}
       </div>
     </div>
   );

@@ -25,10 +25,75 @@ export interface ThemeVars {
 }
 
 export interface ShaderTheme {
+  // Colors — per theme, the reason this catalogue exists.
   color1: string;
   color2: string;
   color3: string;
   brightness: number;
+  // Shape
+  type: 'plane' | 'sphere' | 'waterPlane';
+  uStrength: number;
+  uDensity: number;
+  pixelDensity: number;
+  // Colors, extra
+  grain: 'on' | 'off';
+  /** 'off' omits the envPreset prop entirely rather than passing a preset. */
+  envPreset: 'city' | 'off';
+  // Motion
+  animate: 'on' | 'off';
+  uSpeed: number;
+  range: 'enabled' | 'disabled';
+  rangeStart: number;
+  rangeEnd: number;
+  // View
+  cDistance: number;
+  cAzimuthAngle: number;
+  cPolarAngle: number;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
+  fov: number;
+}
+
+type ShaderColors = Pick<ShaderTheme, 'color1' | 'color2' | 'color3' | 'brightness'>;
+type ShaderExtras = Omit<ShaderTheme, keyof ShaderColors>;
+
+// Every field below Shape/Motion/View wasn't part of the original color-audit
+// exploration — it's ShaderBackground's existing hardcoded prop values,
+// lifted here so they become the shared default every theme's shader starts
+// from. A theme's catalogue entry only ever specifies color1/2/3/brightness
+// (via `mkShader`); these fill in the rest, and the admin theme page's
+// "Details" panel can override any of them per theme the same way it
+// already overrides a color stop's hue.
+const SHADER_EXTRAS_DEFAULTS: ShaderExtras = {
+  type: 'plane',
+  uStrength: 1.5,
+  uDensity: 1.5,
+  pixelDensity: 1,
+  grain: 'off',
+  envPreset: 'city',
+  animate: 'on',
+  uSpeed: 0.3,
+  range: 'disabled',
+  rangeStart: 0,
+  rangeEnd: 40,
+  cDistance: 9.79,
+  cAzimuthAngle: 180,
+  cPolarAngle: 47,
+  positionX: 0,
+  positionY: 0,
+  positionZ: 0,
+  rotationX: 50,
+  rotationY: 0,
+  rotationZ: -60,
+  fov: 30,
+};
+
+function mkShader(colors: ShaderColors): ShaderTheme {
+  return { ...SHADER_EXTRAS_DEFAULTS, ...colors };
 }
 
 export interface Theme {
@@ -55,7 +120,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#1e185c', color2: '#411a4b', color3: '#212121', brightness: 0.5 },
+    shader: mkShader({ color1: '#1e185c', color2: '#411a4b', color3: '#212121', brightness: 0.5 }),
   },
   a: {
     label: 'A · Single Ember',
@@ -72,7 +137,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0D0F14', color2: '#171A22', color3: '#2A2419', brightness: 0.2 },
+    shader: mkShader({ color1: '#0D0F14', color2: '#171A22', color3: '#2A2419', brightness: 0.2 }),
   },
   b: {
     label: 'B · Warm/Cool Duet',
@@ -89,7 +154,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0F1116', color2: '#3C3021', color3: '#232B33', brightness: 0.3 },
+    shader: mkShader({ color1: '#0F1116', color2: '#3C3021', color3: '#232B33', brightness: 0.3 }),
   },
   c: {
     label: 'C · Sepia Field',
@@ -106,7 +171,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(242,233,218,0.5)',
       '--ui-text-3': 'rgba(242,233,218,0.22)',
     },
-    shader: { color1: '#17120D', color2: '#2E2013', color3: '#5C4527', brightness: 0.35 },
+    shader: mkShader({ color1: '#17120D', color2: '#2E2013', color3: '#5C4527', brightness: 0.35 }),
   },
   d: {
     label: 'D · Ember & Plum',
@@ -123,7 +188,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0D0F14', color2: '#3A2130', color3: '#3D2E1C', brightness: 0.3 },
+    shader: mkShader({ color1: '#0D0F14', color2: '#3A2130', color3: '#3D2E1C', brightness: 0.3 }),
   },
   e: {
     label: 'E · Gold & Pine',
@@ -140,7 +205,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0D0F14', color2: '#1E3B33', color3: '#3D2E1C', brightness: 0.28 },
+    shader: mkShader({ color1: '#0D0F14', color2: '#1E3B33', color3: '#3D2E1C', brightness: 0.28 }),
   },
   f: {
     label: 'F · Gold & Terracotta',
@@ -157,7 +222,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0D0F14', color2: '#4A2A1F', color3: '#3D2E1C', brightness: 0.25 },
+    shader: mkShader({ color1: '#0D0F14', color2: '#4A2A1F', color3: '#3D2E1C', brightness: 0.25 }),
   },
   g: {
     label: 'G · Gold & Sage',
@@ -174,7 +239,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0D0F14', color2: '#33391F', color3: '#3D2E1C', brightness: 0.22 },
+    shader: mkShader({ color1: '#0D0F14', color2: '#33391F', color3: '#3D2E1C', brightness: 0.22 }),
   },
   h: {
     label: 'H · Gold & Denim',
@@ -191,7 +256,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0D0F14', color2: '#26304A', color3: '#3D2E1C', brightness: 0.3 },
+    shader: mkShader({ color1: '#0D0F14', color2: '#26304A', color3: '#3D2E1C', brightness: 0.3 }),
   },
   i: {
     label: 'I · Starry Night',
@@ -208,7 +273,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(237,232,223,0.5)',
       '--ui-text-3': 'rgba(237,232,223,0.22)',
     },
-    shader: { color1: '#0B1220', color2: '#1B3A5C', color3: '#5C4A1F', brightness: 0.35 },
+    shader: mkShader({ color1: '#0B1220', color2: '#1B3A5C', color3: '#5C4A1F', brightness: 0.35 }),
   },
   j: {
     label: 'J · Northern Lights',
@@ -225,7 +290,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(233,237,236,0.5)',
       '--ui-text-3': 'rgba(233,237,236,0.22)',
     },
-    shader: { color1: '#0A0C10', color2: '#1C4A3D', color3: '#3A2350', brightness: 0.4 },
+    shader: mkShader({ color1: '#0A0C10', color2: '#1C4A3D', color3: '#3A2350', brightness: 0.4 }),
   },
   k: {
     label: 'K · Deep Space',
@@ -242,7 +307,7 @@ export const THEMES = {
       '--ui-text-2': 'rgba(228,226,232,0.5)',
       '--ui-text-3': 'rgba(228,226,232,0.22)',
     },
-    shader: { color1: '#08090C', color2: '#141022', color3: '#0C1620', brightness: 0.15 },
+    shader: mkShader({ color1: '#08090C', color2: '#141022', color3: '#0C1620', brightness: 0.15 }),
   },
 } as const satisfies Record<string, Theme>;
 
@@ -286,23 +351,94 @@ export function applyThemeVars(vars: ThemeVars): void {
   }
 }
 
-/** Subscribe to the persisted theme, updating on same-tab and cross-tab
- *  change, and keeping the root's CSS variables in sync as a side effect.
- *  Call this once near the app root; call it again wherever a component
- *  needs the theme's *non-CSS* values (ShaderBackground's shader props). */
+// Per-theme shader tuning (the admin theme page's hue + brightness sliders).
+// Kept as a *patch* layered on top of the catalogue entry, keyed by theme id,
+// rather than mutating THEMES itself — the shipped presets stay the source
+// of truth in code, and a tweak is just a reversible localStorage overlay.
+// Same write-triggers-an-event shape as the theme id above, on its own
+// key/event pair so a shader tweak doesn't get confused with a theme switch.
+
+export type ShaderOverride = Partial<ShaderTheme>;
+
+const OVERRIDE_KEY = 'ui-theme-shader-overrides';
+const OVERRIDE_EVENT = 'ui-theme-shader-change';
+
+function loadShaderOverrides(): Partial<Record<ThemeId, ShaderOverride>> {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(OVERRIDE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<Record<ThemeId, ShaderOverride>>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveShaderOverrides(overrides: Partial<Record<ThemeId, ShaderOverride>>): void {
+  try {
+    localStorage.setItem(OVERRIDE_KEY, JSON.stringify(overrides));
+    window.dispatchEvent(new CustomEvent(OVERRIDE_EVENT));
+  } catch {
+    // localStorage unavailable — the tweak stays in-memory for this tab only.
+  }
+}
+
+/** Merge a patch (one hue turn, a brightness drag) into a theme's shader override. */
+export function setShaderOverride(id: ThemeId, patch: ShaderOverride): void {
+  const all = loadShaderOverrides();
+  saveShaderOverrides({ ...all, [id]: { ...all[id], ...patch } });
+}
+
+/** Clear a theme's shader override, reverting it to the catalogue default. */
+export function resetShaderOverride(id: ThemeId): void {
+  const all = loadShaderOverrides();
+  if (!(id in all)) return;
+  const next = { ...all };
+  delete next[id];
+  saveShaderOverrides(next);
+}
+
+/** Read one theme's raw shader override (the patch, not merged with the
+ *  catalogue default) — for the admin "save settings to file" button, which
+ *  wants to know exactly what changed rather than the fully-resolved value. */
+export function getShaderOverride(id: ThemeId): ShaderOverride | undefined {
+  return loadShaderOverrides()[id];
+}
+
+/** Read every theme's raw shader override, keyed by theme id. */
+export function getAllShaderOverrides(): Partial<Record<ThemeId, ShaderOverride>> {
+  return loadShaderOverrides();
+}
+
+/** Subscribe to the persisted theme (+ its shader override), updating on
+ *  same-tab and cross-tab change, and keeping the root's CSS variables in
+ *  sync as a side effect. Call this once near the app root; call it again
+ *  wherever a component needs the theme's *non-CSS* values (ShaderBackground's
+ *  shader props, or the admin theme inspector reading/writing them). */
 export function useTheme(): { id: ThemeId; theme: Theme } {
   const [id, setId] = useState<ThemeId>(loadThemeId);
+  const [overrides, setOverrides] = useState(loadShaderOverrides);
+
   useEffect(() => {
-    const refresh = () => setId(loadThemeId());
+    const refresh = () => {
+      setId(loadThemeId());
+      setOverrides(loadShaderOverrides());
+    };
     window.addEventListener('storage', refresh);
     window.addEventListener(EVENT, refresh);
+    window.addEventListener(OVERRIDE_EVENT, refresh);
     return () => {
       window.removeEventListener('storage', refresh);
       window.removeEventListener(EVENT, refresh);
+      window.removeEventListener(OVERRIDE_EVENT, refresh);
     };
   }, []);
   useEffect(() => {
     applyThemeVars(THEMES[id].vars);
   }, [id]);
-  return { id, theme: THEMES[id] };
+
+  const base = THEMES[id];
+  const theme: Theme = { ...base, shader: { ...base.shader, ...overrides[id] } };
+  return { id, theme };
 }

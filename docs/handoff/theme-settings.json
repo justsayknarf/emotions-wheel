@@ -1,0 +1,84 @@
+{
+  "savedAt": "2026-09-10T17:49:47.980Z",
+  "activeThemeId": "h",
+  "activeThemeLabel": "H · Gold & Denim",
+  "vars": {
+    "--ui-bg": "#0D0F14",
+    "--ui-surface": "#171A24",
+    "--ui-border": "rgba(255,255,255,0.08)",
+    "--ui-gold": "#C9A87C",
+    "--ui-gold-dim": "rgba(201,168,124,0.5)",
+    "--ui-recorded": "#6E7AA3",
+    "--ui-recorded-dim": "rgba(110,122,163,0.5)",
+    "--ui-text-1": "#EDE8DF",
+    "--ui-text-2": "rgba(237,232,223,0.5)",
+    "--ui-text-3": "rgba(237,232,223,0.22)"
+  },
+  "shader": {
+    "type": "waterPlane",
+    "uStrength": 1.5,
+    "uDensity": 1.5,
+    "pixelDensity": 1,
+    "grain": "off",
+    "envPreset": "city",
+    "animate": "on",
+    "uSpeed": 0.3,
+    "range": "disabled",
+    "rangeStart": 0,
+    "rangeEnd": 40,
+    "cDistance": 9.79,
+    "cAzimuthAngle": 180,
+    "cPolarAngle": 47,
+    "positionX": 0,
+    "positionY": 0,
+    "positionZ": 0,
+    "rotationX": 50,
+    "rotationY": 0,
+    "rotationZ": -60,
+    "fov": 30,
+    "color1": "#0d1314",
+    "color2": "#4a2639",
+    "color3": "#3D2E1C",
+    "brightness": 0.66
+  },
+  "shaderOverride": {
+    "color1": "#0d1314",
+    "color2": "#4a2639",
+    "brightness": 0.66,
+    "type": "waterPlane"
+  },
+  "allShaderOverrides": {
+    "h": {
+      "color1": "#0d1314",
+      "color2": "#4a2639",
+      "brightness": 0.66,
+      "type": "waterPlane"
+    },
+    "j": {
+      "brightness": 0.88,
+      "positionX": 1.8,
+      "fov": 29,
+      "cDistance": 8.7,
+      "type": "waterPlane"
+    },
+    "d": {
+      "brightness": 0.98
+    },
+    "i": {
+      "brightness": 0.71,
+      "uSpeed": 0.3,
+      "fov": 58,
+      "type": "waterPlane",
+      "cDistance": 2.5
+    },
+    "k": {
+      "brightness": 0.94
+    },
+    "g": {
+      "brightness": 1.04
+    },
+    "f": {
+      "brightness": 0.7
+    }
+  }
+}
