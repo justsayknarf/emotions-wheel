@@ -22,6 +22,13 @@ import { toPercent } from '../../utils/fieldGeometry';
 // below a real de-overlap displacement. (U4, tune per Q3)
 const TETHER_THRESHOLD = 26;
 import type { PinEntry } from '../../types';
+import { placeAnchorLabel, ANCHOR_LABEL_H } from './anchorLabel';
+
+// The previous check-in's anchor mark: a hollow ring with its day label ("TODAY").
+// Shared by the render and the fan's obstacle boxes, so revealed labels are
+// kept off the mark at the size it actually draws.
+const ANCHOR_RING_SIZE = { rest: 11, emphasized: 14 };
+const ANCHOR_LABEL_CHAR_W = 6; // px/char at the 8px tracked uppercase size
 
 const AXIS_LABEL: React.CSSProperties = {
   position: 'absolute',
@@ -352,6 +359,17 @@ export function EmotionField({
   // focus — scoped to the selected pin so the fan matches the words we
   // actually reveal (above), and no other pin pulls a label toward it.
   // Full constellation when nothing is emphasized.
+  //
+  // A selected recorded pin is a focus too. App lights its card's nearest
+  // words (highlightedIds), and without a focus here those words had nothing
+  // to fan out of and stacked on top of each other. Resolved on its own rather
+  // than by folding recordedPins into `pins` — see the prop's note.
+  const emphasizedRecordedPin = emphasizedPinId
+    ? recordedPins.find((p) => p.id === emphasizedPinId) ?? null
+    : null;
+  // The newest recorded pin carries the anchor mark — same rule as the
+  // recorded-pin render below (isAnchor) and departureAnchor.
+  const recordedAnchor = recordedPins.length > 0 ? recordedPins[recordedPins.length - 1] : null;
   const fociPx = useMemo(() => {
     if (size.width === 0) return [] as Array<{ x: number; y: number }>;
     const toPx = (c: { x: number; y: number }) => ({
@@ -361,9 +379,8 @@ export function EmotionField({
     const arr: Array<{ x: number; y: number }> = [];
     if (dwellCenter) arr.push(toPx(dwellCenter));
     // Without this, a deep word revealed by a departure drag (no pin, no
-    // dwell) has no focus to fan out from — computeRadialFan handles an
-    // empty foci list by leaving every movable box at zero offset, so the
-    // fan-out would silently degrade for this one reveal path only.
+    // dwell) would fan out of computeRadialFan's no-focus fallback (the
+    // revealed dots' centroid) rather than out of the live coordinate.
     if (departureDraft) arr.push(toPx(departureDraft));
     // Same live-position substitution as deepOpacityMap above — an adjust
     // drag fans out from where the pin actually is right now, not its
@@ -372,19 +389,44 @@ export function EmotionField({
       if (adjustDraft) {
         arr.push(toPx(adjustDraft));
       } else {
-        const emphasizedPin = pins.find((p) => p.id === emphasizedPinId);
+        const emphasizedPin = pins.find((p) => p.id === emphasizedPinId) ?? emphasizedRecordedPin;
         if (emphasizedPin) arr.push(toPx(emphasizedPin));
       }
     } else {
       for (const p of pins) arr.push(toPx(p));
     }
     return arr;
-  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, size.width, size.height]);
+  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, emphasizedRecordedPin, size.width, size.height]);
 
   // Lay the revealed labels out as a fan around their nearest focus: each rides
   // a ray out of the cursor/pin, with a no-crossing pass so their tethers never
   // tangle. Surface labels are fixed obstacles; dots never move — only the
   // label callouts. (Q3 radial-fan reveal)
+  //
+  // The previous check-in's anchor mark is resolved first: its ring, and where
+  // its day label sits — above the ring unless a surface word is already there
+  // (placeAnchorLabel). The render and the fan both read this one value, so
+  // revealed words steer around the label where it actually draws.
+  const anchorMark = useMemo(() => {
+    if (!recordedAnchor || size.width === 0) return null;
+    const ringSize = recordedAnchor.id === emphasizedPinId ? ANCHOR_RING_SIZE.emphasized : ANCHOR_RING_SIZE.rest;
+    const x = (toPercent(recordedAnchor.x) / 100) * size.width;
+    const y = (toPercent(-recordedAnchor.y) / 100) * size.height;
+    const label = previousCheckInLabel
+      ? placeAnchorLabel(
+          { x, y, size: ringSize },
+          (previousCheckInLabel.length * ANCHOR_LABEL_CHAR_W) / 2,
+          surfaceEmotions.map((e) => ({
+            x: (toPercent(e.x) / 100) * size.width,
+            y: (toPercent(-e.y) / 100) * size.height - LABEL_STANDOFF,
+            halfW: labelHalfWidth(e.label, e.depth),
+            halfH: LABEL_LINE_H / 2,
+          })),
+        )
+      : null;
+    return { id: recordedAnchor.id, x, y, ringSize, label };
+  }, [recordedAnchor, emphasizedPinId, previousCheckInLabel, size.width, size.height]);
+
   const deepLabelOffsets = useMemo(() => {
     if (size.width === 0 || revealedDeep.length === 0) {
       return new Map<string, { dx: number; dy: number }>();
@@ -410,8 +452,19 @@ export function EmotionField({
       ...surfaceEmotions.map((e) => fanBox(e, false)),
       ...revealedDeep.map((e) => fanBox(e, true)),
     ];
+    // The anchor mark's ring and day label are fixed obstacles too, so no
+    // revealed word settles on top of either.
+    if (anchorMark) {
+      const obstacle = (key: string, cx: number, cy: number, halfW: number, halfH: number): FanBox => ({
+        id: `anchor-${key}:${anchorMark.id}`, dotX: cx, dotY: cy, cx, cy, halfW, halfH, movable: false,
+      });
+      const ringHalf = anchorMark.ringSize / 2 + 2;
+      boxes.push(obstacle('ring', anchorMark.x, anchorMark.y, ringHalf, ringHalf));
+      const l = anchorMark.label;
+      if (l) boxes.push(obstacle('label', anchorMark.x + l.dx, anchorMark.y + l.dy, l.halfW, l.halfH));
+    }
     return computeRadialFan(boxes, fociPx, tuning);
-  }, [revealedDeep, fociPx, size.width, size.height, tuning]);
+  }, [revealedDeep, fociPx, anchorMark, size.width, size.height, tuning]);
 
   // A tether is drawn (and then faded) from each fanned label back to its dot,
   // staggered so the nearest word to a focus draws first.
@@ -788,7 +841,7 @@ export function EmotionField({
               // Breathing lives in opacity only; the ring never changes size
               // on its own, so its position and radius stay a stable target
               // to depart from mid-drag.
-              const ringSize = isEmphasized ? 14 : 11;
+              const ringSize = isEmphasized ? ANCHOR_RING_SIZE.emphasized : ANCHOR_RING_SIZE.rest;
               return (
                 <div
                   key={pin.id}
@@ -843,13 +896,16 @@ export function EmotionField({
                       boxShadow: isEmphasized ? '0 0 8px 1px var(--ui-recorded-dim)' : 'none',
                     }}
                   />
-                  {previousCheckInLabel && (
+                  {/* Day label — above the ring by default, moved to a clear
+                      side when a surface word sits there (anchorMark). */}
+                  {previousCheckInLabel && anchorMark?.label && (
                     <span
                       style={{
                         position: 'absolute',
-                        left: 0,
-                        top: -(ringSize / 2 + 13),
-                        transform: 'translateX(-50%)',
+                        left: anchorMark.label.dx,
+                        top: anchorMark.label.dy,
+                        transform: 'translate(-50%, -50%)',
+                        lineHeight: `${ANCHOR_LABEL_H}px`,
                         fontSize: 8,
                         fontWeight: 600,
                         letterSpacing: '0.12em',

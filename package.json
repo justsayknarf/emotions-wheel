@@ -16,6 +16,7 @@
     "check:departure": "npx tsx scripts/test-departure.ts",
     "check:source": "npx tsx scripts/test-source.ts",
     "check:gesture": "npx tsx scripts/test-field-gesture.ts",
+    "check:anchor": "npx tsx scripts/test-anchor-label.ts",
     "preview": "vite preview"
   },
   "dependencies": {

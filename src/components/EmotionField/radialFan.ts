@@ -84,20 +84,26 @@ function uncross(work: WorkBox[]): void {
  * Fan the movable (revealed deep) labels out of their nearest reveal focus.
  * Fixed (surface) labels are immovable obstacles. Returns offsets keyed by id
  * for movable boxes only — the offset from each label's standoff home.
+ *
+ * With no focus (nothing the field could resolve as a reveal centre), the
+ * revealed dots' own centroid stands in, so colliding labels still separate
+ * instead of stacking at home.
  */
 export function computeRadialFan(
   boxes: FanBox[],
-  foci: Focus[],
+  revealFoci: Focus[],
   tuning: RevealTuning = DEFAULT_TUNING,
 ): Map<string, Offset> {
   const offsets = new Map<string, Offset>();
   const movable = boxes.filter((b) => b.movable);
   if (movable.length === 0) return offsets;
 
-  if (foci.length === 0) {
-    for (const m of movable) offsets.set(m.id, { dx: 0, dy: 0 });
-    return offsets;
-  }
+  const foci: Focus[] = revealFoci.length > 0
+    ? revealFoci
+    : [{
+        x: movable.reduce((s, m) => s + m.dotX, 0) / movable.length,
+        y: movable.reduce((s, m) => s + m.dotY, 0) / movable.length,
+      }];
 
   // Assign each movable label to its nearest focus (by the label's dot).
   const groups = new Map<number, FanBox[]>();

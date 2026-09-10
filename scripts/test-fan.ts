@@ -70,5 +70,20 @@ function check(name: string, ok: boolean, detail: string) {
   check('sparse: two far-apart in place', mag(oa) === 0 && mag(ob) === 0, `|offset| a ${mag(oa)}, b ${mag(ob)}`);
 }
 
+// No reveal focus: colliding words still separate (around their own centroid)
+// rather than stacking at home. A selected recorded pin once hit this path.
+{
+  const words: Array<[string, string, number, number]> = [
+    ['awe', 'Awe', 0.14, 0.11], ['interested', 'Interested', 0.14, 0.11], ['grounded', 'Grounded', 0.14, 0.12],
+    ['renewed', 'Renewed', 0.11, 0.15], ['free', 'Free', 0.14, 0.18], ['worthy', 'Worthy', 0.15, 0.21],
+  ];
+  const boxes = words.map(([id, label, x, y]) => fanBox(id, label, x, y, true));
+  const offsets = computeRadialFan(boxes, []);
+  const finite = boxes.every((b) => { const o = offsets.get(b.id)!; return Number.isFinite(o.dx) && Number.isFinite(o.dy); });
+  const allMoved = boxes.every((b) => mag(offsets.get(b.id)!) > 0);
+  check('no focus: all offsets finite', finite, 'no NaN in any offset');
+  check('no focus: colliding words still fan out', allMoved, 'every overlapping word has a non-zero offset');
+}
+
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);
