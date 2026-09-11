@@ -89,6 +89,20 @@ interface Props {
   // and unused by 'rail'/'sheet', which keep calling `onDone` exactly as
   // before.
   onLandingSave?: () => void;
+  // The 'focus' variant's own escape hatch to the field, wired only once a
+  // pin already exists (see canSave below) — a returning user who minted
+  // via the pre-mint DepartureFloat sliders has no other discoverable way
+  // to know the field itself is still live for a direct press/relocate; the
+  // centered card, however transparent, still reads as "the only way in."
+  // Docks the draft into the ordinary rail (App.tsx's handleMoveToRail)
+  // without saving — the draft's pins are untouched, only its position/
+  // layout changes, via the exact same recede transition onLandingSave
+  // drives. Optional and unused by 'rail'/'sheet', which have no centered
+  // state to escape from; also never reached by a first-ever session, whose
+  // whole pre/post-mint life stays inside DepartureFloat instead (see the
+  // early-return branch below) — "streamlined" there is the point, so this
+  // control only ever appears for a *returning* user's post-mint card.
+  onMoveToRail?: () => void;
   onClear: () => void;
   // Reopen the previous check-in (by its entry id) into the draft, expanding
   // only the specific pin that was clicked — its siblings move into the
@@ -198,6 +212,7 @@ export function EmotionDrawer({
   dissolve,
   onDone,
   onLandingSave,
+  onMoveToRail,
   onClear,
   onReopen,
   justSavedEntryId,
@@ -1151,6 +1166,37 @@ export function EmotionDrawer({
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {/* Escape hatch to the field (see onMoveToRail's own prop comment).
+            canSave-gated: before a pin exists, this is DepartureFloat's
+            early-return branch above, not this one. A ghost link rather
+            than a bordered button — it must read as a quiet secondary path,
+            not compete with Save for attention. */}
+        {!isReopened && canSave && onMoveToRail && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+            <button
+              onClick={onMoveToRail}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'none',
+                border: 'none',
+                padding: '3px 1px',
+                color: 'var(--ui-text-3)',
+                fontSize: 10.5,
+                fontWeight: 500,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              Use the field
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden>
+                <path d="M2.5 7h8M7.5 4l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         {cardList}
         {/* Never renders while isReopened — editingSection above owns its
             own Discard Edit / Update Check-in row instead, same as 'rail'. */}

@@ -669,6 +669,22 @@ export default function App() {
     scheduleLandingSettle();
   }, [pins, record, entrySource, scheduleLandingSettle]);
 
+  // EmotionDrawer's onMoveToRail (see its own prop comment): a returning
+  // user's post-mint escape hatch out of the centered card, without saving
+  // anything — the sliders-only landing streamlines things for newcomers,
+  // but someone who already knows the field can plant/relocate pins there
+  // directly deserves a way back to that instead of being funneled through
+  // the card indefinitely. Reuses handleLandingSave's own recede-to-rail
+  // transition (desktopCardProgress + scheduleLandingSettle) verbatim, just
+  // without the record()/setPins([]) that actually persists and clears the
+  // draft — the pins stay exactly as they are, only their card's position
+  // changes, from centered to docked at the rail.
+  const handleMoveToRail = useCallback(() => {
+    if (pins.length === 0) return;
+    setDesktopCardProgress(1);
+    scheduleLandingSettle();
+  }, [pins.length, scheduleLandingSettle]);
+
   // U5 (docs/plans/2026-08-27-001-feat-desktop-check-in-focus-plan.md,
   // breakpoint and interruption resilience): resolves the landing state
   // when `sideBySide` itself flips false mid-landing (Receded) or mid-drag
@@ -1252,6 +1268,7 @@ export default function App() {
                 onDepart={handleDepart}
                 onDepartureDrag={setDepartureDraftCoord}
                 onLandingSave={handleLandingSave}
+                onMoveToRail={handleMoveToRail}
                 cardFocusProgress={desktopCardProgress}
                 anchor={anchorPin}
                 anchorLabel={previousCheckInLabel}
