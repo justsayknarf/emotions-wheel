@@ -21,7 +21,8 @@ import { ConstellationReplay } from './components/Constellation/ConstellationRep
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
-import type { AppView, DiaryEntry, PinEntry } from './types';
+import { useViewHistory } from './hooks/useViewHistory';
+import type { DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
 
@@ -72,7 +73,7 @@ function useOnboarding() {
 }
 
 export default function App() {
-  const [view, setView] = useState<AppView>('field');
+  const { view, navigateTo, goBack } = useViewHistory('field');
   const [pins, setPins] = useState<PinEntry[]>([]);
   // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
   // U1: the entry id a save most recently produced, in this page load only
@@ -1303,7 +1304,7 @@ export default function App() {
 
           {entries.length > 0 && (
             <button
-              onClick={() => setView('history')}
+              onClick={() => navigateTo('history')}
               style={{ ...HEADER_PILL, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20 }}
             >
               history
@@ -1312,7 +1313,7 @@ export default function App() {
 
           {showMirror && (
             <button
-              onClick={() => setView('constellation')}
+              onClick={() => navigateTo('constellation')}
               style={{ ...HEADER_PILL, left: 20 }}
             >
               ✦ replay
@@ -1348,7 +1349,7 @@ export default function App() {
           >
             <DiaryHistory
               entries={entries}
-              onBack={() => setView('field')}
+              onBack={goBack}
             />
           </motion.div>
         )}
@@ -1363,7 +1364,7 @@ export default function App() {
           >
             <ConstellationReplay
               entries={entries}
-              onDismiss={() => setView('field')}
+              onDismiss={goBack}
             />
           </motion.div>
         )}
