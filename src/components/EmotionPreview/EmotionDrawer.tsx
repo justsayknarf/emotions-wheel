@@ -701,7 +701,16 @@ export function EmotionDrawer({
                 onSelect={() => onSelectPin(pin.id)}
                 onRecognize={onRecognize}
                 onDerecognize={onDerecognize}
+                // hideRemove: see CoordinateCard's own doc comment — a
+                // reopened check-in has exactly one pin (single-pin-check-in
+                // model) and can never gain another via the field while
+                // active, so this card's × used to be a confusing way to
+                // strand the edit in an empty "no pins left" state when
+                // Discard Edit below already covers "abandon this edit"
+                // plainly. onRemove stays wired (unreachable while
+                // hideRemove) only to satisfy the prop's type.
                 onRemove={() => onPinRemove(pin.id)}
+                hideRemove
                 onAdjust={onAdjust}
                 onAdjustDraft={onAdjustDraft}
                 dissolve={dissolve}
@@ -746,8 +755,8 @@ export function EmotionDrawer({
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: 8,
-        padding: '10px 12px',
-        borderTop: '1px solid var(--ui-gold-dim)',
+        padding: '10px 0',
+        borderTop: '1px solid var(--ui-border)',
       }}
     >
       <button
@@ -788,41 +797,52 @@ export function EmotionDrawer({
     </div>
   );
 
-  // Editing lives in its own bordered container, in the position the
-  // previous-check-in group normally occupies, rather than taking over the
-  // whole panel — the border and its own Discard Edit / Update Check-in row
-  // (above) are what make clear the edit is scoped to this one check-in.
-  // Also handles the case where every pin has been removed mid-edit: the
-  // cards area goes empty, but the box (and Discard Edit inside it) keeps
-  // rendering, since App.tsx's mount condition now keeps the drawer around
-  // for as long as a reopen is active, regardless of pin count.
+  // Editing lives in the position the previous-check-in group normally
+  // occupies, in its own flex column, rather than taking over the whole
+  // panel. This used to also carry its own gold border + gold-tinted
+  // background — under the single-pin-check-in model (PinEntry per entry is
+  // always exactly one), that box was wrapping a single already-bordered
+  // card in a second, redundant gold frame, on top of a third gold accent on
+  // editingActionBar's own top border below. Nothing here needs to be
+  // visually scoped off from a sibling group either: no separate "Draft
+  // check-in" group ever renders alongside it while isReopened (see the
+  // early-return/hideHistory logic around cardList below). The one gold
+  // signal that's still meaningful — the card's own selected-state ring,
+  // identical to any ordinary draft card — is what's left; editingActionBar
+  // below now uses the same neutral divider the panel's main actionBar
+  // already does.
+  //
+  // The "no pins left" branch just below is defensive rather than an
+  // expected path now: the only way to empty a reopened check-in's pins
+  // used to be its card's own × (CoordinateCard's hideRemove now hides that
+  // on this expanded card specifically, for the same single-pin-check-in
+  // reason its own doc comment gives), and a field press can't refill it
+  // either — App.tsx's handlePinRelease refuses one outright while
+  // `draftId` is set. Kept rather than removed in case some future path
+  // zeroes `pins` mid-edit some other way; App.tsx's mount condition keeps
+  // the drawer around for as long as a reopen is active regardless of pin
+  // count, so this section (and Discard Edit inside it) would still need to
+  // render something sensible if it ever is reached.
   const editingSection = (
-    <div
-      style={{
-        border: '1px solid var(--ui-gold-dim)',
-        borderRadius: 12,
-        background: 'rgba(201, 168, 124, 0.03)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Same label the section carries when it isn't being edited — the
           section stays "Previous check-in" throughout; editing is a state
-          it enters, not a different section that replaces it. The border,
-          the gold cards, and the local Discard Edit / Update Check-in row
-          already say "you're editing this" without the label itself having
-          to change. */}
+          it enters, not a different section that replaces it. The card's own
+          selected-state ring and the local Discard Edit / Update Check-in
+          row below already say "you're editing this" without the label
+          itself having to change. Unmodified groupHeaderStyle now (no extra
+          horizontal padding) — matches every other group header exactly,
+          now that there's no box border to inset from. */}
       {isPanelLayout && (
-        <div style={{ ...groupHeaderStyle, padding: '10px 12px 2px' }}>
+        <div style={groupHeaderStyle}>
           {`Previous check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
         </div>
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {editingCards}
         {pins.length === 0 && (
           <p style={{ margin: 0, padding: '4px 2px', fontSize: 12.5, color: 'var(--ui-text-3)', fontStyle: 'italic' }}>
-            No pins left in this check-in. Discard to restore it as it was, or add one back on the field.
+            No pins left in this check-in. Discard to restore it as it was.
           </p>
         )}
       </div>

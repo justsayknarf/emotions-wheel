@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { emotions } from '../../data/emotions';
 import { nearbyEmotions } from '../../data/regions';
 import { MiniCircumplex } from '../DiaryHistory/MiniCircumplex';
+import { WordTag } from './WordTag';
 import type { PinEntry } from '../../types';
 
 // Matches CoordinateCard.tsx's own FIELD_SERIF — this surface is for
@@ -107,55 +108,21 @@ export function SavedCheckInSummary({ pin, onRecognize, onReopen, reopenDisabled
               Do any of these fit, too?
             </span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 10 }}>
+              {/* The same chip as CoordinateCard's nearby tags: tap the word
+                  to name it. Once saved there's no un-naming from here, so an
+                  accepted chip goes static, and only a pending one can be
+                  dismissed. */}
               {visible.map((c) => {
                 const accepted = pin.recognizedWords.includes(c.id);
                 return (
-                  <span
+                  <WordTag
                     key={c.id}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: accepted ? '4px 10px 4px 12px' : '4px 5px 4px 12px',
-                      borderRadius: 20,
-                      fontSize: 12,
-                      color: accepted ? 'var(--ui-recorded)' : 'var(--ui-text-2)',
-                      background: accepted ? 'rgba(124,147,168,0.18)' : 'transparent',
-                      border: accepted ? '1px solid var(--ui-recorded-dim)' : '1px dashed var(--ui-recorded-dim)',
-                    }}
-                  >
-                    {c.label.toLowerCase()}
-                    {!accepted && (
-                      <>
-                        <button
-                          onClick={() => onRecognize(c.id)}
-                          aria-label={`Name this ${c.label.toLowerCase()}`}
-                          style={{
-                            width: 16, height: 16, borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 8, cursor: 'pointer', flexShrink: 0,
-                            border: '1px solid var(--ui-border)',
-                            background: 'transparent', color: 'var(--ui-text-3)',
-                          }}
-                        >
-                          ✓
-                        </button>
-                        <button
-                          onClick={() => dismiss(c.id)}
-                          aria-label={`Dismiss ${c.label.toLowerCase()}`}
-                          style={{
-                            width: 16, height: 16, borderRadius: '50%',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 8, cursor: 'pointer', flexShrink: 0,
-                            border: '1px solid var(--ui-border)',
-                            background: 'transparent', color: 'var(--ui-text-3)',
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </>
-                    )}
-                  </span>
+                    label={c.label}
+                    tone="recorded"
+                    named={accepted}
+                    onToggle={accepted ? undefined : () => onRecognize(c.id)}
+                    onDismiss={accepted ? undefined : () => dismiss(c.id)}
+                  />
                 );
               })}
             </div>

@@ -4,6 +4,7 @@ import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
 import { describeDelta, hasNotableDelta } from '../../data/departure';
 import { AxisSlider } from './AxisSlider';
+import { WordTag } from './WordTag';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -47,6 +48,18 @@ interface Props {
   onRecognize: (id: string) => void;
   onDerecognize: (id: string) => void;
   onRemove: () => void;
+  // Hides the header's × remove control without going fully read-only —
+  // EmotionDrawer's editingCards (a reopened check-in) sets this on its one
+  // expanded card. Under the single-pin-check-in model a check-in has
+  // exactly one pin, and a field press is refused outright while a reopen
+  // is active (App.tsx's handlePinRelease, `if (draftId !== null) return`)
+  // — so removing that one pin here had no way back except Discard Edit
+  // anyway, just via a confusing detour through an empty "no pins left"
+  // card first. Discard Edit already reads as "abandon this edit"; this
+  // hides the narrower, surprising second way to reach the same place.
+  // Defaults to false, so an ordinary (non-reopened) draft card is
+  // unaffected.
+  hideRemove?: boolean;
   // Commit an adjusted coordinate for this pin (a slider was released).
   onAdjust: (pinId: string, x: number, y: number) => void;
   // Live draft coordinate during a slider drag (field preview only), carrying
@@ -96,7 +109,7 @@ interface Props {
   frosted?: boolean;
 }
 
-export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, anchor = null, anchorLabel = null, frosted = false }: Props) {
+export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, hideRemove = false, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, anchor = null, anchorLabel = null, frosted = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
   // The accent that marks this card as recorded rather than draft (R6) — the
@@ -189,30 +202,9 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   };
 
   // A neighborhood tag beneath the question — tappable to name (or un-name).
-  const renderTag = (e: NearbyEmotion) => {
-    const named = recognizedSet.has(e.id);
-    return (
-      <button
-        key={e.id}
-        onClick={(ev) => { ev.stopPropagation(); toggleName(e.id); }}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5,
-          padding: '4px 11px',
-          borderRadius: 6,
-          cursor: 'pointer',
-          border: named ? '1px solid var(--ui-gold-dim)' : '1px solid rgba(237,232,223,0.12)',
-          background: named ? 'rgba(201,168,124,0.16)' : 'rgba(237,232,223,0.04)',
-          color: named ? 'var(--ui-gold)' : 'var(--ui-text-2)',
-          fontSize: 12,
-          letterSpacing: '0.01em',
-        }}
-      >
-        {e.label.toLowerCase()}{named ? ' ✓' : ''}
-      </button>
-    );
-  };
+  const renderTag = (e: NearbyEmotion) => (
+    <WordTag key={e.id} label={e.label} named={recognizedSet.has(e.id)} onToggle={() => toggleName(e.id)} />
+  );
 
   // While a slider is dragged, the thumbs follow this local draft; the committed
   // pin coordinate (and its words) hold until release. draftRef mirrors the draft
@@ -373,7 +365,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           >
             {reopenLabel}
           </button>
-        ) : (
+        ) : hideRemove ? null : (
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
             style={{
@@ -414,12 +406,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 10.5, color: accentDim, letterSpacing: '0.02em' }}>named:</span>
               {pin.recognizedWords.map((id) => (
-                <span
-                  key={id}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, border: `1px solid ${accentDim}`, background: 'rgba(124,147,168,0.14)', color: 'var(--ui-recorded)', fontSize: 11 }}
-                >
-                  {labelForId(id)}
-                </span>
+                <WordTag key={id} label={labelForId(id)} tone="recorded" named />
               ))}
             </div>
           )}
@@ -554,13 +541,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, color: 'var(--ui-gold-dim)', letterSpacing: '0.02em' }}>your words:</span>
             {pin.recognizedWords.map((id) => (
-              <button
-                key={id}
-                onClick={(e) => { e.stopPropagation(); onDerecognize(id); }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 5, cursor: 'pointer', border: '1px solid var(--ui-gold-dim)', background: 'rgba(201,168,124,0.14)', color: 'var(--ui-gold)', fontSize: 11.5 }}
-              >
-                {labelForId(id)}<span style={{ opacity: 0.5, fontSize: 13 }}>×</span>
-              </button>
+              <WordTag key={id} label={labelForId(id)} named onToggle={() => onDerecognize(id)} />
             ))}
           </div>
         )}
