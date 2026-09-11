@@ -89,6 +89,20 @@ interface Props {
   // and unused by 'rail'/'sheet', which keep calling `onDone` exactly as
   // before.
   onLandingSave?: () => void;
+  // The 'focus' variant's own escape hatch to the field, wired only once a
+  // pin already exists (see canSave below) — a returning user who minted
+  // via the pre-mint DepartureFloat sliders has no other discoverable way
+  // to know the field itself is still live for a direct press/relocate; the
+  // centered card, however transparent, still reads as "the only way in."
+  // Docks the draft into the ordinary rail (App.tsx's handleMoveToRail)
+  // without saving — the draft's pins are untouched, only its position/
+  // layout changes, via the exact same recede transition onLandingSave
+  // drives. Optional and unused by 'rail'/'sheet', which have no centered
+  // state to escape from; also never reached by a first-ever session, whose
+  // whole pre/post-mint life stays inside DepartureFloat instead (see the
+  // early-return branch below) — "streamlined" there is the point, so this
+  // control only ever appears for a *returning* user's post-mint card.
+  onMoveToRail?: () => void;
   onClear: () => void;
   // Reopen the previous check-in (by its entry id) into the draft, expanding
   // only the specific pin that was clicked — its siblings move into the
@@ -198,6 +212,7 @@ export function EmotionDrawer({
   dissolve,
   onDone,
   onLandingSave,
+  onMoveToRail,
   onClear,
   onReopen,
   justSavedEntryId,
@@ -623,7 +638,26 @@ export function EmotionDrawer({
   // landing hands off post-mint: its read-only card (with its own Reopen
   // button) keeps rendering in cardList throughout. (Never reachable for a
   // first-ever session anyway — there is no previous check-in yet.)
-  if (isFocus && (isFirstEverCheckIn || (pins.length === 0 && departureEligible))) {
+  //
+  // Bug fix (reported live: "another card flashes before the rail opens"
+  // on Save): `cardFocusProgress === 0` added as a precondition. Without
+  // it, App.tsx's handleLandingSave clearing `pins` synchronously with
+  // `record()` (which resolves `previousCheckIn` to the entry just saved)
+  // briefly makes `pins.length === 0 && departureEligible` true again —
+  // the exact shape of a genuine pre-mint returning-user landing — for the
+  // whole settle window between Save and `desktopLandingActive` actually
+  // clearing. This branch would then swap from the ordinary isFocus
+  // cardList/actionBar panel to a freshly-mounted `DepartureFloat`
+  // instance (a different component entirely, not a prop update on an
+  // existing one), which plays its own mount fade-in — reading as a
+  // second, wrong card popping in before the rail appears. `cardFocusProgress`
+  // is the same "are we genuinely still pre-mint, or just mid-settle after
+  // a commit" signal App.tsx's own handleFieldPress already had to adopt
+  // for the identical reason (see its 2026-09-08 bug-fix comment) — it's
+  // 0 only at rest, and synchronously set to 1 by both handleLandingSave
+  // and handleMoveToRail the instant either commits, so this guard closes
+  // off exactly the same window for both.
+  if (isFocus && cardFocusProgress === 0 && (isFirstEverCheckIn || (pins.length === 0 && departureEligible))) {
     return (
       <DepartureFloat
         ref={focusRootRef}
@@ -854,7 +888,29 @@ export function EmotionDrawer({
     <div
       ref={scrollRef}
       style={{
-        overflowY: 'auto',
+        // Bug fix (reported live: a scrollbar still flashes during the
+        // Save/Move-to-rail recede, after the width-freeze fix): this list
+        // is a `flex: 1` item inside a `height: auto` flex column (the
+        // isFocus card has no explicit height, sized to content). The
+        // instant Save/Move-to-rail swaps this list's own content (draft
+        // cards -> the justSaved confirmation card, or vice versa), the
+        // column's one-pass layout can settle this item a few px shorter
+        // than its own new content's natural height before the next
+        // reflow catches up — an ordinary flex auto-height quirk, not
+        // something the width freeze touches (width was already frozen
+        // and unrelated here). Rather than chase the exact few-px
+        // arithmetic for every possible confirmation-card content shape,
+        // suppress the scrollbar specifically while isFocus is actively
+        // receding (cardFocusProgress > 0): the card is already fading to
+        // fully invisible on its own fast opacity transition by then (see
+        // the isFocus return's own comment), so clipping instead of
+        // scrolling for that brief masked window loses nothing visible.
+        // Never applies to 'rail'/'sheet' — cardFocusProgress stays at 1
+        // for the rest of the session after a landing ever settles once
+        // (nothing resets it back to 0), so this must check `isFocus`
+        // too, not `cardFocusProgress` alone, or a real rail/sheet list
+        // would lose its scrollbar permanently after the first landing.
+        overflowY: isFocus && cardFocusProgress > 0 ? 'hidden' : 'auto',
         WebkitOverflowScrolling: 'touch',
         flex: 1,
         padding: '8px 16px',
@@ -1046,11 +1102,17 @@ export function EmotionDrawer({
         // Review fix (P1, scale leak): `scale`/`opacity` are set explicitly
         // here for the same reason `height: 'auto'` is above — the 'focus'
         // branch's own `animate` (below) interpolates `scale` down toward
-        // ~0.92 during its recede state and always targets `opacity: 1`;
-        // omitting either key here left framer's last-applied inline value
-        // in place on this reused DOM node, freezing the rail permanently
-        // shrunk at whatever scale the focus card last animated to when a
-        // drag-commit/field-press/breakpoint resize swapped 'focus' -> 'rail'.
+        // ~0.92 during its recede state; omitting either key here left
+        // framer's last-applied inline value in place on this reused DOM
+        // node, freezing the rail permanently shrunk at whatever scale the
+        // focus card last animated to when a drag-commit/field-press/
+        // breakpoint resize swapped 'focus' -> 'rail'. Bug fix (animation
+        // artifact on Save/Move-to-rail): 'focus' now also fades `opacity`
+        // toward 0 as it recedes (its own comment below) precisely so this
+        // `opacity: 1` target reads as a deliberate fade-*in* at the rail's
+        // dock, landing on an already-transparent, already-repositioned
+        // card, rather than the abrupt reposition-while-still-opaque jump
+        // that used to be visible here.
         animate={{ x: 0, height: 'auto', scale: 1, opacity: 1 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
@@ -1121,18 +1183,68 @@ export function EmotionDrawer({
     const focusTranslateX = lerp(-50, 20);
     const focusTranslateY = lerp(-50, -44);
     const focusScale = lerp(1, 0.92);
-    const focusWidthPx = lerp(420, 372); // eases toward RAIL_WIDTH's own ~340-420px clamp range
+    // Bug fix (reported live: a scrollbar flashes briefly during the
+    // recede): this used to lerp 420 -> 372 (eases toward RAIL_WIDTH's own
+    // ~340-420px clamp range) — but shrinking a text-containing box's width
+    // reflows its content (word-wrap, chip rows) taller, and cardList below
+    // is `overflowY: auto`, so for the brief window before focusOpacity
+    // (below) finishes fading it out, that reflow could make the content
+    // taller than the card's box and pop a native scrollbar into view. The
+    // eventual real rail/sheet width is already applied for free at the
+    // branch swap (masked by opacity being 0 by then, same as every other
+    // position property — see focusOpacity's own comment) as long as
+    // something reaches it, so holding width fixed at its resting value
+    // for the whole recede loses nothing visible and removes the reflow
+    // that caused this.
+    const focusWidthPx = 420;
     const focusRadius = lerp(16, 0); // 'rail' docks flush — no rounding
     const focusInstant = reduce;
+    // Bug fix (reported live: "animates right a little, stops, then
+    // disappears" on Move-to-rail; "another card flashes" on Save): this
+    // card and 'rail's own return further below are the SAME reused DOM
+    // node (see 'rail's own comment on that) — but they position it with
+    // two entirely disjoint sets of CSS properties (center + translate%
+    // here, top/right/bottom + a different width there) with no shared
+    // `transition` string spanning the two. So the moment cardFocusProgress
+    // reaches 1 and App.tsx flips desktopLandingActive false (EmotionDrawer
+    // swaps from this branch to 'rail's), every position property snaps
+    // instantly to its true rail value with no easing at all — the "little
+    // bit, then stop" is this lerp genuinely reaching its own (deliberately
+    // approximate, see focusTranslateX/Y's own comment) endpoint over
+    // `tuning.fieldRecedeDuration`, and the "disappear" is that hard,
+    // un-animated jump to the real rail geometry landing on top of it.
+    // cardList's own content can change in the very same tick too (Save
+    // clears `pins`, swapping the draft's cards for the justSaved
+    // confirmation card) — while the card is still sitting, fully opaque,
+    // near dead-center, reading as a second, wrong card flashing in before
+    // the rail appears.
+    //
+    // Fixed by fading `opacity` out on its own much shorter transition,
+    // decoupled from the position lerp's `tuning.fieldRecedeDuration` (a
+    // per-key transition override, not the single shared spring the rest of
+    // `animate` uses) — the card dissolves within ~120ms of Save/
+    // Move-to-rail firing, well before the position/content mismatch or the
+    // eventual hard snap could ever become visible, and keeps easing
+    // (unseen) for the rest of the recede window. 'rail's own `animate`
+    // below targets `opacity: 1` on this same framer motion value, so once
+    // the branch swap lands (already fully transparent, already
+    // repositioned) it fades back in at the correct dock — a clean dissolve
+    // in place, then a fade-in at the rail, rather than a card trying to
+    // visibly slide between two incompatible layouts.
+    const focusOpacity = focusP > 0 ? 0 : 1;
 
     return (
       <motion.div
         ref={focusRootRef}
         tabIndex={-1}
         initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: focusScale }}
+        animate={{ opacity: focusOpacity, scale: focusScale }}
         exit={{ opacity: 0, scale: 0.96 }}
-        transition={focusInstant ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
+        transition={
+          focusInstant
+            ? { duration: 0 }
+            : { scale: { type: 'spring', stiffness: 300, damping: 35 }, opacity: { duration: 0.12, ease: 'easeOut' } }
+        }
         style={{
           ...shared,
           top: '50%',
@@ -1145,12 +1257,45 @@ export function EmotionDrawer({
           boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
           outline: 'none',
           touchAction: 'pan-y',
+          // `width` dropped from this list — it no longer changes during
+          // the recede (focusWidthPx's own comment).
           transition: focusInstant
             ? 'none'
-            : `translate ${tuning.fieldRecedeDuration}s ease-out, width ${tuning.fieldRecedeDuration}s ease-out, border-radius ${tuning.fieldRecedeDuration}s ease-out`,
+            : `translate ${tuning.fieldRecedeDuration}s ease-out, border-radius ${tuning.fieldRecedeDuration}s ease-out`,
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {/* Escape hatch to the field (see onMoveToRail's own prop comment).
+            canSave-gated: before a pin exists, this is DepartureFloat's
+            early-return branch above, not this one. A ghost link rather
+            than a bordered button — it must read as a quiet secondary path,
+            not compete with Save for attention. */}
+        {!isReopened && canSave && onMoveToRail && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+            <button
+              onClick={onMoveToRail}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'none',
+                border: 'none',
+                padding: '3px 1px',
+                color: 'var(--ui-text-3)',
+                fontSize: 10.5,
+                fontWeight: 500,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              Use the field
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden>
+                <path d="M2.5 7h8M7.5 4l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
         {cardList}
         {/* Never renders while isReopened — editingSection above owns its
             own Discard Edit / Update Check-in row instead, same as 'rail'. */}
