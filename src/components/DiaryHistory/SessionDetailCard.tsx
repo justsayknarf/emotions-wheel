@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { labelForId } from '../../data/emotions';
+import { WordTag } from '../EmotionPreview/WordTag';
 import { formatDate } from '../../utils/formatDate';
 import { MiniCircumplex } from './MiniCircumplex';
 import type { DiaryEntry } from '../../types';
@@ -112,20 +113,7 @@ function WordRow({ entry }: { entry: DiaryEntry }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
       {labels.map(label => (
-        <span
-          key={label}
-          style={{
-            fontSize: 11,
-            color: 'var(--ui-text-1)',
-            background: 'rgba(201,168,124,0.12)',
-            border: '1px solid rgba(201,168,124,0.25)',
-            borderRadius: 5,
-            padding: '3px 8px',
-            letterSpacing: '0.03em',
-          }}
-        >
-          {label}
-        </span>
+        <WordTag key={label} label={label} named />
       ))}
     </div>
   );
