@@ -888,7 +888,29 @@ export function EmotionDrawer({
     <div
       ref={scrollRef}
       style={{
-        overflowY: 'auto',
+        // Bug fix (reported live: a scrollbar still flashes during the
+        // Save/Move-to-rail recede, after the width-freeze fix): this list
+        // is a `flex: 1` item inside a `height: auto` flex column (the
+        // isFocus card has no explicit height, sized to content). The
+        // instant Save/Move-to-rail swaps this list's own content (draft
+        // cards -> the justSaved confirmation card, or vice versa), the
+        // column's one-pass layout can settle this item a few px shorter
+        // than its own new content's natural height before the next
+        // reflow catches up — an ordinary flex auto-height quirk, not
+        // something the width freeze touches (width was already frozen
+        // and unrelated here). Rather than chase the exact few-px
+        // arithmetic for every possible confirmation-card content shape,
+        // suppress the scrollbar specifically while isFocus is actively
+        // receding (cardFocusProgress > 0): the card is already fading to
+        // fully invisible on its own fast opacity transition by then (see
+        // the isFocus return's own comment), so clipping instead of
+        // scrolling for that brief masked window loses nothing visible.
+        // Never applies to 'rail'/'sheet' — cardFocusProgress stays at 1
+        // for the rest of the session after a landing ever settles once
+        // (nothing resets it back to 0), so this must check `isFocus`
+        // too, not `cardFocusProgress` alone, or a real rail/sheet list
+        // would lose its scrollbar permanently after the first landing.
+        overflowY: isFocus && cardFocusProgress > 0 ? 'hidden' : 'auto',
         WebkitOverflowScrolling: 'touch',
         flex: 1,
         padding: '8px 16px',
