@@ -638,7 +638,26 @@ export function EmotionDrawer({
   // landing hands off post-mint: its read-only card (with its own Reopen
   // button) keeps rendering in cardList throughout. (Never reachable for a
   // first-ever session anyway — there is no previous check-in yet.)
-  if (isFocus && (isFirstEverCheckIn || (pins.length === 0 && departureEligible))) {
+  //
+  // Bug fix (reported live: "another card flashes before the rail opens"
+  // on Save): `cardFocusProgress === 0` added as a precondition. Without
+  // it, App.tsx's handleLandingSave clearing `pins` synchronously with
+  // `record()` (which resolves `previousCheckIn` to the entry just saved)
+  // briefly makes `pins.length === 0 && departureEligible` true again —
+  // the exact shape of a genuine pre-mint returning-user landing — for the
+  // whole settle window between Save and `desktopLandingActive` actually
+  // clearing. This branch would then swap from the ordinary isFocus
+  // cardList/actionBar panel to a freshly-mounted `DepartureFloat`
+  // instance (a different component entirely, not a prop update on an
+  // existing one), which plays its own mount fade-in — reading as a
+  // second, wrong card popping in before the rail appears. `cardFocusProgress`
+  // is the same "are we genuinely still pre-mint, or just mid-settle after
+  // a commit" signal App.tsx's own handleFieldPress already had to adopt
+  // for the identical reason (see its 2026-09-08 bug-fix comment) — it's
+  // 0 only at rest, and synchronously set to 1 by both handleLandingSave
+  // and handleMoveToRail the instant either commits, so this guard closes
+  // off exactly the same window for both.
+  if (isFocus && cardFocusProgress === 0 && (isFirstEverCheckIn || (pins.length === 0 && departureEligible))) {
     return (
       <DepartureFloat
         ref={focusRootRef}
@@ -1061,11 +1080,17 @@ export function EmotionDrawer({
         // Review fix (P1, scale leak): `scale`/`opacity` are set explicitly
         // here for the same reason `height: 'auto'` is above — the 'focus'
         // branch's own `animate` (below) interpolates `scale` down toward
-        // ~0.92 during its recede state and always targets `opacity: 1`;
-        // omitting either key here left framer's last-applied inline value
-        // in place on this reused DOM node, freezing the rail permanently
-        // shrunk at whatever scale the focus card last animated to when a
-        // drag-commit/field-press/breakpoint resize swapped 'focus' -> 'rail'.
+        // ~0.92 during its recede state; omitting either key here left
+        // framer's last-applied inline value in place on this reused DOM
+        // node, freezing the rail permanently shrunk at whatever scale the
+        // focus card last animated to when a drag-commit/field-press/
+        // breakpoint resize swapped 'focus' -> 'rail'. Bug fix (animation
+        // artifact on Save/Move-to-rail): 'focus' now also fades `opacity`
+        // toward 0 as it recedes (its own comment below) precisely so this
+        // `opacity: 1` target reads as a deliberate fade-*in* at the rail's
+        // dock, landing on an already-transparent, already-repositioned
+        // card, rather than the abrupt reposition-while-still-opaque jump
+        // that used to be visible here.
         animate={{ x: 0, height: 'auto', scale: 1, opacity: 1 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 35 }}
@@ -1139,15 +1164,52 @@ export function EmotionDrawer({
     const focusWidthPx = lerp(420, 372); // eases toward RAIL_WIDTH's own ~340-420px clamp range
     const focusRadius = lerp(16, 0); // 'rail' docks flush — no rounding
     const focusInstant = reduce;
+    // Bug fix (reported live: "animates right a little, stops, then
+    // disappears" on Move-to-rail; "another card flashes" on Save): this
+    // card and 'rail's own return further below are the SAME reused DOM
+    // node (see 'rail's own comment on that) — but they position it with
+    // two entirely disjoint sets of CSS properties (center + translate%
+    // here, top/right/bottom + a different width there) with no shared
+    // `transition` string spanning the two. So the moment cardFocusProgress
+    // reaches 1 and App.tsx flips desktopLandingActive false (EmotionDrawer
+    // swaps from this branch to 'rail's), every position property snaps
+    // instantly to its true rail value with no easing at all — the "little
+    // bit, then stop" is this lerp genuinely reaching its own (deliberately
+    // approximate, see focusTranslateX/Y's own comment) endpoint over
+    // `tuning.fieldRecedeDuration`, and the "disappear" is that hard,
+    // un-animated jump to the real rail geometry landing on top of it.
+    // cardList's own content can change in the very same tick too (Save
+    // clears `pins`, swapping the draft's cards for the justSaved
+    // confirmation card) — while the card is still sitting, fully opaque,
+    // near dead-center, reading as a second, wrong card flashing in before
+    // the rail appears.
+    //
+    // Fixed by fading `opacity` out on its own much shorter transition,
+    // decoupled from the position lerp's `tuning.fieldRecedeDuration` (a
+    // per-key transition override, not the single shared spring the rest of
+    // `animate` uses) — the card dissolves within ~120ms of Save/
+    // Move-to-rail firing, well before the position/content mismatch or the
+    // eventual hard snap could ever become visible, and keeps easing
+    // (unseen) for the rest of the recede window. 'rail's own `animate`
+    // below targets `opacity: 1` on this same framer motion value, so once
+    // the branch swap lands (already fully transparent, already
+    // repositioned) it fades back in at the correct dock — a clean dissolve
+    // in place, then a fade-in at the rail, rather than a card trying to
+    // visibly slide between two incompatible layouts.
+    const focusOpacity = focusP > 0 ? 0 : 1;
 
     return (
       <motion.div
         ref={focusRootRef}
         tabIndex={-1}
         initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: focusScale }}
+        animate={{ opacity: focusOpacity, scale: focusScale }}
         exit={{ opacity: 0, scale: 0.96 }}
-        transition={focusInstant ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 35 }}
+        transition={
+          focusInstant
+            ? { duration: 0 }
+            : { scale: { type: 'spring', stiffness: 300, damping: 35 }, opacity: { duration: 0.12, ease: 'easeOut' } }
+        }
         style={{
           ...shared,
           top: '50%',
