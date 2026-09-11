@@ -1161,7 +1161,20 @@ export function EmotionDrawer({
     const focusTranslateX = lerp(-50, 20);
     const focusTranslateY = lerp(-50, -44);
     const focusScale = lerp(1, 0.92);
-    const focusWidthPx = lerp(420, 372); // eases toward RAIL_WIDTH's own ~340-420px clamp range
+    // Bug fix (reported live: a scrollbar flashes briefly during the
+    // recede): this used to lerp 420 -> 372 (eases toward RAIL_WIDTH's own
+    // ~340-420px clamp range) — but shrinking a text-containing box's width
+    // reflows its content (word-wrap, chip rows) taller, and cardList below
+    // is `overflowY: auto`, so for the brief window before focusOpacity
+    // (below) finishes fading it out, that reflow could make the content
+    // taller than the card's box and pop a native scrollbar into view. The
+    // eventual real rail/sheet width is already applied for free at the
+    // branch swap (masked by opacity being 0 by then, same as every other
+    // position property — see focusOpacity's own comment) as long as
+    // something reaches it, so holding width fixed at its resting value
+    // for the whole recede loses nothing visible and removes the reflow
+    // that caused this.
+    const focusWidthPx = 420;
     const focusRadius = lerp(16, 0); // 'rail' docks flush — no rounding
     const focusInstant = reduce;
     // Bug fix (reported live: "animates right a little, stops, then
@@ -1222,9 +1235,11 @@ export function EmotionDrawer({
           boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
           outline: 'none',
           touchAction: 'pan-y',
+          // `width` dropped from this list — it no longer changes during
+          // the recede (focusWidthPx's own comment).
           transition: focusInstant
             ? 'none'
-            : `translate ${tuning.fieldRecedeDuration}s ease-out, width ${tuning.fieldRecedeDuration}s ease-out, border-radius ${tuning.fieldRecedeDuration}s ease-out`,
+            : `translate ${tuning.fieldRecedeDuration}s ease-out, border-radius ${tuning.fieldRecedeDuration}s ease-out`,
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
