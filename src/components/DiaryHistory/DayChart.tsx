@@ -1,4 +1,4 @@
-import { sessionAverage } from '../../utils/diaryAggregation';
+import { sessionAverage, gapWeight, MIN_RENDER_WEIGHT } from '../../utils/diaryAggregation';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
@@ -14,6 +14,13 @@ const MARGIN_X = 14;
 const MARGIN_Y = 10;
 const CHART_W = SVG_W - MARGIN_X * 2;
 const CHART_H = SVG_H - MARGIN_Y * 2 - 16; // 16px reserved for x-axis labels
+
+const HOUR_MS = 60 * 60 * 1000;
+// Check-ins within 6h render at full weight; a same-day 15h gap renders
+// visibly faded, not gone. Suggested starting values (see plan U3) --
+// tune by eye against real data.
+const DAY_FULL_WEIGHT_MS = 6 * HOUR_MS;
+const DAY_DECAY_MS = 18 * HOUR_MS;
 
 function xForHour(fractionalHour: number): number {
   return MARGIN_X + (fractionalHour / 23) * CHART_W;
@@ -42,9 +49,15 @@ export function DayChart({ sessions, onDotTap }: Props) {
     points.push({ entry, hour, valence: avg.valence, arousal: avg.arousal });
   }
 
-  // Build polyline point strings
-  const valencePoints = points.map(p => `${xForHour(p.hour)},${yForValue(p.valence)}`).join(' ');
-  const arousalPoints = points.map(p => `${xForHour(p.hour)},${yForValue(p.arousal)}`).join(' ');
+  // Connect each consecutive pair of check-ins, weighting the segment by
+  // how many hours separate them -- an 8am/11pm pair now reads as thin
+  // evidence instead of a confident, continuous line.
+  const daySegments: Array<{ i: number; weight: number }> = [];
+  for (let i = 1; i < points.length; i++) {
+    const gapMs = (points[i].hour - points[i - 1].hour) * HOUR_MS;
+    const weight = gapWeight(gapMs, DAY_FULL_WEIGHT_MS, DAY_DECAY_MS);
+    if (weight > MIN_RENDER_WEIGHT) daySegments.push({ i, weight });
+  }
 
   return (
     <div style={{
@@ -84,30 +97,31 @@ export function DayChart({ sessions, onDotTap }: Props) {
           strokeWidth={1}
         />
 
-        {/* Valence polyline */}
-        {points.length > 1 && (
-          <polyline
-            points={valencePoints}
-            fill="none"
+        {/* Valence segments */}
+        {daySegments.map(({ i, weight }) => (
+          <line
+            key={`v-seg-${i}`}
+            x1={xForHour(points[i - 1].hour)} y1={yForValue(points[i - 1].valence)}
+            x2={xForHour(points[i].hour)} y2={yForValue(points[i].valence)}
             stroke="var(--ui-gold)"
             strokeWidth={1.5}
             strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.9}
+            opacity={0.9 * weight}
           />
-        )}
+        ))}
 
-        {/* Arousal polyline */}
-        {points.length > 1 && (
-          <polyline
-            points={arousalPoints}
-            fill="none"
+        {/* Arousal segments */}
+        {daySegments.map(({ i, weight }) => (
+          <line
+            key={`a-seg-${i}`}
+            x1={xForHour(points[i - 1].hour)} y1={yForValue(points[i - 1].arousal)}
+            x2={xForHour(points[i].hour)} y2={yForValue(points[i].arousal)}
             stroke="var(--ui-recorded)"
             strokeWidth={1.5}
             strokeLinecap="round"
-            strokeLinejoin="round"
+            opacity={weight}
           />
-        )}
+        ))}
 
         {/* Dots — valence */}
         {points.map(p => (
