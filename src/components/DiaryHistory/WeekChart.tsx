@@ -1,6 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { last30Days, dailyAggregates, dateKey, buildWeightedSegments } from '../../utils/diaryAggregation';
+import { last7Days, dailyAggregates, dateKey, buildWeightedSegments } from '../../utils/diaryAggregation';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
@@ -9,17 +7,17 @@ interface Props {
   onDayTap: (date: Date) => void;
 }
 
-const COL_WIDTH = 14;
-const TOTAL_COLS = 30;
-const SVG_W = COL_WIDTH * TOTAL_COLS; // 420
+const COL_WIDTH = 44;
+const TOTAL_COLS = 7;
+const SVG_W = COL_WIDTH * TOTAL_COLS; // 308
 const SVG_H = 80;
 const MARGIN_Y = 10;
 const CHART_H = SVG_H - MARGIN_Y * 2 - 14; // 14px for day labels
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Adjacent days render at full weight; a 4-day gap renders faint; a 7+ day
-// gap falls below MIN_RENDER_WEIGHT and isn't drawn. Suggested starting
-// values (see plan U2) -- tune by eye against real data.
+// Adjacent days render at full weight; longer gaps fade toward the render
+// floor. Suggested starting values (see plan U2) -- tune by eye against
+// real data.
 const WEEK_FULL_WEIGHT_MS = DAY_MS;
 const WEEK_DECAY_MS = 2 * DAY_MS;
 
@@ -40,18 +38,7 @@ const SERIES = [
 ];
 
 export function WeekChart({ entries, onDayTap }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(320);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(([e]) => setContainerWidth(e.contentRect.width));
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  const days = last30Days();
+  const days = last7Days();
   const aggregates = dailyAggregates(entries);
 
   // Build per-day data keyed by array index
@@ -75,8 +62,6 @@ export function WeekChart({ entries, onDayTap }: Props) {
     WEEK_DECAY_MS,
   );
 
-  const maxDrag = Math.max(0, SVG_W - containerWidth);
-
   return (
     <div style={{
       margin: '0 16px 12px',
@@ -93,83 +78,73 @@ export function WeekChart({ entries, onDayTap }: Props) {
         textTransform: 'uppercase',
         color: 'var(--ui-text-2)',
       }}>
-        Trend · Last 30 Days
+        Trend · Last 7 Days
       </div>
       <ChartLegend style={{ padding: '0 16px 8px' }} />
-      <div ref={containerRef} style={{ overflow: 'hidden', position: 'relative' }}>
-        <motion.div
-          drag="x"
-          dragConstraints={{ left: -maxDrag, right: 0 }}
-          dragElastic={0.05}
-          initial={{ x: -maxDrag }}
-          animate={{ x: -maxDrag }}
-          style={{ width: SVG_W, cursor: 'grab' }}
-          onPointerDown={e => e.currentTarget.style.cursor = 'grabbing'}
-          onPointerUp={e => e.currentTarget.style.cursor = 'grab'}
-        >
-          <svg width={SVG_W} height={SVG_H} style={{ display: 'block', overflow: 'visible' }}>
-            {/* Zero line */}
-            <line
-              x1={0} y1={yForValue(0)}
-              x2={SVG_W} y2={yForValue(0)}
-              stroke="var(--ui-border)"
-              strokeWidth={1}
-            />
+      <svg
+        width="100%"
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        style={{ display: 'block' }}
+      >
+        {/* Zero line */}
+        <line
+          x1={0} y1={yForValue(0)}
+          x2={SVG_W} y2={yForValue(0)}
+          stroke="var(--ui-border)"
+          strokeWidth={1}
+        />
 
-            {/* Segments, one pass per series */}
-            {SERIES.flatMap(s => weekSegments.map(({ i, j, weight }) => (
-              <line
-                key={`${s.key}-${i}-${j}`}
-                x1={colCenterX(i)} y1={yForValue(data[i]![s.key])}
-                x2={colCenterX(j)} y2={yForValue(data[j]![s.key])}
-                stroke={s.color}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                opacity={s.opacityMul * weight}
-              />
-            )))}
+        {/* Segments, one pass per series */}
+        {SERIES.flatMap(s => weekSegments.map(({ i, j, weight }) => (
+          <line
+            key={`${s.key}-${i}-${j}`}
+            x1={colCenterX(i)} y1={yForValue(data[i]![s.key])}
+            x2={colCenterX(j)} y2={yForValue(data[j]![s.key])}
+            stroke={s.color}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            opacity={s.opacityMul * weight}
+          />
+        )))}
 
-            {/* Dots */}
-            {data.map((d, i) => d === null ? null : (
-              <g key={`dots-${i}`}>
-                {SERIES.map(s => (
-                  <circle key={s.key} cx={colCenterX(i)} cy={yForValue(d[s.key])} r={3.5} fill={s.color} />
-                ))}
-              </g>
+        {/* Dots */}
+        {data.map((d, i) => d === null ? null : (
+          <g key={`dots-${i}`}>
+            {SERIES.map(s => (
+              <circle key={s.key} cx={colCenterX(i)} cy={yForValue(d[s.key])} r={3.5} fill={s.color} />
             ))}
+          </g>
+        ))}
 
-            {/* Day labels every 7 columns */}
-            {days.map((day, i) => i % 7 === 0 && (
-              <text
-                key={`lbl-${i}`}
-                x={colCenterX(i)}
-                y={SVG_H - 3}
-                textAnchor="middle"
-                fontSize={7}
-                fill="var(--ui-text-3)"
-                fontFamily="inherit"
-              >
-                {day.getDate()}
-              </text>
-            ))}
+        {/* Day labels -- one per column now that there are only 7 */}
+        {days.map((day, i) => (
+          <text
+            key={`lbl-${i}`}
+            x={colCenterX(i)}
+            y={SVG_H - 3}
+            textAnchor="middle"
+            fontSize={7}
+            fill="var(--ui-text-3)"
+            fontFamily="inherit"
+          >
+            {day.toLocaleDateString('en-US', { weekday: 'short' })}
+          </text>
+        ))}
 
-            {/* Per-column tap targets */}
-            {days.map((day, i) => (
-              <rect
-                key={`hit-${i}`}
-                x={i * COL_WIDTH}
-                y={0}
-                width={COL_WIDTH}
-                height={SVG_H - 14}
-                fill="transparent"
-                style={{ cursor: 'pointer' }}
-                onClick={() => onDayTap(day)}
-              />
-            ))}
-          </svg>
-        </motion.div>
-      </div>
+        {/* Per-column tap targets */}
+        {days.map((day, i) => (
+          <rect
+            key={`hit-${i}`}
+            x={i * COL_WIDTH}
+            y={0}
+            width={COL_WIDTH}
+            height={SVG_H - 14}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onClick={() => onDayTap(day)}
+          />
+        ))}
+      </svg>
     </div>
   );
 }
-

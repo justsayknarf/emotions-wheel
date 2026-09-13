@@ -60,7 +60,7 @@ export function WeekPointCloud({ windowEntries, onOpenEntry }: Props) {
         textTransform: 'uppercase',
         color: 'var(--ui-text-2)',
       }}>
-        Positions · Last 30 Days
+        Positions · Last 7 Days
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>

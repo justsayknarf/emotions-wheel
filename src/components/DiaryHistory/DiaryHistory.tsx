@@ -7,7 +7,7 @@ import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { WeekPointCloud } from './WeekPointCloud';
 import { SessionDetailCard } from './SessionDetailCard';
-import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last30Days } from '../../utils/diaryAggregation';
+import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
 import type { DiaryEntry } from '../../types';
 
@@ -233,7 +233,7 @@ interface WeekTabProps {
 }
 
 function WeekTabContent({ entries, onDaySelect, onOpenEntry }: WeekTabProps) {
-  const windowEntries = entriesInWindow(entries, last30Days());
+  const windowEntries = entriesInWindow(entries, last7Days());
   const showInvitation = !hasSpreadCoverage(windowEntries);
 
   return (

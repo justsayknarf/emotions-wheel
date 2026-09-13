@@ -45,18 +45,18 @@ function samplePin(x = 0, y = 0): PinEntry {
   return { id: `p-${x}-${y}-${Math.random()}`, x, y, recognizedWords: [], regionDescription: { relational: 'r', narrative: 'n' } };
 }
 
-const threeDays = [mkEntry(0, 9), mkEntry(1, 9), mkEntry(2, 9)];
+const twoDays = [mkEntry(0, 9), mkEntry(1, 9)];
 check(
   'hasSpreadCoverage: false below MIN_SPREAD_DAYS',
-  hasSpreadCoverage(threeDays, MIN_SPREAD_DAYS) === false,
-  `${distinctDayCount(threeDays)} distinct days vs threshold ${MIN_SPREAD_DAYS}`,
+  hasSpreadCoverage(twoDays, MIN_SPREAD_DAYS) === false,
+  `${distinctDayCount(twoDays)} distinct days vs threshold ${MIN_SPREAD_DAYS}`,
 );
 
-const fourDays = [...threeDays, mkEntry(3, 9)];
+const threeDaysAtThreshold = [...twoDays, mkEntry(2, 9)];
 check(
   'hasSpreadCoverage: true at exactly MIN_SPREAD_DAYS',
-  hasSpreadCoverage(fourDays, MIN_SPREAD_DAYS) === true,
-  `${distinctDayCount(fourDays)} distinct days vs threshold ${MIN_SPREAD_DAYS}`,
+  hasSpreadCoverage(threeDaysAtThreshold, MIN_SPREAD_DAYS) === true,
+  `${distinctDayCount(threeDaysAtThreshold)} distinct days vs threshold ${MIN_SPREAD_DAYS}`,
 );
 
 const sameDayTriple = [mkEntry(0, 8), mkEntry(0, 12), mkEntry(0, 20)];

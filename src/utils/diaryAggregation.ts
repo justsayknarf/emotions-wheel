@@ -55,12 +55,12 @@ export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] 
   return entries.filter(e => new Date(e.timestamp).toDateString() === target);
 }
 
-/** Array of 30 Date objects: [today−29, …, today]. Index 29 is today. */
-export function last30Days(): Date[] {
+/** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. */
+export function last7Days(): Date[] {
   const days: Date[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  for (let i = 29; i >= 0; i--) {
+  for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     days.push(d);
@@ -84,8 +84,13 @@ export function distinctDayCount(entries: DiaryEntry[]): number {
   return keys.size;
 }
 
-/** Below this many distinct days of coverage, a pattern claim is thin evidence rather than a trend. */
-export const MIN_SPREAD_DAYS = 4;
+/**
+ * Below this many distinct days of coverage, a pattern claim is thin
+ * evidence rather than a trend. Set relative to a 7-day window: 3 of 7
+ * flags the sparse case (1-2 check-in days that week) without firing
+ * on an ordinary every-2-to-3-days cadence.
+ */
+export const MIN_SPREAD_DAYS = 3;
 
 /** Whether the given entries are spread across enough distinct days to support a pattern claim. */
 export function hasSpreadCoverage(entries: DiaryEntry[], minDays: number = MIN_SPREAD_DAYS): boolean {
