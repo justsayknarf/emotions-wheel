@@ -238,7 +238,7 @@ function WeekTabContent({ entries, onDaySelect, onOpenEntry }: WeekTabProps) {
 
   return (
     <div style={{ padding: '12px 0' }}>
-      <WeekChart entries={entries} onDayTap={onDaySelect} />
+      <WeekChart entries={windowEntries} onDayTap={onDaySelect} />
       {showInvitation && (
         <p style={{ margin: '8px 16px 0', fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
           Patterns get clearer with more check-ins.

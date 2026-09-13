@@ -34,6 +34,14 @@ function yForValue(v: number): number {
 const TICK_HOURS = [0, 6, 12, 18];
 const TICK_LABELS: Record<number, string> = { 0: '12a', 6: '6a', 12: '12p', 18: '6p' };
 
+// Valence and arousal render identically apart from color and ceiling
+// opacity -- one series list drives both the segment and dot loops so
+// the two can't silently drift apart.
+const SERIES = [
+  { key: 'valence' as const, color: 'var(--ui-gold)', opacityMul: 0.9 },
+  { key: 'arousal' as const, color: 'var(--ui-recorded)', opacityMul: 1 },
+];
+
 export function DayChart({ sessions, onDotTap }: Props) {
   // Build data points: sorted by time, with session average
   type Point = { entry: DiaryEntry; hour: number; valence: number; arousal: number };
@@ -97,72 +105,34 @@ export function DayChart({ sessions, onDotTap }: Props) {
           strokeWidth={1}
         />
 
-        {/* Valence segments */}
-        {daySegments.map(({ i, j, weight }) => (
+        {/* Segments, one pass per series */}
+        {SERIES.flatMap(s => daySegments.map(({ i, j, weight }) => (
           <line
-            key={`v-seg-${i}-${j}`}
-            x1={xForHour(points[i].hour)} y1={yForValue(points[i].valence)}
-            x2={xForHour(points[j].hour)} y2={yForValue(points[j].valence)}
-            stroke="var(--ui-gold)"
+            key={`${s.key}-seg-${i}-${j}`}
+            x1={xForHour(points[i].hour)} y1={yForValue(points[i][s.key])}
+            x2={xForHour(points[j].hour)} y2={yForValue(points[j][s.key])}
+            stroke={s.color}
             strokeWidth={1.5}
             strokeLinecap="round"
-            opacity={0.9 * weight}
+            opacity={s.opacityMul * weight}
           />
-        ))}
+        )))}
 
-        {/* Arousal segments */}
-        {daySegments.map(({ i, j, weight }) => (
-          <line
-            key={`a-seg-${i}-${j}`}
-            x1={xForHour(points[i].hour)} y1={yForValue(points[i].arousal)}
-            x2={xForHour(points[j].hour)} y2={yForValue(points[j].arousal)}
-            stroke="var(--ui-recorded)"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            opacity={weight}
-          />
-        ))}
-
-        {/* Dots — valence */}
-        {points.map(p => (
-          <g key={`v-${p.entry.id}`}>
-            <circle
-              cx={xForHour(p.hour)}
-              cy={yForValue(p.valence)}
-              r={4}
-              fill="var(--ui-gold)"
-            />
+        {/* Dots, one pass per series */}
+        {SERIES.flatMap(s => points.map(p => (
+          <g key={`${s.key}-${p.entry.id}`}>
+            <circle cx={xForHour(p.hour)} cy={yForValue(p[s.key])} r={4} fill={s.color} />
             {/* Transparent hit target */}
             <circle
               cx={xForHour(p.hour)}
-              cy={yForValue(p.valence)}
+              cy={yForValue(p[s.key])}
               r={12}
               fill="transparent"
               style={{ cursor: 'pointer' }}
               onClick={() => onDotTap(p.entry)}
             />
           </g>
-        ))}
-
-        {/* Dots — arousal */}
-        {points.map(p => (
-          <g key={`a-${p.entry.id}`}>
-            <circle
-              cx={xForHour(p.hour)}
-              cy={yForValue(p.arousal)}
-              r={4}
-              fill="var(--ui-recorded)"
-            />
-            <circle
-              cx={xForHour(p.hour)}
-              cy={yForValue(p.arousal)}
-              r={12}
-              fill="transparent"
-              style={{ cursor: 'pointer' }}
-              onClick={() => onDotTap(p.entry)}
-            />
-          </g>
-        ))}
+        )))}
       </svg>
     </div>
   );

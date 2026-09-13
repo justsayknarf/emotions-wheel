@@ -31,6 +31,14 @@ function colCenterX(i: number): number {
   return i * COL_WIDTH + COL_WIDTH / 2;
 }
 
+// Valence and arousal render identically apart from color and ceiling
+// opacity -- one series list drives both the segment and dot loops so
+// the two can't silently drift apart.
+const SERIES = [
+  { key: 'valence' as const, color: 'var(--ui-gold)', opacityMul: 0.9 },
+  { key: 'arousal' as const, color: 'var(--ui-recorded)', opacityMul: 1 },
+];
+
 export function WeekChart({ entries, onDayTap }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(320);
@@ -92,37 +100,25 @@ export function WeekChart({ entries, onDayTap }: Props) {
               strokeWidth={1}
             />
 
-            {/* Valence segments */}
-            {weekSegments.map(({ i, j, weight }) => (
+            {/* Segments, one pass per series */}
+            {SERIES.flatMap(s => weekSegments.map(({ i, j, weight }) => (
               <line
-                key={`vs-${i}-${j}`}
-                x1={colCenterX(i)} y1={yForValue(data[i]!.valence)}
-                x2={colCenterX(j)} y2={yForValue(data[j]!.valence)}
-                stroke="var(--ui-gold)"
+                key={`${s.key}-${i}-${j}`}
+                x1={colCenterX(i)} y1={yForValue(data[i]![s.key])}
+                x2={colCenterX(j)} y2={yForValue(data[j]![s.key])}
+                stroke={s.color}
                 strokeWidth={1.5}
                 strokeLinecap="round"
-                opacity={0.9 * weight}
+                opacity={s.opacityMul * weight}
               />
-            ))}
-
-            {/* Arousal segments */}
-            {weekSegments.map(({ i, j, weight }) => (
-              <line
-                key={`as-${i}-${j}`}
-                x1={colCenterX(i)} y1={yForValue(data[i]!.arousal)}
-                x2={colCenterX(j)} y2={yForValue(data[j]!.arousal)}
-                stroke="var(--ui-recorded)"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                opacity={weight}
-              />
-            ))}
+            )))}
 
             {/* Dots */}
             {data.map((d, i) => d === null ? null : (
               <g key={`dots-${i}`}>
-                <circle cx={colCenterX(i)} cy={yForValue(d.valence)} r={3.5} fill="var(--ui-gold)" />
-                <circle cx={colCenterX(i)} cy={yForValue(d.arousal)} r={3.5} fill="var(--ui-recorded)" />
+                {SERIES.map(s => (
+                  <circle key={s.key} cx={colCenterX(i)} cy={yForValue(d[s.key])} r={3.5} fill={s.color} />
+                ))}
               </g>
             ))}
 

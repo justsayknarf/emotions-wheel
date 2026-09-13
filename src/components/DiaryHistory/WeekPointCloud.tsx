@@ -57,6 +57,8 @@ export function WeekPointCloud({ windowEntries, onOpenEntry }: Props) {
             style={{
               position: 'absolute',
               top: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
               marginTop: 8,
               background: 'var(--ui-surface)',
               border: '1px solid var(--ui-border)',
