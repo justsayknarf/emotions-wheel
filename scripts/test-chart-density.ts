@@ -23,7 +23,6 @@ function check(name: string, ok: boolean, detail: string) {
 }
 
 const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
 
 // --- gapWeight ---
 check('gapWeight: full weight at the boundary', gapWeight(6 * HOUR, 6 * HOUR, 24 * HOUR) === 1, 'weight at gap === fullWeightMs');
