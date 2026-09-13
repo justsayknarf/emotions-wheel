@@ -1,3 +1,4 @@
+import { euclideanDist } from '../hooks/useProximity';
 import type { DiaryEntry, PinEntry } from '../types';
 
 export interface Aggregate {
@@ -106,6 +107,35 @@ export function gapWeight(gapMs: number, fullWeightMs: number, decayMs: number):
 /** Below this weight, a segment is not drawn at all rather than rendered near-invisibly. */
 export const MIN_RENDER_WEIGHT = 0.08;
 
+export interface WeightedSegment {
+  i: number;
+  j: number;
+  weight: number;
+}
+
+/**
+ * Connects each pair of consecutive present indices, weighting the
+ * connection by the gap between them (via `gapMsBetween`) and dropping it
+ * below `MIN_RENDER_WEIGHT`. Shared by DayChart (hour-scale gaps within a
+ * day) and WeekChart (day-scale gaps across the week) -- only the index
+ * source and gap measurement differ.
+ */
+export function buildWeightedSegments(
+  presentIndices: number[],
+  gapMsBetween: (i: number, j: number) => number,
+  fullWeightMs: number,
+  decayMs: number,
+): WeightedSegment[] {
+  const segments: WeightedSegment[] = [];
+  for (let k = 1; k < presentIndices.length; k++) {
+    const i = presentIndices[k - 1];
+    const j = presentIndices[k];
+    const weight = gapWeight(gapMsBetween(i, j), fullWeightMs, decayMs);
+    if (weight > MIN_RENDER_WEIGHT) segments.push({ i, j, weight });
+  }
+  return segments;
+}
+
 /**
  * Tap-disambiguation radius in the app's (x, y) pin-coordinate space
  * (each axis −1..1), not pixels — independent of how large the panel
@@ -116,5 +146,5 @@ export const PIN_OVERLAP_RADIUS = 0.12;
 
 /** Every pin (including `target`) within `radius` of `target`, for resolving an ambiguous tap. */
 export function nearestPins(pins: PinEntry[], target: PinEntry, radius: number = PIN_OVERLAP_RADIUS): PinEntry[] {
-  return pins.filter(p => Math.hypot(p.x - target.x, p.y - target.y) <= radius);
+  return pins.filter(p => euclideanDist(p.x, p.y, target.x, target.y) <= radius);
 }

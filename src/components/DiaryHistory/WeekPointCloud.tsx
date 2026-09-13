@@ -1,21 +1,22 @@
 import { useState } from 'react';
 import { MiniCircumplex } from './MiniCircumplex';
-import { entriesInWindow, nearestPins, last30Days } from '../../utils/diaryAggregation';
+import { nearestPins } from '../../utils/diaryAggregation';
 import { formatRelative } from '../../utils/formatDate';
 import type { DiaryEntry, PinEntry } from '../../types';
 
 interface Props {
-  entries: DiaryEntry[];
+  // Already filtered to the visible window by the caller, which needs the
+  // same window for its own coverage check -- computed once, shared here.
+  windowEntries: DiaryEntry[];
   onOpenEntry: (entry: DiaryEntry) => void;
 }
 
 // Where recent check-ins have landed, independent of when they happened —
 // a distribution rather than a time series, so it stays meaningful even
 // when the charts above it are too sparse to read as a trend.
-export function WeekPointCloud({ entries, onOpenEntry }: Props) {
+export function WeekPointCloud({ windowEntries, onOpenEntry }: Props) {
   const [overlapPicker, setOverlapPicker] = useState<DiaryEntry[] | null>(null);
 
-  const windowEntries = entriesInWindow(entries, last30Days());
   const pins: PinEntry[] = windowEntries.flatMap(e => e.pins);
   const entryByPinId = new Map<string, DiaryEntry>();
   for (const entry of windowEntries) {
@@ -36,8 +37,9 @@ export function WeekPointCloud({ entries, onOpenEntry }: Props) {
       }
     }
 
-    if (distinctEntries.length <= 1) {
-      if (distinctEntries[0]) onOpenEntry(distinctEntries[0]);
+    // nearestPins always includes `target` itself, so this is never empty.
+    if (distinctEntries.length === 1) {
+      onOpenEntry(distinctEntries[0]);
     } else {
       setOverlapPicker(distinctEntries);
     }

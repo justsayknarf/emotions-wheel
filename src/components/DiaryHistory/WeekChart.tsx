@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { last30Days, dailyAggregates, dateKey, gapWeight, MIN_RENDER_WEIGHT } from '../../utils/diaryAggregation';
+import { last30Days, dailyAggregates, dateKey, buildWeightedSegments } from '../../utils/diaryAggregation';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
@@ -55,18 +55,17 @@ export function WeekChart({ entries, onDayTap }: Props) {
 
   // Connect each day with data to the next day with data (skipping gaps),
   // weighting each connecting segment by how much time that gap spans.
-  // A gap wide enough to fall below MIN_RENDER_WEIGHT draws no segment at
+  // A gap wide enough to fall below the render floor draws no segment at
   // all -- the formula's own limiting case, not a separate break rule.
   const presentIndices: number[] = [];
   data.forEach((d, i) => { if (d !== null) presentIndices.push(i); });
 
-  const weekSegments: Array<{ i: number; j: number; weight: number }> = [];
-  for (let k = 1; k < presentIndices.length; k++) {
-    const i = presentIndices[k - 1];
-    const j = presentIndices[k];
-    const weight = gapWeight((j - i) * DAY_MS, WEEK_FULL_WEIGHT_MS, WEEK_DECAY_MS);
-    if (weight > MIN_RENDER_WEIGHT) weekSegments.push({ i, j, weight });
-  }
+  const weekSegments = buildWeightedSegments(
+    presentIndices,
+    (i, j) => (j - i) * DAY_MS,
+    WEEK_FULL_WEIGHT_MS,
+    WEEK_DECAY_MS,
+  );
 
   const maxDrag = Math.max(0, SVG_W - containerWidth);
 

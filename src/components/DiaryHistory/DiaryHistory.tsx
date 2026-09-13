@@ -233,7 +233,8 @@ interface WeekTabProps {
 }
 
 function WeekTabContent({ entries, onDaySelect, onOpenEntry }: WeekTabProps) {
-  const showInvitation = !hasSpreadCoverage(entriesInWindow(entries, last30Days()));
+  const windowEntries = entriesInWindow(entries, last30Days());
+  const showInvitation = !hasSpreadCoverage(windowEntries);
 
   return (
     <div style={{ padding: '12px 0' }}>
@@ -243,7 +244,7 @@ function WeekTabContent({ entries, onDaySelect, onOpenEntry }: WeekTabProps) {
           Patterns get clearer with more check-ins.
         </p>
       )}
-      <WeekPointCloud entries={entries} onOpenEntry={onOpenEntry} />
+      <WeekPointCloud windowEntries={windowEntries} onOpenEntry={onOpenEntry} />
     </div>
   );
 }

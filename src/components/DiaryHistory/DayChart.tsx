@@ -1,4 +1,4 @@
-import { sessionAverage, gapWeight, MIN_RENDER_WEIGHT } from '../../utils/diaryAggregation';
+import { sessionAverage, buildWeightedSegments } from '../../utils/diaryAggregation';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
@@ -52,12 +52,12 @@ export function DayChart({ sessions, onDotTap }: Props) {
   // Connect each consecutive pair of check-ins, weighting the segment by
   // how many hours separate them -- an 8am/11pm pair now reads as thin
   // evidence instead of a confident, continuous line.
-  const daySegments: Array<{ i: number; weight: number }> = [];
-  for (let i = 1; i < points.length; i++) {
-    const gapMs = (points[i].hour - points[i - 1].hour) * HOUR_MS;
-    const weight = gapWeight(gapMs, DAY_FULL_WEIGHT_MS, DAY_DECAY_MS);
-    if (weight > MIN_RENDER_WEIGHT) daySegments.push({ i, weight });
-  }
+  const daySegments = buildWeightedSegments(
+    points.map((_, i) => i),
+    (i, j) => (points[j].hour - points[i].hour) * HOUR_MS,
+    DAY_FULL_WEIGHT_MS,
+    DAY_DECAY_MS,
+  );
 
   return (
     <div style={{
@@ -98,11 +98,11 @@ export function DayChart({ sessions, onDotTap }: Props) {
         />
 
         {/* Valence segments */}
-        {daySegments.map(({ i, weight }) => (
+        {daySegments.map(({ i, j, weight }) => (
           <line
-            key={`v-seg-${i}`}
-            x1={xForHour(points[i - 1].hour)} y1={yForValue(points[i - 1].valence)}
-            x2={xForHour(points[i].hour)} y2={yForValue(points[i].valence)}
+            key={`v-seg-${i}-${j}`}
+            x1={xForHour(points[i].hour)} y1={yForValue(points[i].valence)}
+            x2={xForHour(points[j].hour)} y2={yForValue(points[j].valence)}
             stroke="var(--ui-gold)"
             strokeWidth={1.5}
             strokeLinecap="round"
@@ -111,11 +111,11 @@ export function DayChart({ sessions, onDotTap }: Props) {
         ))}
 
         {/* Arousal segments */}
-        {daySegments.map(({ i, weight }) => (
+        {daySegments.map(({ i, j, weight }) => (
           <line
-            key={`a-seg-${i}`}
-            x1={xForHour(points[i - 1].hour)} y1={yForValue(points[i - 1].arousal)}
-            x2={xForHour(points[i].hour)} y2={yForValue(points[i].arousal)}
+            key={`a-seg-${i}-${j}`}
+            x1={xForHour(points[i].hour)} y1={yForValue(points[i].arousal)}
+            x2={xForHour(points[j].hour)} y2={yForValue(points[j].arousal)}
             stroke="var(--ui-recorded)"
             strokeWidth={1.5}
             strokeLinecap="round"
