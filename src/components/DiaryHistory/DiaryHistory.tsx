@@ -6,7 +6,7 @@ import { DiaryEntryRow } from './DiaryEntryRow';
 import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { SessionDetailCard } from './SessionDetailCard';
-import { sessionsForDay } from '../../utils/diaryAggregation';
+import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last30Days } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
 import type { DiaryEntry } from '../../types';
 
@@ -230,9 +230,16 @@ interface WeekTabProps {
 }
 
 function WeekTabContent({ entries, onDaySelect }: WeekTabProps) {
+  const showInvitation = !hasSpreadCoverage(entriesInWindow(entries, last30Days()));
+
   return (
     <div style={{ padding: '12px 0' }}>
       <WeekChart entries={entries} onDayTap={onDaySelect} />
+      {showInvitation && (
+        <p style={{ margin: '8px 16px 0', fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
+          Patterns get clearer with more check-ins.
+        </p>
+      )}
     </div>
   );
 }
