@@ -78,7 +78,23 @@ export function WeekChart({ entries, onDayTap }: Props) {
   const maxDrag = Math.max(0, SVG_W - containerWidth);
 
   return (
-    <div>
+    <div style={{
+      margin: '0 16px 12px',
+      background: 'var(--ui-surface)',
+      borderRadius: 12,
+      padding: '10px 0 0',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '0 16px 2px',
+        fontSize: 9,
+        fontWeight: 500,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        color: 'var(--ui-text-2)',
+      }}>
+        Trend · Last 30 Days
+      </div>
       <ChartLegend style={{ padding: '0 16px 8px' }} />
       <div ref={containerRef} style={{ overflow: 'hidden', position: 'relative' }}>
         <motion.div

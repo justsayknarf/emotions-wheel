@@ -46,51 +46,69 @@ export function WeekPointCloud({ windowEntries, onOpenEntry }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 16px', position: 'relative' }}>
-      <MiniCircumplex pins={pins} size={112} showAxes onPinTap={handlePinTap} />
+    <div style={{
+      margin: '0 16px 4px',
+      background: 'var(--ui-surface)',
+      borderRadius: 12,
+      padding: '10px 0 16px',
+    }}>
+      <div style={{
+        padding: '0 16px 10px',
+        fontSize: 9,
+        fontWeight: 500,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        color: 'var(--ui-text-2)',
+      }}>
+        Positions · Last 30 Days
+      </div>
 
-      {overlapPicker && (
-        <>
-          {/* Backdrop — dismiss by tapping outside the picker */}
-          <div onClick={() => setOverlapPicker(null)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              marginTop: 8,
-              background: 'var(--ui-surface)',
-              border: '1px solid var(--ui-border)',
-              borderRadius: 10,
-              padding: 6,
-              zIndex: 11,
-              minWidth: 160,
-            }}
-          >
-            {overlapPicker.map(entry => (
-              <button
-                key={entry.id}
-                onClick={() => { onOpenEntry(entry); setOverlapPicker(null); }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--ui-text-1)',
-                  fontSize: 12,
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                }}
-              >
-                {formatRelative(entry.timestamp)}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+        <MiniCircumplex pins={pins} size={112} showAxes onPinTap={handlePinTap} />
+
+        {overlapPicker && (
+          <>
+            {/* Backdrop — dismiss by tapping outside the picker */}
+            <div onClick={() => setOverlapPicker(null)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                marginTop: 8,
+                background: 'var(--ui-surface)',
+                border: '1px solid var(--ui-border)',
+                borderRadius: 10,
+                padding: 6,
+                zIndex: 11,
+                minWidth: 160,
+              }}
+            >
+              {overlapPicker.map(entry => (
+                <button
+                  key={entry.id}
+                  onClick={() => { onOpenEntry(entry); setOverlapPicker(null); }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--ui-text-1)',
+                    fontSize: 12,
+                    padding: '6px 8px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {formatRelative(entry.timestamp)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
