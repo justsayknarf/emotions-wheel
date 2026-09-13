@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { last30Days, dailyAggregates } from '../../utils/diaryAggregation';
+import { last30Days, dailyAggregates, dateKey, gapWeight, MIN_RENDER_WEIGHT } from '../../utils/diaryAggregation';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
@@ -15,6 +15,13 @@ const SVG_W = COL_WIDTH * TOTAL_COLS; // 420
 const SVG_H = 80;
 const MARGIN_Y = 10;
 const CHART_H = SVG_H - MARGIN_Y * 2 - 14; // 14px for day labels
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Adjacent days render at full weight; a 4-day gap renders faint; a 7+ day
+// gap falls below MIN_RENDER_WEIGHT and isn't drawn. Suggested starting
+// values (see plan U2) -- tune by eye against real data.
+const WEEK_FULL_WEIGHT_MS = DAY_MS;
+const WEEK_DECAY_MS = 2 * DAY_MS;
 
 function yForValue(v: number): number {
   return MARGIN_Y + ((1 - v) / 2) * CHART_H;
@@ -42,13 +49,24 @@ export function WeekChart({ entries, onDayTap }: Props) {
   // Build per-day data keyed by array index
   type DayData = { valence: number; arousal: number } | null;
   const data: DayData[] = days.map(d => {
-    const key = toDateKey(d);
+    const key = dateKey(d);
     return aggregates.get(key) ?? null;
   });
 
-  // Build polyline segments (break on null days)
-  const valenceSegments = buildSegments(data, d => d?.valence);
-  const arousalSegments = buildSegments(data, d => d?.arousal);
+  // Connect each day with data to the next day with data (skipping gaps),
+  // weighting each connecting segment by how much time that gap spans.
+  // A gap wide enough to fall below MIN_RENDER_WEIGHT draws no segment at
+  // all -- the formula's own limiting case, not a separate break rule.
+  const presentIndices: number[] = [];
+  data.forEach((d, i) => { if (d !== null) presentIndices.push(i); });
+
+  const weekSegments: Array<{ i: number; j: number; weight: number }> = [];
+  for (let k = 1; k < presentIndices.length; k++) {
+    const i = presentIndices[k - 1];
+    const j = presentIndices[k];
+    const weight = gapWeight((j - i) * DAY_MS, WEEK_FULL_WEIGHT_MS, WEEK_DECAY_MS);
+    if (weight > MIN_RENDER_WEIGHT) weekSegments.push({ i, j, weight });
+  }
 
   const maxDrag = Math.max(0, SVG_W - containerWidth);
 
@@ -75,30 +93,29 @@ export function WeekChart({ entries, onDayTap }: Props) {
               strokeWidth={1}
             />
 
-            {/* Valence polyline segments */}
-            {valenceSegments.map((seg, i) => (
-              <polyline
-                key={`vs-${i}`}
-                points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.valence)}`).join(' ')}
-                fill="none"
+            {/* Valence segments */}
+            {weekSegments.map(({ i, j, weight }) => (
+              <line
+                key={`vs-${i}-${j}`}
+                x1={colCenterX(i)} y1={yForValue(data[i]!.valence)}
+                x2={colCenterX(j)} y2={yForValue(data[j]!.valence)}
                 stroke="var(--ui-gold)"
                 strokeWidth={1.5}
                 strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.9}
+                opacity={0.9 * weight}
               />
             ))}
 
-            {/* Arousal polyline segments */}
-            {arousalSegments.map((seg, i) => (
-              <polyline
-                key={`as-${i}`}
-                points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.arousal)}`).join(' ')}
-                fill="none"
+            {/* Arousal segments */}
+            {weekSegments.map(({ i, j, weight }) => (
+              <line
+                key={`as-${i}-${j}`}
+                x1={colCenterX(i)} y1={yForValue(data[i]!.arousal)}
+                x2={colCenterX(j)} y2={yForValue(data[j]!.arousal)}
                 stroke="var(--ui-recorded)"
                 strokeWidth={1.5}
                 strokeLinecap="round"
-                strokeLinejoin="round"
+                opacity={weight}
               />
             ))}
 
@@ -145,30 +162,3 @@ export function WeekChart({ entries, onDayTap }: Props) {
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-/** Split a data array into contiguous runs of non-null values. */
-function buildSegments<T>(
-  data: (T | null)[],
-  _getValue: (d: T | null) => number | undefined
-): Array<Array<{ idx: number }>> {
-  const segments: Array<Array<{ idx: number }>> = [];
-  let current: Array<{ idx: number }> | null = null;
-
-  for (let i = 0; i < data.length; i++) {
-    if (data[i] !== null) {
-      if (!current) { current = []; segments.push(current); }
-      current.push({ idx: i });
-    } else {
-      current = null;
-    }
-  }
-  return segments;
-}
