@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { last30Days, dailyAggregates } from '../../utils/diaryAggregation';
+import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -52,91 +53,94 @@ export function WeekChart({ entries, onDayTap }: Props) {
   const maxDrag = Math.max(0, SVG_W - containerWidth);
 
   return (
-    <div ref={containerRef} style={{ overflow: 'hidden', position: 'relative' }}>
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: -maxDrag, right: 0 }}
-        dragElastic={0.05}
-        initial={{ x: -maxDrag }}
-        animate={{ x: -maxDrag }}
-        style={{ width: SVG_W, cursor: 'grab' }}
-        onPointerDown={e => e.currentTarget.style.cursor = 'grabbing'}
-        onPointerUp={e => e.currentTarget.style.cursor = 'grab'}
-      >
-        <svg width={SVG_W} height={SVG_H} style={{ display: 'block', overflow: 'visible' }}>
-          {/* Zero line */}
-          <line
-            x1={0} y1={yForValue(0)}
-            x2={SVG_W} y2={yForValue(0)}
-            stroke="var(--ui-border)"
-            strokeWidth={1}
-          />
-
-          {/* Valence polyline segments */}
-          {valenceSegments.map((seg, i) => (
-            <polyline
-              key={`vs-${i}`}
-              points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.valence)}`).join(' ')}
-              fill="none"
-              stroke="var(--ui-gold)"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={0.9}
+    <div>
+      <ChartLegend style={{ padding: '0 16px 8px' }} />
+      <div ref={containerRef} style={{ overflow: 'hidden', position: 'relative' }}>
+        <motion.div
+          drag="x"
+          dragConstraints={{ left: -maxDrag, right: 0 }}
+          dragElastic={0.05}
+          initial={{ x: -maxDrag }}
+          animate={{ x: -maxDrag }}
+          style={{ width: SVG_W, cursor: 'grab' }}
+          onPointerDown={e => e.currentTarget.style.cursor = 'grabbing'}
+          onPointerUp={e => e.currentTarget.style.cursor = 'grab'}
+        >
+          <svg width={SVG_W} height={SVG_H} style={{ display: 'block', overflow: 'visible' }}>
+            {/* Zero line */}
+            <line
+              x1={0} y1={yForValue(0)}
+              x2={SVG_W} y2={yForValue(0)}
+              stroke="var(--ui-border)"
+              strokeWidth={1}
             />
-          ))}
 
-          {/* Arousal polyline segments */}
-          {arousalSegments.map((seg, i) => (
-            <polyline
-              key={`as-${i}`}
-              points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.arousal)}`).join(' ')}
-              fill="none"
-              stroke="var(--ui-gold-dim)"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          ))}
+            {/* Valence polyline segments */}
+            {valenceSegments.map((seg, i) => (
+              <polyline
+                key={`vs-${i}`}
+                points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.valence)}`).join(' ')}
+                fill="none"
+                stroke="var(--ui-gold)"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.9}
+              />
+            ))}
 
-          {/* Dots */}
-          {data.map((d, i) => d === null ? null : (
-            <g key={`dots-${i}`}>
-              <circle cx={colCenterX(i)} cy={yForValue(d.valence)} r={3.5} fill="var(--ui-gold)" />
-              <circle cx={colCenterX(i)} cy={yForValue(d.arousal)} r={3.5} fill="var(--ui-gold-dim)" />
-            </g>
-          ))}
+            {/* Arousal polyline segments */}
+            {arousalSegments.map((seg, i) => (
+              <polyline
+                key={`as-${i}`}
+                points={seg.map(({ idx }) => `${colCenterX(idx)},${yForValue(data[idx]!.arousal)}`).join(' ')}
+                fill="none"
+                stroke="var(--ui-recorded)"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
 
-          {/* Day labels every 7 columns */}
-          {days.map((day, i) => i % 7 === 0 && (
-            <text
-              key={`lbl-${i}`}
-              x={colCenterX(i)}
-              y={SVG_H - 3}
-              textAnchor="middle"
-              fontSize={7}
-              fill="var(--ui-text-3)"
-              fontFamily="inherit"
-            >
-              {day.getDate()}
-            </text>
-          ))}
+            {/* Dots */}
+            {data.map((d, i) => d === null ? null : (
+              <g key={`dots-${i}`}>
+                <circle cx={colCenterX(i)} cy={yForValue(d.valence)} r={3.5} fill="var(--ui-gold)" />
+                <circle cx={colCenterX(i)} cy={yForValue(d.arousal)} r={3.5} fill="var(--ui-recorded)" />
+              </g>
+            ))}
 
-          {/* Per-column tap targets */}
-          {days.map((day, i) => (
-            <rect
-              key={`hit-${i}`}
-              x={i * COL_WIDTH}
-              y={0}
-              width={COL_WIDTH}
-              height={SVG_H - 14}
-              fill="transparent"
-              style={{ cursor: 'pointer' }}
-              onClick={() => onDayTap(day)}
-            />
-          ))}
-        </svg>
-      </motion.div>
+            {/* Day labels every 7 columns */}
+            {days.map((day, i) => i % 7 === 0 && (
+              <text
+                key={`lbl-${i}`}
+                x={colCenterX(i)}
+                y={SVG_H - 3}
+                textAnchor="middle"
+                fontSize={7}
+                fill="var(--ui-text-3)"
+                fontFamily="inherit"
+              >
+                {day.getDate()}
+              </text>
+            ))}
+
+            {/* Per-column tap targets */}
+            {days.map((day, i) => (
+              <rect
+                key={`hit-${i}`}
+                x={i * COL_WIDTH}
+                y={0}
+                width={COL_WIDTH}
+                height={SVG_H - 14}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onDayTap(day)}
+              />
+            ))}
+          </svg>
+        </motion.div>
+      </div>
     </div>
   );
 }

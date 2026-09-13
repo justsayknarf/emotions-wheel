@@ -1,4 +1,5 @@
 import { sessionAverage } from '../../utils/diaryAggregation';
+import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -50,9 +51,10 @@ export function DayChart({ sessions, onDotTap }: Props) {
       margin: '0 16px 4px',
       background: 'var(--ui-surface)',
       borderRadius: 12,
-      padding: '8px 0 0',
+      padding: '10px 0 0',
       overflow: 'hidden',
     }}>
+      <ChartLegend style={{ padding: '0 14px 8px' }} />
       <svg
         width="100%"
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -100,7 +102,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
           <polyline
             points={arousalPoints}
             fill="none"
-            stroke="var(--ui-gold-dim)"
+            stroke="var(--ui-recorded)"
             strokeWidth={1.5}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -135,7 +137,7 @@ export function DayChart({ sessions, onDotTap }: Props) {
               cx={xForHour(p.hour)}
               cy={yForValue(p.arousal)}
               r={4}
-              fill="var(--ui-gold-dim)"
+              fill="var(--ui-recorded)"
             />
             <circle
               cx={xForHour(p.hour)}
