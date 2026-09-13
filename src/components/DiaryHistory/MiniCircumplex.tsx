@@ -10,9 +10,13 @@ interface Props {
   // opt in where a single, unfamiliar instance needs its axes legible
   // at a glance rather than implied.
   showAxes?: boolean;
+  // Makes each pin's dot tappable — off by default (undefined) so the two
+  // existing read-only call sites (SessionDetailCard, SavedCheckInSummary)
+  // are unaffected, same reasoning as showAxes above.
+  onPinTap?: (pinId: string) => void;
 }
 
-export function MiniCircumplex({ pins, size = 80, showAxes = false }: Props) {
+export function MiniCircumplex({ pins, size = 80, showAxes = false, onPinTap }: Props) {
   return (
     <div style={{
       width: size,
@@ -42,7 +46,23 @@ export function MiniCircumplex({ pins, size = 80, showAxes = false }: Props) {
             top: `${toPercent(-pin.y)}%`,
             transform: 'translate(-50%, -50%)',
           }}
-        />
+        >
+          {onPinTap && (
+            <button
+              onClick={() => onPinTap(pin.id)}
+              aria-label={`Open check-in at ${pin.x.toFixed(2)}, ${pin.y.toFixed(2)}`}
+              style={{
+                position: 'absolute',
+                inset: -8,
+                background: 'transparent',
+                border: 'none',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            />
+          )}
+        </div>
       ))}
     </div>
   );
