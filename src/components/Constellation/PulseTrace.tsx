@@ -96,10 +96,18 @@ export function PulseTrace({ entries, onPointClick }: Props) {
     };
 
     let raf = 0;
-    const start = performance.now();
+    // `start` is set from the rAF callback's own first timestamp, not a
+    // separate performance.now() call -- an rAF timestamp can reflect a
+    // frame that began slightly before a performance.now() read moments
+    // later in the same synchronous execution, which made the first
+    // frame's elapsed time go negative (t < 0 sent posAt() to a
+    // negative array index, throwing before the loop could reschedule
+    // itself -- the trail silently never appeared).
+    let start: number | null = null;
     let prev = posAt(0);
 
     const frame = (now: number) => {
+      if (start === null) start = now;
       const t = (now - start) / 1000;
 
       // Fade the whole trail toward transparent — older glow dissipates.
