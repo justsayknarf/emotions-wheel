@@ -1,4 +1,5 @@
-import type { DiaryEntry } from '../types';
+import { euclideanDist, SELECTION_RADIUS } from '../hooks/useProximity';
+import type { DiaryEntry, PinEntry } from '../types';
 
 export interface Aggregate {
   valence: number;
@@ -14,7 +15,7 @@ export function sessionAverage(entry: DiaryEntry): Aggregate | null {
 }
 
 /** ISO date string key YYYY-MM-DD for a given Date in local time. */
-function dateKey(d: Date): string {
+export function dateKey(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -54,15 +55,105 @@ export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] 
   return entries.filter(e => new Date(e.timestamp).toDateString() === target);
 }
 
-/** Array of 30 Date objects: [today−29, …, today]. Index 29 is today. */
-export function last30Days(): Date[] {
+/** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. */
+export function last7Days(): Date[] {
   const days: Date[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  for (let i = 29; i >= 0; i--) {
+  for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     days.push(d);
   }
   return days;
+}
+
+/** Filter entries to those falling on one of the given days (by local calendar date). */
+export function entriesInWindow(entries: DiaryEntry[], days: Date[]): DiaryEntry[] {
+  const keys = new Set(days.map(dateKey));
+  return entries.filter(e => keys.has(dateKey(new Date(e.timestamp))));
+}
+
+/** Count of distinct calendar days with at least one pin among the given entries. */
+export function distinctDayCount(entries: DiaryEntry[]): number {
+  const keys = new Set<string>();
+  for (const entry of entries) {
+    if (entry.pins.length === 0) continue;
+    keys.add(dateKey(new Date(entry.timestamp)));
+  }
+  return keys.size;
+}
+
+/**
+ * Below this many distinct days of coverage, a pattern claim is thin
+ * evidence rather than a trend. Set relative to a 7-day window: 3 of 7
+ * flags the sparse case (1-2 check-in days that week) without firing
+ * on an ordinary every-2-to-3-days cadence.
+ */
+export const MIN_SPREAD_DAYS = 3;
+
+/** Whether the given entries are spread across enough distinct days to support a pattern claim. */
+export function hasSpreadCoverage(entries: DiaryEntry[], minDays: number = MIN_SPREAD_DAYS): boolean {
+  return distinctDayCount(entries) >= minDays;
+}
+
+/**
+ * Visual weight for a line segment spanning `gapMs`: full weight up to
+ * `fullWeightMs`, decaying exponentially beyond it. Callers pick
+ * `fullWeightMs`/`decayMs` for their own granularity (hours for an
+ * intra-day chart, days for a multi-day one) — the decay shape is shared,
+ * the scale is not.
+ */
+export function gapWeight(gapMs: number, fullWeightMs: number, decayMs: number): number {
+  if (gapMs <= fullWeightMs) return 1;
+  return Math.exp(-(gapMs - fullWeightMs) / decayMs);
+}
+
+/** Below this weight, a segment is not drawn at all rather than rendered near-invisibly. */
+export const MIN_RENDER_WEIGHT = 0.08;
+
+export interface WeightedSegment {
+  i: number;
+  j: number;
+  weight: number;
+}
+
+/**
+ * Connects each pair of consecutive present indices, weighting the
+ * connection by the gap between them (via `gapMsBetween`) and dropping it
+ * below `MIN_RENDER_WEIGHT`. Shared by DayChart (hour-scale gaps within a
+ * day) and WeekChart (day-scale gaps across the week) -- only the index
+ * source and gap measurement differ.
+ */
+export function buildWeightedSegments(
+  presentIndices: number[],
+  gapMsBetween: (i: number, j: number) => number,
+  fullWeightMs: number,
+  decayMs: number,
+): WeightedSegment[] {
+  const segments: WeightedSegment[] = [];
+  for (let k = 1; k < presentIndices.length; k++) {
+    const i = presentIndices[k - 1];
+    const j = presentIndices[k];
+    const weight = gapWeight(gapMsBetween(i, j), fullWeightMs, decayMs);
+    if (weight > MIN_RENDER_WEIGHT) segments.push({ i, j, weight });
+  }
+  return segments;
+}
+
+/**
+ * Tap-disambiguation radius in the app's (x, y) pin-coordinate space
+ * (each axis −1..1), not pixels — independent of how large the panel
+ * that renders these pins happens to be. Derived from the field's own
+ * `SELECTION_RADIUS` (rather than a fully independent constant) so a
+ * retune of one is a visible prompt to reconsider the other, offset
+ * down since the point-cloud panel's much smaller rendered size (~112px
+ * suggested) needs a tighter normalized tolerance for "visually the
+ * same dot" than the full-size field's hover-selection distance does.
+ */
+export const PIN_OVERLAP_RADIUS = SELECTION_RADIUS - 0.03;
+
+/** Every pin (including `target`) within `radius` of `target`, for resolving an ambiguous tap. */
+export function nearestPins(pins: PinEntry[], target: PinEntry, radius: number = PIN_OVERLAP_RADIUS): PinEntry[] {
+  return pins.filter(p => euclideanDist(p.x, p.y, target.x, target.y) <= radius);
 }
