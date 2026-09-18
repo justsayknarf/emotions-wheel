@@ -1,3 +1,5 @@
+import { dateKey } from './diaryAggregation';
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     weekday: 'short',
@@ -32,7 +34,7 @@ export function startOfDay(d: Date): number {
 
 /** Whether two dates fall on the same local calendar day. */
 export function isSameDay(a: Date, b: Date): boolean {
-  return startOfDay(a) === startOfDay(b);
+  return dateKey(a) === dateKey(b);
 }
 
 /** Short weekday label, e.g. "Tue" -- shared by WeekChart's day columns and DailySummaryRow. */

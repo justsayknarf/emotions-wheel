@@ -22,42 +22,11 @@ export function dateKey(d: Date): string {
 }
 
 /**
- * Per-day aggregate across all sessions. Each day's value is the mean of
- * every pin across every session recorded on that calendar day.
- * Days with no sessions are absent from the map.
- */
-export function dailyAggregates(entries: DiaryEntry[]): Map<string, Aggregate> {
-  const buckets = new Map<string, { vSum: number; aSum: number; count: number }>();
-
-  for (const entry of entries) {
-    if (entry.pins.length === 0) continue;
-    const key = dateKey(new Date(entry.timestamp));
-    const existing = buckets.get(key) ?? { vSum: 0, aSum: 0, count: 0 };
-    for (const pin of entry.pins) {
-      existing.vSum += pin.x;
-      existing.aSum += pin.y;
-      existing.count += 1;
-    }
-    buckets.set(key, existing);
-  }
-
-  const result = new Map<string, Aggregate>();
-  for (const [key, { vSum, aSum, count }] of buckets) {
-    result.set(key, { valence: vSum / count, arousal: aSum / count });
-  }
-  return result;
-}
-
-/** Filter entries to those recorded on the same calendar day as `date` (local time). */
-export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] {
-  const target = date.toDateString();
-  return entries.filter(e => new Date(e.timestamp).toDateString() === target);
-}
-
-/**
  * Buckets entries by calendar day in one pass -- for callers that need every
  * day's sessions (e.g. a week of daily summary rows), so they don't call
  * sessionsForDay once per day and re-scan the full entry list each time.
+ * The single canonical day-bucketing pass -- dailyAggregates and
+ * distinctDayCount build on this rather than re-deriving their own key.
  */
 export function groupByDay(entries: DiaryEntry[]): Map<string, DiaryEntry[]> {
   const buckets = new Map<string, DiaryEntry[]>();
@@ -68,6 +37,33 @@ export function groupByDay(entries: DiaryEntry[]): Map<string, DiaryEntry[]> {
     else buckets.set(key, [entry]);
   }
   return buckets;
+}
+
+/**
+ * Per-day aggregate across all sessions. Each day's value is the mean of
+ * every pin across every session recorded on that calendar day.
+ * Days with no sessions (or only zero-pin sessions) are absent from the map.
+ */
+export function dailyAggregates(entries: DiaryEntry[]): Map<string, Aggregate> {
+  const result = new Map<string, Aggregate>();
+  for (const [key, dayEntries] of groupByDay(entries)) {
+    let vSum = 0, aSum = 0, count = 0;
+    for (const entry of dayEntries) {
+      for (const pin of entry.pins) {
+        vSum += pin.x;
+        aSum += pin.y;
+        count += 1;
+      }
+    }
+    if (count > 0) result.set(key, { valence: vSum / count, arousal: aSum / count });
+  }
+  return result;
+}
+
+/** Filter entries to those recorded on the same calendar day as `date` (local time). */
+export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] {
+  const target = dateKey(date);
+  return entries.filter(e => dateKey(new Date(e.timestamp)) === target);
 }
 
 /** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. */

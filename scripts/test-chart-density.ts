@@ -10,10 +10,12 @@ import {
   entriesInWindow,
   distinctDayCount,
   dailyAggregates,
+  sessionsForDay,
   capDots,
   groupByDay,
   MIN_SPREAD_DAYS,
 } from '../src/utils/diaryAggregation';
+import { isSameDay } from '../src/utils/formatDate';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
 let failures = 0;
@@ -121,6 +123,28 @@ const grouped = groupByDay(mixed);
 check('groupByDay: buckets by calendar day, same as dailyAggregates', grouped.size === 2, `${grouped.size} day bucket(s)`);
 const day0Entries = [...grouped.values()].find(v => v.length === 2);
 check('groupByDay: same-day entries land in one bucket, in original order', day0Entries?.length === 2, `${day0Entries?.length} entrie(s) in the 2-entry bucket`);
+
+// --- Regression: dailyAggregates still excludes zero-pin entries after deriving from groupByDay ---
+const withZeroPin = [...mixed, mkEntry(0, 14, [])];
+const aggWithZeroPin = dailyAggregates(withZeroPin);
+check(
+  'dailyAggregates: a zero-pin entry does not shift the day-0 average',
+  aggWithZeroPin.get([...agg.keys()][0])?.valence === day0.valence,
+  `day-0 valence unchanged at ${aggWithZeroPin.get([...agg.keys()][0])?.valence}`,
+);
+
+// --- sessionsForDay / isSameDay: converged on the same dateKey-based day identity ---
+const today = new Date();
+const todayEntry = mkEntry(0, 10);
+const yesterdayEntry = mkEntry(1, 10);
+const forToday = sessionsForDay([todayEntry, yesterdayEntry], today);
+check(
+  'sessionsForDay: returns only entries matching the target calendar day',
+  forToday.length === 1 && forToday[0].id === todayEntry.id,
+  `${forToday.length} entrie(s): ${forToday.map(e => e.id).join(', ')}`,
+);
+check('isSameDay: true for two timestamps on the same calendar day', isSameDay(today, new Date(todayEntry.timestamp)), 'same-day pair');
+check('isSameDay: false across a day boundary', !isSameDay(today, new Date(yesterdayEntry.timestamp)), 'cross-day pair');
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);

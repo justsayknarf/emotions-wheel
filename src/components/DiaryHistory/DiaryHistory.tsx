@@ -29,6 +29,18 @@ function backButtonStyle(fontSize: number): CSSProperties {
   };
 }
 
+// Week/day-detail swap: same fade + horizontal-offset shape, opposite sign
+// per direction (week slides in from the left, day-detail from the right).
+const screenTransition = { duration: 0.2 };
+function screenMotionProps(offsetX: number) {
+  return {
+    initial: { opacity: 0, x: offsetX },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: offsetX },
+    transition: screenTransition,
+  };
+}
+
 export function DiaryHistory({ entries, onBack }: Props) {
   const [dayDetailFor, setDayDetailFor] = useState<Date | null>(null);
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
@@ -73,8 +85,9 @@ export function DiaryHistory({ entries, onBack }: Props) {
         flexDirection: 'column',
       }}
       onPointerDownCapture={(e) => {
-        // Edge swipe to close — only from left 40px. Gated the same as the
-        // outer header's back button (handleOuterBack).
+        // Edge swipe to close — only from left 40px, a narrow zone so it
+        // doesn't compete with tapping content elsewhere on screen. Gated
+        // the same as the outer header's back button (handleOuterBack).
         if (openEntry === null && e.clientX <= 40) {
           swipeCloseRef.current = { x: e.clientX, y: e.clientY };
         }
@@ -144,23 +157,11 @@ export function DiaryHistory({ entries, onBack }: Props) {
       <div style={{ flex: 1, overflowY: 'auto', touchAction: 'pan-y' }}>
         <AnimatePresence mode="wait" initial={false}>
           {dayDetailFor === null ? (
-            <motion.div
-              key="week"
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -12 }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key="week" {...screenMotionProps(-12)}>
               <WeekScreen entries={entries} onSelectDay={setDayDetailFor} />
             </motion.div>
           ) : (
-            <motion.div
-              key="day"
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 12 }}
-              transition={{ duration: 0.2 }}
-            >
+            <motion.div key="day" {...screenMotionProps(12)}>
               <DayDetail
                 date={dayDetailFor}
                 sessions={daySessions}
@@ -194,12 +195,18 @@ interface WeekScreenProps {
 }
 
 function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
-  const days = last7Days();
-  const windowEntries = entriesInWindow(entries, days);
-  const showInvitation = !hasSpreadCoverage(windowEntries);
-  // One pass over windowEntries instead of re-scanning the full entries
-  // array once per day.
-  const byDay = groupByDay(windowEntries);
+  const { days, windowEntries, showInvitation, byDay } = useMemo(() => {
+    const days = last7Days();
+    const windowEntries = entriesInWindow(entries, days);
+    // One pass over windowEntries instead of re-scanning the full entries
+    // array once per day.
+    return {
+      days,
+      windowEntries,
+      showInvitation: !hasSpreadCoverage(windowEntries),
+      byDay: groupByDay(windowEntries),
+    };
+  }, [entries]);
 
   return (
     <div style={{ padding: '12px 0' }}>
@@ -212,7 +219,7 @@ function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
       <div style={{ padding: '4px 20px 0' }}>
         {[...days].reverse().map(day => (
           <DailySummaryRow
-            key={day.toDateString()}
+            key={dateKey(day)}
             date={day}
             sessions={byDay.get(dateKey(day)) ?? []}
             onSelect={onSelectDay}
@@ -236,6 +243,8 @@ interface DayDetailProps {
 }
 
 function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpenEntry }: DayDetailProps) {
+  const spreadPins = useMemo(() => sessions.flatMap(e => e.pins), [sessions]);
+
   return (
     <div>
       {/* In-app back control — returns to the week screen. Distinct from the
@@ -253,7 +262,7 @@ function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpe
 
       {sessions.length > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 12px' }}>
-          <MiniCircumplex pins={sessions.flatMap(e => e.pins)} size={90} showAxes />
+          <MiniCircumplex pins={spreadPins} size={90} showAxes />
         </div>
       )}
 

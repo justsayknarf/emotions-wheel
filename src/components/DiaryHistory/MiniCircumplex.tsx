@@ -5,10 +5,9 @@ interface Props {
   pins: PinEntry[];
   size?: number;
   // A faint crosshair through the center, clipped to the circle by the
-  // same overflow:hidden as the dots — off by default so the existing
-  // diary-history call site (a dense grid of these) is unaffected;
-  // opt in where a single, unfamiliar instance needs its axes legible
-  // at a glance rather than implied.
+  // same overflow:hidden as the dots — off by default so existing
+  // call sites are unaffected; opt in where a single, unfamiliar
+  // instance needs its axes legible at a glance rather than implied.
   showAxes?: boolean;
   // Makes each pin's dot tappable — off by default (undefined) so the two
   // existing read-only call sites (SessionDetailCard, SavedCheckInSummary)
