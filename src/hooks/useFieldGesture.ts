@@ -21,6 +21,15 @@ interface Options {
 // Exported for scripts/test-field-gesture.ts (U1): this repo has no
 // component-test harness, so the coordinate-normalization math is exercised
 // directly as pure logic rather than only live in the app.
+const clampUnit = (v: number) => Math.max(-1, Math.min(1, v));
+
+// Pointer capture (set on press, see onPointerDown below) keeps delivering
+// move/up events to the field's handlers even after the cursor leaves the
+// field element — e.g. a press-drag-release into the rail. Clamping here,
+// the one place every consumer (pin storage, the adjust sliders) reads
+// through, keeps an out-of-field release from ever producing a coordinate
+// beyond what the field — or a slider built to display [-1, 1] — can
+// represent.
 export function pixelToCoord(
   px: number,
   py: number,
@@ -32,7 +41,7 @@ export function pixelToCoord(
   const relY = py - rect.top;
   const coordX = ((relX / W - 0.05) / 0.9) * 2 - 1;
   const coordY = -(((relY / H - 0.05) / 0.9) * 2 - 1);
-  return { x: coordX, y: coordY };
+  return { x: clampUnit(coordX), y: clampUnit(coordY) };
 }
 
 export function useFieldGesture({
