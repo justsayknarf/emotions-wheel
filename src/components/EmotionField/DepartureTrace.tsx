@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { useReducedMotion } from 'framer-motion';
+import { themeRgba } from '../../config/themeColor';
 
 interface Props {
   // Increments once per departure commit (App's handlePinRelease) — the
@@ -18,14 +19,13 @@ interface Props {
   strength: number; // glow intensity/size multiplier
 }
 
-const REC: [number, number, number] = [124, 147, 168]; // --ui-recorded
 const ease = (u: number) => u * u * (3 - 2 * u); // smoothstep, matches AxisRadiance
 
 function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, `rgba(235,240,245,${a})`);
-  g.addColorStop(0.32, `rgba(${REC[0]},${REC[1]},${REC[2]},${a * 0.55})`);
-  g.addColorStop(1, `rgba(${REC[0]},${REC[1]},${REC[2]},0)`);
+  g.addColorStop(0, themeRgba('text', a));
+  g.addColorStop(0.32, themeRgba('recorded', a * 0.55));
+  g.addColorStop(1, themeRgba('recorded', 0));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);

@@ -43,7 +43,7 @@ const AXIS_LABEL: React.CSSProperties = {
 
 // Opaque bone — brightness is carried by the element's animated opacity, not the
 // colour alpha, so the labels can pulse above their emphasized level.
-const AXIS_TEXT = 'rgb(237,232,223)';
+const AXIS_TEXT = 'var(--ui-text-1)';
 
 // Partition once at module load — emotions array is a static import constant
 const surfaceEmotions = emotions.filter(e => e.depth === 'surface');
@@ -511,7 +511,7 @@ export function EmotionField({
   }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height, tuning]);
 
   // Axes read legibly at rest and brighten (emphasis) while the intro runs.
-  const crosshairColor = `rgba(201,168,124,${axisEmphasis ? 0.22 : 0.1})`;
+  const crosshairColor = `rgb(var(--ui-gold-rgb) / ${axisEmphasis ? 0.22 : 0.1})`;
   const AXIS_REST = 0.45;    // resting label opacity
   const AXIS_EMPH = 0.75;    // emphasized label opacity
 
@@ -621,7 +621,7 @@ export function EmotionField({
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: 'rgba(201,168,124,0.55)',
+            background: 'rgb(var(--ui-gold-rgb) / 0.55)',
             pointerEvents: 'none',
             zIndex: 6,
           }} />
@@ -634,7 +634,7 @@ export function EmotionField({
             width: 6,
             height: 6,
             borderRadius: '50%',
-            background: 'rgba(201,168,124,0.55)',
+            background: 'rgb(var(--ui-gold-rgb) / 0.55)',
             pointerEvents: 'none',
             zIndex: 6,
           }} />
@@ -727,7 +727,7 @@ export function EmotionField({
                     width: 8,
                     height: 8,
                     borderRadius: '50%',
-                    border: '1px solid rgba(201, 168, 124, 0.6)',
+                    border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
                     top: -4,
                     left: -4,
                   }}
@@ -746,7 +746,7 @@ export function EmotionField({
                         width: 12,
                         height: 12,
                         borderRadius: '50%',
-                        border: '1px solid rgba(201, 168, 124, 0.6)',
+                        border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
                         top: -6,
                         left: -6,
                       }}
@@ -762,8 +762,8 @@ export function EmotionField({
                     width: dotSize,
                     height: dotSize,
                     borderRadius: '50%',
-                    background: isEmphasized ? 'rgba(201, 168, 124, 1)' : 'rgba(201, 168, 124, 0.7)',
-                    boxShadow: isEmphasized ? '0 0 8px 1px rgba(201, 168, 124, 0.7)' : 'none',
+                    background: isEmphasized ? 'rgb(var(--ui-gold-rgb) / 1)' : 'rgb(var(--ui-gold-rgb) / 0.7)',
+                    boxShadow: isEmphasized ? '0 0 8px 1px rgb(var(--ui-gold-rgb) / 0.7)' : 'none',
                     top: -dotSize / 2,
                     left: -dotSize / 2,
                   }}
@@ -786,8 +786,8 @@ export function EmotionField({
           {liveDraft && (() => {
             const { x: gx, y: gy } = toFieldPx(liveDraft);
             const glowBackground = liveDraftAccent === 'recorded'
-              ? 'radial-gradient(circle, rgba(124,147,168,0.45) 0%, rgba(124,147,168,0.18) 42%, transparent 72%)'
-              : 'radial-gradient(circle, rgba(240,217,181,0.5) 0%, rgba(201,168,124,0.2) 42%, transparent 72%)';
+              ? 'radial-gradient(circle, rgb(var(--ui-recorded-rgb) / 0.45) 0%, rgb(var(--ui-recorded-rgb) / 0.18) 42%, transparent 72%)'
+              : 'radial-gradient(circle, color-mix(in srgb, var(--ui-gold-hi) 50%, transparent) 0%, rgb(var(--ui-gold-rgb) / 0.2) 42%, transparent 72%)';
             return (
               <div
                 style={{

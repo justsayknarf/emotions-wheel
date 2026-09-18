@@ -1,9 +1,9 @@
 ---
-name: Emotions Wheel
+name: Constellation
 last_updated: 2026-07-01
 ---
 
-# Emotions Wheel Strategy
+# Constellation Strategy
 
 ## Target problem
 
@@ -15,7 +15,7 @@ Record the coordinate in emotional space as the primary datum; treat words as op
 
 ## Who it's for
 
-**Primary:** The first-time emotional tracker — someone who wants to start paying attention to their emotional states but doesn't yet have the vocabulary. They're hiring Emotions Wheel to make the habit of emotional check-in low enough friction to actually stick.
+**Primary:** The first-time emotional tracker — someone who wants to start paying attention to their emotional states but doesn't yet have the vocabulary. They're hiring Constellation to make the habit of emotional check-in low enough friction to actually stick.
 
 ## Key metrics
 

@@ -22,8 +22,8 @@ export function FirstRunDemo({ fieldWidth, variant }: Props) {
       <div style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ui-text-3)' }}>
         Your check-in
       </div>
-      <div style={{ height: 12, width: '60%', borderRadius: 4, background: 'rgba(237,232,223,0.07)' }} />
-      <div style={{ height: 12, width: '85%', borderRadius: 4, background: 'rgba(237,232,223,0.05)' }} />
+      <div style={{ height: 12, width: '60%', borderRadius: 4, background: 'rgb(var(--ui-text-rgb) / 0.07)' }} />
+      <div style={{ height: 12, width: '85%', borderRadius: 4, background: 'rgb(var(--ui-text-rgb) / 0.05)' }} />
       <span style={{ fontSize: 12, fontWeight: 300, color: 'var(--ui-text-3)', marginTop: 2 }}>
         Your check-in will appear here
       </span>
@@ -50,7 +50,7 @@ export function FirstRunDemo({ fieldWidth, variant }: Props) {
             marginLeft: -8,
             marginTop: -8,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(201,168,124,0.55), rgba(201,168,124,0))',
+            background: 'radial-gradient(circle, rgb(var(--ui-gold-rgb) / 0.55), rgb(var(--ui-gold-rgb) / 0))',
           }}
         />
         {/* Demo pin ring */}
@@ -66,7 +66,7 @@ export function FirstRunDemo({ fieldWidth, variant }: Props) {
             marginLeft: -5,
             marginTop: -5,
             borderRadius: '50%',
-            border: '1px solid rgba(201,168,124,0.6)',
+            border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
           }}
         />
         {/* Demo pin dot */}
@@ -82,7 +82,7 @@ export function FirstRunDemo({ fieldWidth, variant }: Props) {
             marginLeft: -2,
             marginTop: -2,
             borderRadius: '50%',
-            background: 'rgba(201,168,124,0.85)',
+            background: 'rgb(var(--ui-gold-rgb) / 0.85)',
           }}
         />
       </div>

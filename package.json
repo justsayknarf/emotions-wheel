@@ -19,6 +19,9 @@
     "check:anchor": "npx tsx scripts/test-anchor-label.ts",
     "check:density": "npx tsx scripts/test-chart-density.ts",
     "check:tags": "npx tsx scripts/test-day-tags.ts",
+    "check:landing": "npx tsx scripts/test-landing-sky.ts",
+    "check:theme": "npx tsx scripts/test-theme.ts",
+    "sync:theme": "npx tsx scripts/sync-theme-tokens.ts",
     "preview": "vite preview"
   },
   "dependencies": {

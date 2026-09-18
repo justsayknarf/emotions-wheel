@@ -1,24 +1,13 @@
-import { useTheme, type ThemeVars } from '../../config/theme';
+import { DEFAULT_THEME_ID, DERIVED_TOKENS, THEME_TOKENS, THEMES, deriveVars, useTheme } from '../../config/theme';
 import { AdminShaderDetails } from './AdminShaderDetails';
 
 // Answers "which color is this token actually using" for whichever theme is
-// currently selected — the ten CSS custom properties index.css defines. The
+// currently selected. The token list is THEME_TOKENS in config/theme.ts, the
+// same registry the generated src/theme-tokens.css and the check script read,
+// so a token added there shows up here with no edit to this file. The
 // shader's full prop set (color1/2/3 + everything else ShaderGradient takes)
 // lives in AdminShaderDetails below, since those aren't CSS — they're
 // component props with their own Shape/Colors/Motion/View organization.
-
-const VAR_ROWS: { key: keyof ThemeVars; note: string }[] = [
-  { key: '--ui-bg', note: 'App ground' },
-  { key: '--ui-surface', note: 'Cards, drawers, nav' },
-  { key: '--ui-border', note: 'Hairlines' },
-  { key: '--ui-gold', note: 'Primary accent' },
-  { key: '--ui-gold-dim', note: 'Primary accent, backed off' },
-  { key: '--ui-recorded', note: 'Secondary accent / recorded pins' },
-  { key: '--ui-recorded-dim', note: 'Secondary accent, backed off' },
-  { key: '--ui-text-1', note: 'Primary text' },
-  { key: '--ui-text-2', note: 'Secondary text' },
-  { key: '--ui-text-3', note: 'Tertiary text / labels' },
-];
 
 function SectionLabel({ title, subtitle }: { title: string; subtitle: string }) {
   return (
@@ -54,15 +43,29 @@ function Row({ swatch, name, value, note }: { swatch: string | null; name: strin
 }
 
 export function AdminThemeInspector() {
-  const { theme } = useTheme();
+  const { id, theme } = useTheme();
+  const derived = deriveVars(theme.vars);
+  const shipped = THEMES[DEFAULT_THEME_ID].label;
 
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
-        <SectionLabel title="CSS custom properties" subtitle={`what "${theme.label}" sets on :root — src/index.css's own ten tokens`} />
+        <SectionLabel title="CSS custom properties" subtitle={`what "${theme.label}" sets on :root${id === DEFAULT_THEME_ID ? ' (the shipped default)' : ` — the shipped default is "${shipped}"`}`} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--ui-border)', border: '1px solid var(--ui-border)', borderRadius: 8, overflow: 'hidden' }}>
-          {VAR_ROWS.map(({ key, note }) => (
+          {THEME_TOKENS.map(({ key, note }) => (
             <Row key={key} swatch={theme.vars[key]} name={key} value={theme.vars[key]} note={note} />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <SectionLabel
+          title="Derived channels"
+          subtitle="computed from the tokens above, never authored: components write rgb(var(--ui-gold-rgb) / 0.3) to follow the theme"
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--ui-border)', border: '1px solid var(--ui-border)', borderRadius: 8, overflow: 'hidden' }}>
+          {DERIVED_TOKENS.map(({ key, from }) => (
+            <Row key={key} swatch={theme.vars[from]} name={key} value={derived[key]} note={`from ${from}`} />
           ))}
         </div>
       </div>

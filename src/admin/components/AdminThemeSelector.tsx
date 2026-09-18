@@ -87,6 +87,11 @@ export function AdminThemeSelector() {
               <span style={{ fontSize: 11, color: active ? 'var(--ui-text-1)' : 'var(--ui-text-2)', whiteSpace: 'nowrap' }}>
                 {t.label}
               </span>
+              {themeId === DEFAULT_THEME_ID && (
+                <span style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ui-gold-dim)' }}>
+                  shipped
+                </span>
+              )}
             </button>
           );
         })}

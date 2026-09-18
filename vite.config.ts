@@ -13,8 +13,8 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       input: (mode !== 'production'
-        ? { main: 'index.html', admin: 'admin.html' }
-        : { main: 'index.html' }) as Record<string, string>,
+        ? { main: 'index.html', landing: 'landing.html', admin: 'admin.html' }
+        : { main: 'index.html', landing: 'landing.html' }) as Record<string, string>,
     },
   },
 }))

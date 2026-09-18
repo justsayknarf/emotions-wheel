@@ -33,7 +33,7 @@ function Pill({ label, active, onToggle }: { label: string; active: boolean; onT
         padding: '2px 9px',
         borderRadius: 10,
         border: active ? '1px solid var(--ui-gold)' : '1px solid var(--ui-border)',
-        background: active ? 'rgba(201,168,124,0.18)' : 'transparent',
+        background: active ? 'rgb(var(--ui-gold-rgb) / 0.18)' : 'transparent',
         color: active ? 'var(--ui-gold)' : 'var(--ui-text-3)',
         fontSize: 10,
         cursor: 'pointer',

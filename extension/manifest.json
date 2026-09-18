@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Emotion Selector — New Tab Check-In",
-  "description": "Replaces the new tab page with a full Emotion Selector check-in, so opening a tab becomes a moment to notice how you feel.",
+  "name": "Constellation — New Tab Check-In",
+  "description": "Replaces the new tab page with a full Constellation check-in, so opening a tab becomes a moment to notice how you feel.",
   "version": "1.0.0",
   "chrome_url_overrides": {
     "newtab": "newtab.html"

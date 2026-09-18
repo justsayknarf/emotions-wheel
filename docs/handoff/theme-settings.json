@@ -1,15 +1,15 @@
 {
-  "savedAt": "2026-09-10T17:49:47.980Z",
-  "activeThemeId": "h",
-  "activeThemeLabel": "H · Gold & Denim",
+  "savedAt": "2026-09-18T23:04:55.183Z",
+  "activeThemeId": "i",
+  "activeThemeLabel": "I · Starry Night",
   "vars": {
-    "--ui-bg": "#0D0F14",
-    "--ui-surface": "#171A24",
+    "--ui-bg": "#0B1220",
+    "--ui-surface": "#131B2E",
     "--ui-border": "rgba(255,255,255,0.08)",
-    "--ui-gold": "#C9A87C",
-    "--ui-gold-dim": "rgba(201,168,124,0.5)",
-    "--ui-recorded": "#6E7AA3",
-    "--ui-recorded-dim": "rgba(110,122,163,0.5)",
+    "--ui-gold": "#EAD9A8",
+    "--ui-gold-dim": "rgba(234,217,168,0.5)",
+    "--ui-recorded": "#8FC1C4",
+    "--ui-recorded-dim": "rgba(143,193,196,0.5)",
     "--ui-text-1": "#EDE8DF",
     "--ui-text-2": "rgba(237,232,223,0.5)",
     "--ui-text-3": "rgba(237,232,223,0.22)"
@@ -22,11 +22,11 @@
     "grain": "off",
     "envPreset": "city",
     "animate": "on",
-    "uSpeed": 0.3,
+    "uSpeed": 0.04,
     "range": "disabled",
     "rangeStart": 0,
     "rangeEnd": 40,
-    "cDistance": 9.79,
+    "cDistance": 2.5,
     "cAzimuthAngle": 180,
     "cPolarAngle": 47,
     "positionX": 0,
@@ -35,17 +35,21 @@
     "rotationX": 50,
     "rotationY": 0,
     "rotationZ": -60,
-    "fov": 30,
-    "color1": "#0d1314",
-    "color2": "#4a2639",
-    "color3": "#3D2E1C",
-    "brightness": 0.66
+    "fov": 58,
+    "color1": "#0B1220",
+    "color2": "#1B3A5C",
+    "color3": "#5c4e1f",
+    "brightness": 0.5
   },
   "shaderOverride": {
-    "color1": "#0d1314",
-    "color2": "#4a2639",
-    "brightness": 0.66,
-    "type": "waterPlane"
+    "brightness": 0.5,
+    "uSpeed": 0.04,
+    "fov": 58,
+    "type": "waterPlane",
+    "cDistance": 2.5,
+    "grain": "off",
+    "envPreset": "city",
+    "color3": "#5c4e1f"
   },
   "allShaderOverrides": {
     "h": {
@@ -55,7 +59,7 @@
       "type": "waterPlane"
     },
     "j": {
-      "brightness": 0.88,
+      "brightness": 0.67,
       "positionX": 1.8,
       "fov": 29,
       "cDistance": 8.7,
@@ -65,11 +69,14 @@
       "brightness": 0.98
     },
     "i": {
-      "brightness": 0.71,
-      "uSpeed": 0.3,
+      "brightness": 0.5,
+      "uSpeed": 0.04,
       "fov": 58,
       "type": "waterPlane",
-      "cDistance": 2.5
+      "cDistance": 2.5,
+      "grain": "off",
+      "envPreset": "city",
+      "color3": "#5c4e1f"
     },
     "k": {
       "brightness": 0.94
@@ -79,6 +86,19 @@
     },
     "f": {
       "brightness": 0.7
+    },
+    "e": {
+      "brightness": 0.72
+    },
+    "default": {
+      "cDistance": 1.7,
+      "brightness": 0.45,
+      "grain": "off",
+      "rangeStart": 0,
+      "type": "plane",
+      "color3": "#212121",
+      "color2": "#411a4b",
+      "color1": "#18205c"
     }
   }
 }

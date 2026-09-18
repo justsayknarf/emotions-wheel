@@ -68,7 +68,7 @@ export function AdminThemeSaveButton() {
           padding: '4px 10px',
           borderRadius: 5,
           border: '1px solid var(--ui-gold-dim)',
-          background: status === 'saved' ? 'rgba(201,168,124,0.18)' : 'transparent',
+          background: status === 'saved' ? 'rgb(var(--ui-gold-rgb) / 0.18)' : 'transparent',
           color: 'var(--ui-gold)',
           cursor: status === 'saving' ? 'default' : 'pointer',
         }}

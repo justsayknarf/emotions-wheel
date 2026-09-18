@@ -28,10 +28,10 @@ const SHEET_MAX_VH = 0.46;
 // The tray's background/blur while a slider drag is active — low enough to
 // see a pin move on the field underneath, not just the general glow.
 // Tune here.
-const TRAY_DRAG_BACKGROUND = 'rgba(12, 14, 18, 0.08)';
+const TRAY_DRAG_BACKGROUND = 'rgb(var(--ui-bg-rgb) / 0.08)';
 const TRAY_DRAG_BLUR = 'blur(0px)';
 // Resting (not dragging) values, for reference/tuning alongside the above.
-const TRAY_RESTING_BACKGROUND = 'rgba(12, 14, 18, 0.97)';
+const TRAY_RESTING_BACKGROUND = 'rgb(var(--ui-bg-rgb) / 0.97)';
 const TRAY_RESTING_BLUR = 'blur(20px)';
 
 const MICRO_LABEL: React.CSSProperties = {
@@ -555,7 +555,7 @@ export function EmotionDrawer({
           border: 'none',
           borderRadius: 6,
           padding: '7px 18px',
-          color: canSave ? '#0D0F14' : 'var(--ui-text-3)',
+          color: canSave ? 'var(--ui-bg)' : 'var(--ui-text-3)',
           fontSize: 11,
           fontWeight: 600,
           letterSpacing: '0.06em',
@@ -818,7 +818,7 @@ export function EmotionDrawer({
           border: 'none',
           borderRadius: 6,
           padding: '6px 16px',
-          color: canSave ? '#0D0F14' : 'var(--ui-text-3)',
+          color: canSave ? 'var(--ui-bg)' : 'var(--ui-text-3)',
           fontSize: 10.5,
           fontWeight: 600,
           letterSpacing: '0.06em',
@@ -1077,7 +1077,7 @@ export function EmotionDrawer({
   // action bar) now shows the field through.
   const shared: React.CSSProperties = {
     position: 'absolute',
-    background: isFocus ? 'rgba(13,15,20,0.42)' : 'rgba(12, 14, 18, 0.97)',
+    background: isFocus ? 'rgb(var(--ui-bg-rgb) / 0.42)' : 'rgb(var(--ui-bg-rgb) / 0.97)',
     backdropFilter: isFocus ? 'blur(18px) saturate(1.15)' : 'blur(20px)',
     display: 'flex',
     flexDirection: 'column',

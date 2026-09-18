@@ -39,7 +39,7 @@ export function AdminRow({ emotion, selected, onSelect, onUpdate, onRemove }: Pr
       ref={rowRef}
       onClick={onSelect}
       style={{
-        background: selected ? 'rgba(201,168,124,0.14)' : 'transparent',
+        background: selected ? 'rgb(var(--ui-gold-rgb) / 0.14)' : 'transparent',
         borderBottom: '1px solid var(--ui-border)',
         cursor: 'default',
       }}

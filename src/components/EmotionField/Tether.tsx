@@ -111,8 +111,8 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
     >
       <defs>
         <linearGradient id="tether-thread" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#C9A87C" stopOpacity="0.65" />
-          <stop offset="1" stopColor="#C9A87C" stopOpacity="0.22" />
+          <stop offset="0" stopColor="var(--ui-gold)" stopOpacity="0.65" />
+          <stop offset="1" stopColor="var(--ui-gold)" stopOpacity="0.22" />
         </linearGradient>
       </defs>
       {/* pathLength normalizes to the real path length, so the draw reaches the
@@ -131,7 +131,7 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
         cx={ex}
         cy={ey}
         r="2.5"
-        fill="#C9A87C"
+        fill="var(--ui-gold)"
         initial={{ opacity: reduce ? 0.85 : 0 }}
         animate={{ opacity: 0.85 }}
         transition={{ duration: 0.35, delay: reduce ? 0 : 0.9 }}

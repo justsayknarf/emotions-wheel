@@ -18,7 +18,7 @@ const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, s
 // a pin move on the field through the card's own body. Tune here. The
 // border is dropped entirely during a drag (see CARD_DRAG_BORDER below)
 // rather than faded, so it doesn't outline a box around that same view.
-const CARD_DRAG_BACKGROUND = 'rgba(22, 24, 32, 0.15)';
+const CARD_DRAG_BACKGROUND = 'rgb(var(--ui-surface-rgb) / 0.15)';
 const CARD_DRAG_BORDER = 'none';
 // Non-active content (header, the sibling axis slider, caption/tags) fades
 // to this opacity — the axis actually being dragged stays at 1.
@@ -37,7 +37,7 @@ const CARD_DRAG_CONTENT_OPACITY = 0.3;
 // (already much more transparent, no blur) is unchanged for both frosted
 // and non-frosted cards, so an active per-card drag still shows the field
 // clearly through it.
-const CARD_FROSTED_BACKGROUND = 'rgba(22,24,32,0.56)';
+const CARD_FROSTED_BACKGROUND = 'rgb(var(--ui-surface-rgb) / 0.56)';
 const CARD_FROSTED_BACKDROP_FILTER = 'blur(12px) saturate(1.1)';
 
 interface Props {
@@ -314,7 +314,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
         boxShadow: draggingAxis !== null || frosted
           ? 'none'
           : showSelected
-            ? `0 0 0 1px ${accentDim}, 0 6px 22px rgba(201,168,124,0.12)`
+            ? `0 0 0 1px ${accentDim}, 0 6px 22px rgb(var(--ui-gold-rgb) / 0.12)`
             : 'none',
         transition: reduced ? 'none' : 'box-shadow 0.35s ease, background 0.25s ease-out',
       }}

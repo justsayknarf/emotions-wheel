@@ -13,9 +13,9 @@ const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, s
 // exploration. Frosted, not solid: the field still reads through as soft
 // color and motion, rather than text and thumbs sitting directly on
 // whatever word or glow happens to be behind them.
-const RESTING_BACKGROUND = 'rgba(13,15,20,0.42)';
+const RESTING_BACKGROUND = 'rgb(var(--ui-bg-rgb) / 0.42)';
 const RESTING_BLUR = 'blur(18px) saturate(1.15)';
-const DRAGGING_BACKGROUND = 'rgba(13,15,20,0.14)';
+const DRAGGING_BACKGROUND = 'rgb(var(--ui-bg-rgb) / 0.14)';
 const DRAGGING_BLUR = 'blur(7px) saturate(1.05)';
 
 // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
@@ -348,7 +348,7 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
                 border: 'none',
                 borderRadius: 6,
                 padding: '7px 18px',
-                color: '#0D0F14',
+                color: 'var(--ui-bg)',
                 fontSize: 11,
                 fontWeight: 600,
                 letterSpacing: '0.06em',

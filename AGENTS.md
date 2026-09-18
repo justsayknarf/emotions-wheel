@@ -14,6 +14,8 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:csv` | diary CSV export |
 | `npm run check:cues` | grounding-cue rotation |
 | `npm run check:pin` | pin coordinate adjustment |
+| `npm run check:theme` | theme drift: generated tokens, theme completeness, DESIGN.md palette, no hardcoded theme colors (see [docs/theme-system.md](docs/theme-system.md)) |
+| `npm run check:landing` | landing page sky geometry |
 
 New logic gets a new `check:<short-name>` script following the same shape.
 
@@ -27,7 +29,7 @@ Work happens on a branch named for it (`feat/…`, `fix/…`, `docs/…`), lands
 
 ## Conventions
 
-- Design tokens are CSS custom properties in `src/index.css`. Reach for an existing `--ui-*` token before introducing a color.
+- Design tokens are the `--ui-*` custom properties, authored once in `src/config/theme.ts` and generated into `src/theme-tokens.css` (`npm run sync:theme`). Reach for an existing token, or a derived channel like `rgb(var(--ui-gold-rgb) / 0.3)`, before introducing a color; never paste a hex. `npm run check:theme` enforces it.
 - Derive at render rather than reconciling in an effect. `src/App.tsx` resolves the selected pin and its dependents this way on purpose — several visual systems read from one resolved value so they cannot drift apart.
 - Motion is framer-motion throughout and most of it honors `useReducedMotion` — but not all: the canvas `requestAnimationFrame` loops (`AxisRadiance.tsx`) do not, so adding reduced-motion support there is new work rather than reuse.
 - One-shot animations key on a counter and measure at play time, not on geometry — see `AxisRadiance.tsx`, which had a resize-restart bug precisely because it did otherwise.

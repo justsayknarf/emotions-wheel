@@ -63,7 +63,7 @@ export function AdminHeader({ dirty, saveStatus, saveError, onSave }: Props) {
             borderRadius: 6,
             border: 'none',
             background: canSave ? 'var(--ui-gold)' : 'var(--ui-border)',
-            color: canSave ? '#0D0F14' : 'var(--ui-text-3)',
+            color: canSave ? 'var(--ui-bg)' : 'var(--ui-text-3)',
             fontSize: 11,
             fontWeight: 500,
             textTransform: 'uppercase',

@@ -1,3 +1,4 @@
+import { themeRgba } from '../../config/themeColor';
 import { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -20,9 +21,9 @@ const emotionById = new Map(emotions.map((e) => [e.id, e]));
 // A soft radial glow blob, drawn additively to build the light trail.
 function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, `rgba(255,250,240,${a})`);
-  g.addColorStop(0.28, `rgba(219,193,152,${a * 0.45})`);
-  g.addColorStop(1, 'rgba(201,168,124,0)');
+  g.addColorStop(0, themeRgba('text', a));
+  g.addColorStop(0.28, themeRgba('gold', a * 0.45));
+  g.addColorStop(1, themeRgba('gold', 0));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -154,7 +155,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
           <motion.path
             d={pathD}
             fill="none"
-            stroke="rgba(201,168,124,0.3)"
+            stroke="rgb(var(--ui-gold-rgb) / 0.3)"
             strokeWidth={1}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -185,7 +186,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
               fontWeight: 400,
               letterSpacing: '0.02em',
               color: 'var(--ui-gold)',
-              textShadow: '0 0 10px rgba(201,168,124,0.55)',
+              textShadow: '0 0 10px rgb(var(--ui-gold-rgb) / 0.55)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -211,7 +212,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
               height: 14,
               margin: '-7px 0 0 -7px',
               borderRadius: '50%',
-              border: '1px solid rgba(201,168,124,0.7)',
+              border: '1px solid rgb(var(--ui-gold-rgb) / 0.7)',
             }}
           />
         ))}
@@ -232,7 +233,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
                 height: 12,
                 margin: '-6px 0 0 -6px',
                 borderRadius: '50%',
-                border: '1px solid rgba(201,168,124,0.6)',
+                border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
               }}
             />
           )}
@@ -264,8 +265,8 @@ export function PulseTrace({ entries, onPointClick }: Props) {
                 width: 6,
                 height: 6,
                 borderRadius: '50%',
-                background: 'rgba(201,168,124,0.9)',
-                boxShadow: '0 0 6px rgba(201,168,124,0.6)',
+                background: 'rgb(var(--ui-gold-rgb) / 0.9)',
+                boxShadow: '0 0 6px rgb(var(--ui-gold-rgb) / 0.6)',
               }}
             />
           </motion.button>
@@ -287,7 +288,7 @@ export function PulseTrace({ entries, onPointClick }: Props) {
             margin: '-2.5px 0 0 -2.5px',
             borderRadius: '50%',
             background: 'rgba(255,252,246,0.95)',
-            boxShadow: '0 0 8px 2px rgba(201,168,124,0.8)',
+            boxShadow: '0 0 8px 2px rgb(var(--ui-gold-rgb) / 0.8)',
           }}
         />
       )}
