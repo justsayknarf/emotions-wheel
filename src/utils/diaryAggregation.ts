@@ -117,6 +117,15 @@ export interface WeightedSegment {
   weight: number;
 }
 
+/** Above this many dots in a daily summary row, the rest collapse into a "+k" overflow marker. */
+export const MAX_ROW_DOTS = 5;
+
+/** How many dots a count renders as, and how many are left over past the cap. */
+export function capDots(count: number, cap: number = MAX_ROW_DOTS): { shown: number; overflow: number } {
+  const shown = Math.min(count, cap);
+  return { shown, overflow: count - shown };
+}
+
 /**
  * Connects each pair of consecutive present indices, weighting the
  * connection by the gap between them (via `gapMsBetween`) and dropping it

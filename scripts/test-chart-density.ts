@@ -10,6 +10,7 @@ import {
   entriesInWindow,
   distinctDayCount,
   dailyAggregates,
+  capDots,
   MIN_SPREAD_DAYS,
 } from '../src/utils/diaryAggregation';
 import type { DiaryEntry, PinEntry } from '../src/types';
@@ -100,6 +101,19 @@ check(
   Math.abs(day0.valence) < 1e-9 && Math.abs(day0.arousal) < 1e-9,
   `valence=${day0.valence}, arousal=${day0.arousal} (expected ~0,~0 — the two pins cancel out)`,
 );
+
+// --- capDots ---
+const under = capDots(3, 5);
+check('capDots: under the cap shows all, no overflow', under.shown === 3 && under.overflow === 0, JSON.stringify(under));
+
+const over = capDots(7, 5);
+check('capDots: over the cap shows the cap, overflow is the remainder', over.shown === 5 && over.overflow === 2, JSON.stringify(over));
+
+const zero = capDots(0, 5);
+check('capDots: zero shows zero, no overflow', zero.shown === 0 && zero.overflow === 0, JSON.stringify(zero));
+
+const atCap = capDots(5, 5);
+check('capDots: exactly at the cap shows all, no overflow', atCap.shown === 5 && atCap.overflow === 0, JSON.stringify(atCap));
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);
