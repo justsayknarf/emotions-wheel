@@ -115,5 +115,25 @@ check(
   JSON.stringify(centerLive),
 );
 
+// --- Release outside the field bounds (e.g. in the rail) clamps to the
+// nearest edge rather than reporting a coordinate beyond [-1, 1]. Pointer
+// capture keeps delivering move/up events to the field's handlers even once
+// the cursor has left its element, so pixelToCoord must be the one place
+// that bounds the result — every consumer (pin storage, the adjust sliders)
+// trusts it's already in range. ---
+const farRight = pixelToCoord(FULL * 1.4, center, fullRect, FULL, FULL);
+check(
+  'release far outside the right edge clamps x to 1',
+  farRight.x === 1,
+  JSON.stringify(farRight),
+);
+
+const farAbove = pixelToCoord(center, -FULL * 0.4, fullRect, FULL, FULL);
+check(
+  'release far above the top edge clamps y to 1',
+  farAbove.y === 1,
+  JSON.stringify(farAbove),
+);
+
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);
