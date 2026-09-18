@@ -103,7 +103,7 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
       </span>
 
       {tags.shown.length > 0 && (
-        <span style={{ paddingLeft: 12, fontSize: 13, color: 'var(--ui-text-2)', fontWeight: 300, lineHeight: 1.5 }}>
+        <span style={{ fontSize: 13, color: 'var(--ui-text-2)', fontWeight: 300, lineHeight: 1.5 }}>
           {tags.shown.join(', ')}
           {tags.overflow > 0 && (
             <span style={{ fontSize: 11, color: 'var(--ui-text-3)' }}> +{tags.overflow}</span>
