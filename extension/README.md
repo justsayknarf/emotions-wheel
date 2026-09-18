@@ -1,7 +1,7 @@
-# Emotion Selector — New Tab Check-In
+# Constellation — New Tab Check-In
 
 A Chrome extension that replaces the browser's New Tab page with the
-[Emotion Selector](https://justsayknarf.github.io/emotions-wheel/) check-in field.
+[Constellation](https://justsayknarf.github.io/emotions-wheel/) check-in field.
 
 ## Single purpose
 
