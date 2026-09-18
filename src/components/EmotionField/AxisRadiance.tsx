@@ -1,3 +1,4 @@
+import { themeRgba } from '../../config/themeColor';
 import { useRef, useEffect } from 'react';
 
 interface Props {
@@ -17,9 +18,9 @@ const EDGE_MARGIN = 26;       // px the orb stops short of the edge (by the labe
 // as one visual language.
 function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, `rgba(255,250,240,${a})`);
-  g.addColorStop(0.3, `rgba(219,193,152,${a * 0.5})`);
-  g.addColorStop(1, 'rgba(201,168,124,0)');
+  g.addColorStop(0, themeRgba('text', a));
+  g.addColorStop(0.3, themeRgba('gold', a * 0.5));
+  g.addColorStop(1, themeRgba('gold', 0));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);

@@ -39,7 +39,7 @@ const WELCOME_EXIT_SNAP = 0.35;
 const HEADER_PILL: CSSProperties = {
   position: 'absolute',
   top: 20,
-  background: 'rgba(22, 24, 32, 0.8)',
+  background: 'rgb(var(--ui-surface-rgb) / 0.8)',
   border: '1px solid var(--ui-border)',
   borderRadius: 8,
   padding: '7px 13px',
@@ -1199,7 +1199,7 @@ export default function App() {
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ delay: 0.4, duration: 0.7, ease: 'easeOut' }}
                   style={{
-                    background: 'rgba(13, 15, 20, 0.82)',
+                    background: 'rgb(var(--ui-bg-rgb) / 0.82)',
                     backdropFilter: 'blur(20px)',
                     border: '1px solid var(--ui-border)',
                     borderRadius: 10,

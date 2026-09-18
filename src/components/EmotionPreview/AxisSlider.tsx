@@ -24,14 +24,14 @@ const endLabelStyle = {
 // rather than the warm gold every other slider gets.
 const ACCENT = {
   gold: {
-    fill: 'rgba(201,168,124,0.12)',
-    thumb: 'radial-gradient(circle at 40% 35%, #f0d9b5, var(--ui-gold) 62%)',
-    ring: '0 0 0 4px rgba(201,168,124,0.12), 0 2px 8px rgba(201,168,124,0.35)',
+    fill: 'rgb(var(--ui-gold-rgb) / 0.12)',
+    thumb: 'radial-gradient(circle at 40% 35%, var(--ui-gold-hi), var(--ui-gold) 62%)',
+    ring: '0 0 0 4px rgb(var(--ui-gold-rgb) / 0.12), 0 2px 8px rgb(var(--ui-gold-rgb) / 0.35)',
   },
   recorded: {
-    fill: 'rgba(124,147,168,0.12)',
-    thumb: 'radial-gradient(circle at 40% 35%, #c3ceda, var(--ui-recorded) 62%)',
-    ring: '0 0 0 4px rgba(124,147,168,0.12), 0 2px 8px rgba(124,147,168,0.35)',
+    fill: 'rgb(var(--ui-recorded-rgb) / 0.12)',
+    thumb: 'radial-gradient(circle at 40% 35%, var(--ui-recorded-hi), var(--ui-recorded) 62%)',
+    ring: '0 0 0 4px rgb(var(--ui-recorded-rgb) / 0.12), 0 2px 8px rgb(var(--ui-recorded-rgb) / 0.35)',
   },
 } as const;
 
@@ -128,7 +128,7 @@ export function AxisSlider({
           position: 'relative',
           height: 5,
           borderRadius: 3,
-          background: 'rgba(237,232,223,0.09)',
+          background: 'rgb(var(--ui-text-rgb) / 0.09)',
           cursor: 'pointer',
           touchAction: 'none',
         }}

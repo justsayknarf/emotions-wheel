@@ -11,17 +11,68 @@ import { useEffect, useState } from 'react';
 // Explored as mockups first — see the "One Accent, Three Golds" color-audit
 // artifact — before any of this was wired into the app.
 
-export interface ThemeVars {
-  '--ui-bg': string;
-  '--ui-surface': string;
-  '--ui-border': string;
-  '--ui-gold': string;
-  '--ui-gold-dim': string;
-  '--ui-recorded': string;
-  '--ui-recorded-dim': string;
-  '--ui-text-1': string;
-  '--ui-text-2': string;
-  '--ui-text-3': string;
+// The ten tokens every theme defines. This registry is the single list: the
+// ThemeVars type, the admin inspector's rows, scripts/sync-theme-tokens.ts and
+// scripts/test-theme.ts all read it, so adding an eleventh token is one edit
+// here plus a value in each THEMES entry (the check script names any miss).
+export const THEME_TOKENS = [
+  { key: '--ui-bg', note: 'App ground' },
+  { key: '--ui-surface', note: 'Cards, drawers, nav' },
+  { key: '--ui-border', note: 'Hairlines' },
+  { key: '--ui-gold', note: 'Primary accent' },
+  { key: '--ui-gold-dim', note: 'Primary accent, backed off' },
+  { key: '--ui-recorded', note: 'Secondary accent / recorded pins' },
+  { key: '--ui-recorded-dim', note: 'Secondary accent, backed off' },
+  { key: '--ui-text-1', note: 'Primary text' },
+  { key: '--ui-text-2', note: 'Secondary text' },
+  { key: '--ui-text-3', note: 'Tertiary text / labels' },
+] as const;
+
+export type ThemeVars = Record<(typeof THEME_TOKENS)[number]['key'], string>;
+
+// Channel triplets derived from the tokens above ("201 168 124"), so any
+// component can write `rgb(var(--ui-gold-rgb) / 0.3)` and follow the theme
+// instead of hardcoding a color's RGB. They are computed, never authored: a
+// theme only ever specifies the ten tokens.
+export const DERIVED_TOKENS = [
+  { key: '--ui-bg-rgb', from: '--ui-bg' },
+  { key: '--ui-surface-rgb', from: '--ui-surface' },
+  { key: '--ui-gold-rgb', from: '--ui-gold' },
+  { key: '--ui-recorded-rgb', from: '--ui-recorded' },
+  { key: '--ui-text-rgb', from: '--ui-text-1' },
+] as const satisfies ReadonlyArray<{ key: string; from: keyof ThemeVars }>;
+
+/** "#C9A87C" / "rgba(201,168,124,0.5)" -> "201 168 124". Alpha is dropped. */
+export function toRgbChannels(color: string): string {
+  const c = color.trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].replace(/./g, (d) => d + d) : hex[1];
+    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ');
+  }
+  const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(c);
+  if (rgb) return [rgb[1], rgb[2], rgb[3]].map((n) => Math.round(Number(n))).join(' ');
+  throw new Error(`toRgbChannels: cannot read "${color}"`);
+}
+
+/** The derived channel custom properties for a set of theme vars. */
+export function deriveVars(vars: ThemeVars): Record<string, string> {
+  return Object.fromEntries(DERIVED_TOKENS.map(({ key, from }) => [key, toRgbChannels(vars[from])]));
+}
+
+// The bone text ramp most themes share. Themes with a differently tinted
+// ground (C, J, K) spell their own; everyone else takes these, so a contrast
+// tweak to body text is one edit here, not one per theme.
+const BONE_TEXT = {
+  '--ui-text-1': '#EDE8DF',
+  '--ui-text-2': 'rgba(237,232,223,0.5)',
+  '--ui-text-3': 'rgba(237,232,223,0.22)',
+} as const;
+
+type TextKey = keyof typeof BONE_TEXT;
+
+function mkVars(vars: Omit<ThemeVars, TextKey> & Partial<Pick<ThemeVars, TextKey>>): ThemeVars {
+  return { ...BONE_TEXT, ...vars };
 }
 
 export interface ShaderTheme {
@@ -106,9 +157,9 @@ export interface Theme {
 
 export const THEMES = {
   default: {
-    label: 'Current (shipped)',
-    note: 'What index.css and ShaderBackground actually ship today.',
-    vars: {
+    label: 'Original (retired)',
+    note: 'The palette this app first shipped with, before Starry Night became the default.',
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#161820',
       '--ui-border': 'rgba(255,255,255,0.06)',
@@ -116,16 +167,13 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#7C93A8',
       '--ui-recorded-dim': 'rgba(124,147,168,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#1e185c', color2: '#411a4b', color3: '#212121', brightness: 0.5 }),
   },
   a: {
     label: 'A · Single Ember',
     note: 'One accent hue, everywhere. Recorded pins dim the same gold instead of reaching for a second color.',
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#1B1E28',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -133,16 +181,13 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': 'rgba(201,168,124,0.55)',
       '--ui-recorded-dim': 'rgba(201,168,124,0.3)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#0D0F14', color2: '#171A22', color3: '#2A2419', brightness: 0.2 }),
   },
   b: {
     label: 'B · Warm/Cool Duet',
     note: 'Gold + slate-blue, tidied. Keeps a real color distinction for draft vs. recorded pins.',
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0F1116',
       '--ui-surface': '#1C1F29',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -150,10 +195,7 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#7C93A8',
       '--ui-recorded-dim': 'rgba(124,147,168,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#0F1116', color2: '#3C3021', color3: '#232B33', brightness: 0.3 }),
   },
   c: {
@@ -176,7 +218,7 @@ export const THEMES = {
   d: {
     label: 'D · Ember & Plum',
     note: "Gold stays; the recorded hue is the shader's own original plum, desaturated and tamed rather than discarded.",
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#1A1926',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -184,16 +226,13 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#9C7C93',
       '--ui-recorded-dim': 'rgba(156,124,147,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#0D0F14', color2: '#3A2130', color3: '#3D2E1C', brightness: 0.3 }),
   },
   e: {
     label: 'E · Gold & Pine',
     note: 'Earthy near-complementary — forest-at-dusk instead of jewel-tone. No purple family at all.',
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#151E1B',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -201,16 +240,13 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#6F9C8F',
       '--ui-recorded-dim': 'rgba(111,156,143,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#0D0F14', color2: '#1E3B33', color3: '#3D2E1C', brightness: 0.28 }),
   },
   f: {
     label: 'F · Gold & Terracotta',
     note: 'The tightest pairing — ~18° from gold, both warm. Gentlest contrast of the two-hue options.',
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#1D1614',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -218,16 +254,13 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#B98572',
       '--ui-recorded-dim': 'rgba(185,133,114,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#0D0F14', color2: '#4A2A1F', color3: '#3D2E1C', brightness: 0.25 }),
   },
   g: {
     label: 'G · Gold & Sage',
     note: 'Quietest of the two-hue options — sage barely announces itself against the gold.',
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#181C15',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -235,16 +268,13 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#92A378',
       '--ui-recorded-dim': 'rgba(146,163,120,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     shader: mkShader({ color1: '#0D0F14', color2: '#33391F', color3: '#3D2E1C', brightness: 0.22 }),
   },
   h: {
     label: 'H · Gold & Denim',
     note: "Deeper/moodier than B's slate-blue — still a warm/cool split, just less primary-feeling.",
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0D0F14',
       '--ui-surface': '#171A24',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -252,10 +282,7 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(201,168,124,0.5)',
       '--ui-recorded': '#6E7AA3',
       '--ui-recorded-dim': 'rgba(110,122,163,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
-    },
+    }),
     // Tuned live in the admin theme page and folded in from
     // docs/handoff/theme-settings.json (2026-09-10): a deeper, cooler
     // color1/2 and higher brightness than the original pairing, plus the
@@ -265,7 +292,7 @@ export const THEMES = {
   i: {
     label: 'I · Starry Night',
     note: 'Gold survives, paler and looser, swirling through a cobalt-indigo sky instead of sitting on warm near-black.',
-    vars: {
+    vars: mkVars({
       '--ui-bg': '#0B1220',
       '--ui-surface': '#131B2E',
       '--ui-border': 'rgba(255,255,255,0.08)',
@@ -273,11 +300,18 @@ export const THEMES = {
       '--ui-gold-dim': 'rgba(234,217,168,0.5)',
       '--ui-recorded': '#8FC1C4',
       '--ui-recorded-dim': 'rgba(143,193,196,0.5)',
-      '--ui-text-1': '#EDE8DF',
-      '--ui-text-2': 'rgba(237,232,223,0.5)',
-      '--ui-text-3': 'rgba(237,232,223,0.22)',
+    }),
+    // Tuned live in the admin theme page and folded in from
+    // docs/handoff/theme-settings.json (2026-09-18): the flat plane becomes a
+    // waterPlane, brighter, almost still (uSpeed 0.04) and viewed close (camera
+    // distance 2.5, fov 58) so it reads as slow water under starlight.
+    shader: {
+      ...mkShader({ color1: '#0B1220', color2: '#1B3A5C', color3: '#5c4e1f', brightness: 0.5 }),
+      type: 'waterPlane',
+      uSpeed: 0.04,
+      cDistance: 2.5,
+      fov: 58,
     },
-    shader: mkShader({ color1: '#0B1220', color2: '#1B3A5C', color3: '#5C4A1F', brightness: 0.35 }),
   },
   j: {
     label: 'J · Northern Lights',
@@ -317,7 +351,10 @@ export const THEMES = {
 
 export type ThemeId = keyof typeof THEMES;
 
-export const DEFAULT_THEME_ID: ThemeId = 'default';
+// The shipped default. Changing it also means running `npm run sync:theme`
+// (regenerates src/theme-tokens.css, the pre-JavaScript first paint) and
+// updating DESIGN.md; `npm run check:theme` fails until both agree.
+export const DEFAULT_THEME_ID: ThemeId = 'i';
 
 const KEY = 'ui-theme';
 const EVENT = 'ui-theme-change';
@@ -345,12 +382,12 @@ export function saveThemeId(id: ThemeId): void {
   }
 }
 
-/** Sets the ten `--ui-*` custom properties on the document root. Safe to call
+/** Sets the ten `--ui-*` custom properties (plus their derived `-rgb` channels) on the document root. Safe to call
  *  before React mounts, so the very first paint already reflects the saved
  *  theme instead of flashing the shipped default. */
 export function applyThemeVars(vars: ThemeVars): void {
   const root = document.documentElement.style;
-  for (const [prop, value] of Object.entries(vars)) {
+  for (const [prop, value] of Object.entries({ ...vars, ...deriveVars(vars) })) {
     root.setProperty(prop, value);
   }
 }

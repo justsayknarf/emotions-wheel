@@ -56,7 +56,7 @@ export function WordTethers({ segments, duration = 1.5, keep = false, keepIds }:
             y1={s.y1}
             x2={s.x2}
             y2={s.y2}
-            stroke={pinned ? 'rgba(201, 168, 124, 0.5)' : 'rgba(237, 232, 223, 0.4)'}
+            stroke={pinned ? 'rgb(var(--ui-gold-rgb) / 0.5)' : 'rgb(var(--ui-text-rgb) / 0.4)'}
             strokeWidth={1}
             strokeLinecap="round"
             initial={{ pathLength: reduce ? 1 : 0, opacity: reduce ? 1 : 0 }}

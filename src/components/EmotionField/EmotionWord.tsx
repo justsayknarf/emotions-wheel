@@ -72,10 +72,9 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   // Warm toward the gold accent as the cursor nears, so proximity reads in
   // colour as well as size — for surface anchors and revealed deep words alike.
   const n = Math.max(0, Math.min(1, nearness)) * 0.85;
-  const mix = (bone: number, gold: number) => Math.round(bone + (gold - bone) * n);
-  const proximityColor = `rgb(${mix(237, 201)}, ${mix(232, 168)}, ${mix(223, 124)})`;
+  const proximityColor = `color-mix(in srgb, var(--ui-gold) ${Math.round(n * 100)}%, var(--ui-text-1))`;
   const proximityGlow =
-    n > 0.04 ? `0 0 ${Math.round(12 * n)}px rgba(201, 168, 124, ${(0.35 * n).toFixed(2)})` : undefined;
+    n > 0.04 ? `0 0 ${Math.round(12 * n)}px rgb(var(--ui-gold-rgb) / ${(0.35 * n).toFixed(2)})` : undefined;
 
   // The coordinate dot is the word's true anchor: it sits at the point and holds
   // a steady, depth-encoded presence, independent of the label's proximity
@@ -91,7 +90,7 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   const isPair = emphasis === 'pair';
   const dotSize = isPair ? 4 : isSurface ? 3 : 2;
   const dotOpacity = isSurface ? 0.32 : 0.16;
-  const dotColor = isPair ? 'rgba(201, 168, 124, 0.7)' : `rgba(237, 232, 223, ${dotOpacity})`;
+  const dotColor = isPair ? 'rgb(var(--ui-gold-rgb) / 0.7)' : `rgb(var(--ui-text-rgb) / ${dotOpacity})`;
 
   return (
     <motion.span
@@ -138,9 +137,9 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
           display: 'inline-block',
           fontFamily: FIELD_FONT,
           color: isSelected || emphasis === 'pair'
-            ? '#C9A87C'
+            ? 'var(--ui-gold)'
             : isHighlighted
-              ? 'rgba(201, 168, 124, 0.7)'
+              ? 'rgb(var(--ui-gold-rgb) / 0.7)'
               : proximityColor,
           // Depth tiers (U5): surface words are the landmarks — the larger size
           // (text-sm), kept light and airy. Deep words stay a step smaller
@@ -151,11 +150,11 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
           fontWeight: emphasis === 'pair' || isSelected ? 500 : isHighlighted ? 400 : isSurface ? 300 : 400,
           letterSpacing: isSelected ? '0.01em' : '0.02em',
           textShadow: emphasis === 'pair'
-            ? '0 0 14px rgba(201, 168, 124, 0.45)'
+            ? '0 0 14px rgb(var(--ui-gold-rgb) / 0.45)'
             : isSelected
-              ? '0 0 16px rgba(201, 168, 124, 0.4)'
+              ? '0 0 16px rgb(var(--ui-gold-rgb) / 0.4)'
               : isHighlighted
-                ? '0 0 10px rgba(201, 168, 124, 0.2)'
+                ? '0 0 10px rgb(var(--ui-gold-rgb) / 0.2)'
                 : proximityGlow,
         }}
         initial={animateIn ? { opacity: 0, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) } : false}

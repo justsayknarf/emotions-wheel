@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-18T23:14:02.005737Z",
+  "title": "Design System: Constellation",
+  "extensions": {
+    "colorMeta": {
+      "night-indigo": {
+        "role": "neutral",
+        "displayName": "Night Indigo",
+        "canonical": "#0B1220",
+        "tonalRamp": [
+          "oklch(15% 0.031 263)",
+          "oklch(26% 0.031 263)",
+          "oklch(38% 0.031 263)",
+          "oklch(49% 0.031 263)",
+          "oklch(61% 0.031 263)",
+          "oklch(72% 0.031 263)",
+          "oklch(84% 0.031 263)",
+          "oklch(95% 0.031 263)"
+        ]
+      },
+      "midnight-surface": {
+        "role": "neutral",
+        "displayName": "Midnight Surface",
+        "canonical": "#131B2E",
+        "tonalRamp": [
+          "oklch(15% 0.039 266)",
+          "oklch(26% 0.039 266)",
+          "oklch(38% 0.039 266)",
+          "oklch(49% 0.039 266)",
+          "oklch(61% 0.039 266)",
+          "oklch(72% 0.039 266)",
+          "oklch(84% 0.039 266)",
+          "oklch(95% 0.039 266)"
+        ]
+      },
+      "starlight-gold": {
+        "role": "primary",
+        "displayName": "Starlight Gold",
+        "canonical": "oklch(89% 0.067 91)",
+        "tonalRamp": [
+          "oklch(15% 0.067 91)",
+          "oklch(26% 0.067 91)",
+          "oklch(38% 0.067 91)",
+          "oklch(49% 0.067 91)",
+          "oklch(61% 0.067 91)",
+          "oklch(72% 0.067 91)",
+          "oklch(84% 0.067 91)",
+          "oklch(95% 0.067 91)"
+        ]
+      },
+      "starlight-gold-dim": {
+        "role": "primary",
+        "displayName": "Starlight Gold Dim",
+        "canonical": "rgba(234,217,168,0.5)"
+      },
+      "tidal-teal": {
+        "role": "secondary",
+        "displayName": "Tidal Teal",
+        "canonical": "oklch(78% 0.052 201)",
+        "tonalRamp": [
+          "oklch(15% 0.052 201)",
+          "oklch(26% 0.052 201)",
+          "oklch(38% 0.052 201)",
+          "oklch(49% 0.052 201)",
+          "oklch(61% 0.052 201)",
+          "oklch(72% 0.052 201)",
+          "oklch(84% 0.052 201)",
+          "oklch(95% 0.052 201)"
+        ]
+      },
+      "tidal-teal-dim": {
+        "role": "secondary",
+        "displayName": "Tidal Teal Dim",
+        "canonical": "rgba(143,193,196,0.5)"
+      },
+      "bone": {
+        "role": "neutral",
+        "displayName": "Bone",
+        "canonical": "oklch(93% 0.013 82)",
+        "tonalRamp": [
+          "oklch(15% 0.013 82)",
+          "oklch(26% 0.013 82)",
+          "oklch(38% 0.013 82)",
+          "oklch(49% 0.013 82)",
+          "oklch(61% 0.013 82)",
+          "oklch(72% 0.013 82)",
+          "oklch(84% 0.013 82)",
+          "oklch(95% 0.013 82)"
+        ]
+      },
+      "bone-2": {
+        "role": "neutral",
+        "displayName": "Bone 50%",
+        "canonical": "rgba(237,232,223,0.5)"
+      },
+      "bone-3": {
+        "role": "neutral",
+        "displayName": "Bone 22%",
+        "canonical": "rgba(237,232,223,0.22)"
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgba(255,255,255,0.08)"
+      }
+    },
+    "typographyMeta": {
+      "field-word": {
+        "displayName": "Field Word",
+        "purpose": "Palatino serif for words that name or reflect a feeling."
+      },
+      "welcome": {
+        "displayName": "Welcome Cue",
+        "purpose": "The only large text: the grounding line on arrival."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Inter 300 for diary summaries and quiet supporting text."
+      },
+      "chip": {
+        "displayName": "Chip",
+        "purpose": "Word tags on cards."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tiny uppercase tracked labels: axis ends, eyebrows, small buttons."
+      }
+    },
+    "shadows": [
+      {
+        "name": "selection-glow",
+        "value": "0 0 0 1px rgb(var(--ui-gold-rgb) / 0.5), 0 6px 22px rgb(var(--ui-gold-rgb) / 0.12)",
+        "purpose": "Selected, docked card only."
+      },
+      {
+        "name": "thumb-ring-gold",
+        "value": "0 0 0 4px rgb(var(--ui-gold-rgb) / 0.12), 0 2px 8px rgb(var(--ui-gold-rgb) / 0.35)",
+        "purpose": "Draft slider thumb."
+      },
+      {
+        "name": "thumb-ring-recorded",
+        "value": "0 0 0 4px rgb(var(--ui-recorded-rgb) / 0.12), 0 2px 8px rgb(var(--ui-recorded-rgb) / 0.35)",
+        "purpose": "Recorded / pre-mint slider thumb."
+      },
+      {
+        "name": "frosted-glass",
+        "value": "backdrop-filter: blur(12px) saturate(1.1); background: rgb(var(--ui-surface-rgb) / 0.56)",
+        "purpose": "Cards laid over the field."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-soft",
+        "value": "ease-out",
+        "purpose": "Default: opacity/background 0.25s, box-shadow 0.35s."
+      },
+      {
+        "name": "welcome-rise",
+        "value": "0.7s ease-out, 0.3s delay, y 8px",
+        "purpose": "Welcome cue entrance."
+      },
+      {
+        "name": "proximity-reveal",
+        "value": "dwell 1.2s (DWELL_DELAY_MS)",
+        "purpose": "Deep words appear after stable hover."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Word Tag (suggested)",
+      "kind": "chip",
+      "refersTo": "word-tag",
+      "description": "An offered word: dashed, dim, not yet yours.",
+      "html": "<span class=\"ds-tag\"><span class=\"ds-tag-body\">restless</span></span>",
+      "css": ".ds-tag{display:inline-flex;align-items:center;border-radius:6px;border:1px dashed color-mix(in srgb, var(--ui-gold) 32%, transparent);color:var(--ui-text-2);font-size:12px;line-height:1.35;letter-spacing:.01em;background:transparent}.ds-tag-body{padding:4px 11px}"
+    },
+    {
+      "name": "Word Tag (named)",
+      "kind": "chip",
+      "refersTo": "word-tag-named",
+      "description": "A word the user has named: solid, tinted, checked.",
+      "html": "<span class=\"ds-tag-named\"><span class=\"ds-tag-named-body\">restless \u2713</span></span>",
+      "css": ".ds-tag-named{display:inline-flex;align-items:center;border-radius:6px;border:1px solid var(--ui-gold-dim);background:color-mix(in srgb, var(--ui-gold) 15%, transparent);color:var(--ui-gold);font-size:12px;line-height:1.35;letter-spacing:.01em}.ds-tag-named-body{padding:4px 11px}"
+    },
+    {
+      "name": "Word Tag (recorded)",
+      "kind": "chip",
+      "refersTo": "word-tag-recorded",
+      "description": "The named chip in teal, on a saved check-in.",
+      "html": "<span class=\"ds-tag-rec\"><span class=\"ds-tag-rec-body\">calm \u2713</span></span>",
+      "css": ".ds-tag-rec{display:inline-flex;align-items:center;border-radius:6px;border:1px solid var(--ui-recorded-dim);background:color-mix(in srgb, var(--ui-recorded) 16%, transparent);color:var(--ui-recorded);font-size:12px;line-height:1.35;letter-spacing:.01em}.ds-tag-rec-body{padding:4px 11px}"
+    },
+    {
+      "name": "Ghost Text Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Tiny uppercase hairline button; the product has no filled primary.",
+      "html": "<button class=\"ds-ghost\">HISTORY</button>",
+      "css": ".ds-ghost{background:none;border:1px solid var(--ui-border);border-radius:6px;color:var(--ui-text-2);font:500 9px Inter,system-ui,sans-serif;letter-spacing:.14em;padding:6px 12px;cursor:pointer;transition:border-color .25s ease-out,color .25s ease-out}.ds-ghost:hover{border-color:var(--ui-gold-dim);color:var(--ui-text-1)}.ds-ghost:focus-visible{outline:1px solid var(--ui-gold-dim);outline-offset:2px}"
+    },
+    {
+      "name": "Coordinate Card (frosted)",
+      "kind": "card",
+      "refersTo": "coordinate-card",
+      "description": "Translucent card over the field with a header band and hint line.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-head\">VALENCE \u00b7 AROUSAL</div><p class=\"ds-card-hint\">between calm and content</p></div>",
+      "css": ".ds-card{background:rgb(var(--ui-surface-rgb) / .56);backdrop-filter:blur(12px) saturate(1.1);border:1px solid var(--ui-border);border-radius:12px;overflow:hidden;width:260px;color:var(--ui-text-1)}.ds-card-head{padding:10px 14px;font:500 9px Inter,system-ui,sans-serif;letter-spacing:.14em;color:var(--ui-text-3)}.ds-card-hint{margin:0;padding:6px 14px 16px;font:italic 14px Palatino,\"Palatino Linotype\",Georgia,serif;color:var(--ui-text-3)}"
+    },
+    {
+      "name": "Axis Slider",
+      "kind": "custom",
+      "refersTo": "coordinate-card",
+      "description": "Full-width axis track with end labels, gradient bead thumb, and origin tick.",
+      "html": "<div class=\"ds-slider\"><div class=\"ds-ends\"><span>CALM</span><span>ACTIVATED</span></div><div class=\"ds-track\"><div class=\"ds-tick\"></div><div class=\"ds-thumb\"></div></div></div>",
+      "css": ".ds-slider{width:240px}.ds-ends{display:flex;justify-content:space-between;margin-bottom:6px;font:500 8px Inter,system-ui,sans-serif;letter-spacing:.12em;color:var(--ui-text-3)}.ds-track{position:relative;height:2px;background:var(--ui-border);border-radius:2px;margin:12px 0}.ds-tick{position:absolute;left:50%;top:-4px;width:1px;height:10px;background:var(--ui-text-3)}.ds-thumb{position:absolute;left:62%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:radial-gradient(circle at 40% 35%,var(--ui-gold-hi),var(--ui-gold) 62%);box-shadow:0 0 0 4px rgb(var(--ui-gold-rgb) / .12),0 2px 8px rgb(var(--ui-gold-rgb) / .35)}"
+    },
+    {
+      "name": "Field Word",
+      "kind": "custom",
+      "refersTo": "field-word",
+      "description": "Serif label above a tiny coordinate dot; warms to gold near the cursor.",
+      "html": "<div class=\"ds-fw\"><span class=\"ds-fw-label\">serene</span><span class=\"ds-fw-dot\"></span></div>",
+      "css": ".ds-fw{display:inline-flex;flex-direction:column;align-items:center;gap:11px}.ds-fw-label{font:400 15.5px Palatino,\"Palatino Linotype\",\"Book Antiqua\",Georgia,serif;color:var(--ui-text-2)}.ds-fw-dot{width:3px;height:3px;border-radius:50%;background:rgba(237,232,223,.32)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Sky Journal",
+    "overview": "The field is a night sky and every check-in is a point of warm light you place in it. The room is a deep indigo dark with slow water-like light drifting behind it. Emotion words emerge out of the dark only as your attention nears them, and your own pins are the brightest things there. Later, in the diary, the same points are read back as a personal constellation.",
+    "keyCharacteristics": [
+      "Deep-indigo night ground with a slow, near-still water gradient; light comes from the user's own pins.",
+      "One warm accent (starlight gold) for the present draft; one soft teal for the recorded past.",
+      "Serif for feeling-words, sans for chrome. Type is small, light-weight, and low-contrast.",
+      "Tonal, glassy depth: translucent frosted cards over the live field, no structural shadows.",
+      "Everything offered is dashed, dim, or italic; assertion is saved for the user's own pin."
+    ],
+    "rules": [
+      {
+        "name": "The Two Hues Rule",
+        "body": "Gold means present and yours; teal means recorded and past. Never use either for anything else, and never introduce a third accent hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Verdict Colors Rule",
+        "body": "Emotional valence never maps to red/green, good/bad, or warm/alarm.",
+        "section": "colors"
+      },
+      {
+        "name": "The Bone Not White Rule",
+        "body": "Text is #EDE8DF at three fixed opacity tiers. Do not add a fourth tier or use pure white.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif For Feelings Rule",
+        "body": "Palatino is reserved for words that name or reflect an emotional state. Controls, dates, counts, and chrome are Inter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Small And Quiet Rule",
+        "body": "Most text is 8\u201315px at weight 300\u2013500 in a dimmed tier. Emphasis comes from warmth (gold) or proximity, not from bold or size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat At Rest Rule",
+        "body": "Surfaces carry no shadow at rest. Glows and rings appear only in response to selection, drag, or proximity.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Field Reads Through Rule",
+        "body": "Any surface laid over the field is translucent enough that the field is still legible behind it.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Token Is The Source Rule",
+        "body": "A color exists once, in the theme catalogue. Any other file that needs it reads a --ui-* token or a derived -rgb channel; a hex or rgba() copy of a theme color is a bug, and npm run check:theme scans src/ for it.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do let the coordinate lead: an entry looks complete with no word attached.",
+      "Do use starlight gold (--ui-gold) only for the present draft and teal (--ui-recorded) only for the recorded past.",
+      "Do mark anything offered rather than chosen with a dashed border, dim text, or italic serif.",
+      "Do build new surfaces from the --ui-* tokens and their -rgb channels so a theme swap recolors them; never paste a hex.",
+      "Do keep surfaces translucent over the field and honor prefers-reduced-motion.",
+      "Do keep type small and light; use warmth or proximity for emphasis."
+    ],
+    "donts": [
+      "Don't use chart aesthetics, clinical grids, gauges, or scores anywhere.",
+      "Don't use urgency or verdict colors: no red, no green-for-good, no amber alerts.",
+      "Don't add a filled primary button, a badge, or a required-field affordance.",
+      "Don't use pure white text or pure black grounds; stay on bone and night indigo.",
+      "Don't add structural drop shadows or opaque cards that hide the field.",
+      "Don't hardcode a theme color, in a component, in the landing page, or in a new stylesheet; that silently opts the surface out of every future theme.",
+      "Don't introduce a third accent hue or a social, sharing, or comparison visual."
+    ]
+  }
+}

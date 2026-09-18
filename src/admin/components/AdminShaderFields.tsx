@@ -142,7 +142,7 @@ export function FieldSegmented<T extends string>({
                 padding: '5px 12px',
                 borderRadius: 6,
                 border: active ? '1px solid var(--ui-gold)' : '1px solid var(--ui-border)',
-                background: active ? 'rgba(201,168,124,0.14)' : 'transparent',
+                background: active ? 'rgb(var(--ui-gold-rgb) / 0.14)' : 'transparent',
                 color: active ? 'var(--ui-gold)' : 'var(--ui-text-2)',
                 fontSize: 11.5,
                 cursor: 'pointer',
