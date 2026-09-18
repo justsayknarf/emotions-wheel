@@ -31,9 +31,9 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 6,
         width: '100%',
-        padding: '14px 0',
+        padding: '12px 0',
         borderBottom: '1px solid var(--ui-border)',
         borderTop: 'none',
         borderLeft: 'none',
