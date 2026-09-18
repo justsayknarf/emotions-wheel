@@ -1,13 +1,9 @@
-import { isSameDay } from '../../utils/formatDate';
+import { isSameDay, formatWeekdayAndDate } from '../../utils/formatDate';
 
 interface Props {
   date: Date;
   onPrev: () => void;
   onNext: () => void;
-}
-
-function formatHeaderDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 const chevronStyle: React.CSSProperties = {
@@ -38,7 +34,7 @@ export function DayTabHeader({ date, onPrev, onNext }: Props) {
         textTransform: 'uppercase',
         color: 'var(--ui-text-2)',
       }}>
-        {formatHeaderDate(date)}
+        {formatWeekdayAndDate(date)}
       </span>
       <button
         onClick={onNext}

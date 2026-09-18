@@ -1,5 +1,5 @@
 import { sessionAverage, capDots } from '../../utils/diaryAggregation';
-import { isSameDay, formatWeekdayShort } from '../../utils/formatDate';
+import { isSameDay, formatWeekdayAndDate } from '../../utils/formatDate';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -51,7 +51,7 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
         color: isEmpty ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
         opacity: isEmpty ? 0.5 : 1,
       }}>
-        {formatWeekdayShort(date)}
+        {formatWeekdayAndDate(date)}
         {isToday && (
           <span style={{
             fontSize: 8,
