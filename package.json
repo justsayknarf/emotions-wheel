@@ -18,6 +18,7 @@
     "check:gesture": "npx tsx scripts/test-field-gesture.ts",
     "check:anchor": "npx tsx scripts/test-anchor-label.ts",
     "check:density": "npx tsx scripts/test-chart-density.ts",
+    "check:tags": "npx tsx scripts/test-day-tags.ts",
     "preview": "vite preview"
   },
   "dependencies": {

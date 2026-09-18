@@ -1,5 +1,9 @@
+import { useMemo } from 'react';
 import { sessionAverage, capDots } from '../../utils/diaryAggregation';
 import { isSameDay, formatWeekdayAndDate } from '../../utils/formatDate';
+import { dayTags } from '../../utils/dayTags';
+import { labelForId } from '../../data/emotions';
+import { WordTag } from '../EmotionPreview/WordTag';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -19,14 +23,15 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
   const renderableCount = sessions.filter(e => sessionAverage(e) !== null).length;
   const { shown, overflow } = capDots(renderableCount);
   const isEmpty = renderableCount === 0;
+  const tags = useMemo(() => dayTags(sessions, labelForId), [sessions]);
 
   return (
     <button
       onClick={() => onSelect(date)}
       style={{
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: 'column',
+        gap: 10,
         width: '100%',
         padding: '14px 0',
         borderBottom: '1px solid var(--ui-border)',
@@ -40,59 +45,82 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
         color: 'inherit',
       }}
     >
-      <span style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: 10,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        fontWeight: 500,
-        color: isEmpty ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
-        opacity: isEmpty ? 0.5 : 1,
-      }}>
-        {formatWeekdayAndDate(date)}
-        {isToday && (
-          <span style={{
-            fontSize: 8,
-            fontWeight: 600,
-            letterSpacing: '0.06em',
-            color: 'var(--ui-gold)',
-            border: '1px solid var(--ui-gold-dim)',
-            borderRadius: 4,
-            padding: '1px 4px',
-          }}>
-            TODAY
-          </span>
-        )}
+      {/* Spans, not divs -- a button's content model is phrasing-only. */}
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 10,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          fontWeight: 500,
+          color: isEmpty ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
+          opacity: isEmpty ? 0.5 : 1,
+        }}>
+          {formatWeekdayAndDate(date)}
+          {isToday && (
+            <span style={{
+              fontSize: 8,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              color: 'var(--ui-gold)',
+              border: '1px solid var(--ui-gold-dim)',
+              borderRadius: 4,
+              padding: '1px 4px',
+            }}>
+              TODAY
+            </span>
+          )}
+        </span>
+
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isEmpty ? (
+            <span style={{ fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
+              No check-ins
+            </span>
+          ) : (
+            <>
+              {Array.from({ length: shown }).map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: 'var(--ui-gold)',
+                  }}
+                />
+              ))}
+              {overflow > 0 && (
+                <span style={{ fontSize: 9, color: 'var(--ui-text-3)', marginLeft: 2 }}>
+                  +{overflow}
+                </span>
+              )}
+            </>
+          )}
+        </span>
       </span>
 
-      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {isEmpty ? (
-          <span style={{ fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
-            No check-ins
-          </span>
-        ) : (
-          <>
-            {Array.from({ length: shown }).map((_, i) => (
+      {tags.shown.length > 0 && (
+        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          {tags.shown.map(tag =>
+            tag.kind === 'tag' ? (
+              <WordTag key={`tag:${tag.text}`} label={tag.text} named />
+            ) : (
               <span
-                key={i}
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--ui-gold)',
-                }}
-              />
-            ))}
-            {overflow > 0 && (
-              <span style={{ fontSize: 9, color: 'var(--ui-text-3)', marginLeft: 2 }}>
-                +{overflow}
+                key={`region:${tag.text}`}
+                style={{ fontSize: 13, color: 'var(--ui-text-2)', fontWeight: 300, lineHeight: 1.5 }}
+              >
+                {tag.text}
               </span>
-            )}
-          </>
-        )}
-      </span>
+            ),
+          )}
+          {tags.overflow > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--ui-text-3)' }}>+{tags.overflow}</span>
+          )}
+        </span>
+      )}
     </button>
   );
 }
