@@ -5,6 +5,7 @@ import { DiaryEntryRow } from './DiaryEntryRow';
 import { DailySummaryRow } from './DailySummaryRow';
 import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
+import { MiniCircumplex } from './MiniCircumplex';
 import { SessionDetailCard } from './SessionDetailCard';
 import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
@@ -249,6 +250,12 @@ function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpe
       <DayTabHeader date={date} onPrev={onPrev} onNext={onNext} />
 
       <DayChart sessions={sessions} onDotTap={onOpenEntry} />
+
+      {sessions.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 12px' }}>
+          <MiniCircumplex pins={sessions.flatMap(e => e.pins)} size={90} showAxes />
+        </div>
+      )}
 
       {/* Session list */}
       <div style={{ padding: '0 20px' }}>
