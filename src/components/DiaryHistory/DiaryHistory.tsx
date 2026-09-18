@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { TabBar } from './TabBar';
+import { motion, AnimatePresence } from 'framer-motion';
 import { DayTabHeader } from './DayTabHeader';
 import { DiaryEntryRow } from './DiaryEntryRow';
+import { DailySummaryRow } from './DailySummaryRow';
 import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { SessionDetailCard } from './SessionDetailCard';
@@ -16,24 +16,33 @@ interface Props {
 }
 
 export function DiaryHistory({ entries, onBack }: Props) {
-  const [activeTab, setActiveTab] = useState<'day' | 'week'>('day');
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [dayDetailFor, setDayDetailFor] = useState<Date | null>(null);
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
   const swipeCloseRef = useRef<{ x: number; y: number } | null>(null);
 
+  // Gated on dayDetailFor: while day-detail is open, this pops back to the
+  // week screen first; only when it's already null does it reach the
+  // App-level onBack and exit History. Physical/system back stays unwired
+  // to this local state (unchanged from today's SessionDetailCard) and
+  // always exits History directly, from either screen.
+  function handleOuterBack() {
+    if (dayDetailFor !== null) {
+      setDayDetailFor(null);
+    } else {
+      onBack();
+    }
+  }
+
   function shiftDate(delta: number) {
-    setSelectedDate(prev => {
+    setDayDetailFor(prev => {
+      if (prev === null) return prev;
       const next = new Date(prev);
       next.setDate(prev.getDate() + delta);
       return next;
     });
   }
 
-  const daySessions = sessionsForDay(entries, selectedDate).sort(
+  const daySessions = dayDetailFor === null ? [] : sessionsForDay(entries, dayDetailFor).sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
@@ -47,7 +56,8 @@ export function DiaryHistory({ entries, onBack }: Props) {
         flexDirection: 'column',
       }}
       onPointerDownCapture={(e) => {
-        // Edge swipe to close — only from left 40px to avoid WeekChart conflict
+        // Edge swipe to close — only from left 40px. Gated the same as the
+        // outer header's back button (handleOuterBack).
         if (openEntry === null && e.clientX <= 40) {
           swipeCloseRef.current = { x: e.clientX, y: e.clientY };
         }
@@ -58,7 +68,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
         const dy = e.clientY - swipeCloseRef.current.y;
         if (dx > 80 && Math.abs(dx) / Math.abs(dy || 1) > 2) {
           swipeCloseRef.current = null;
-          onBack();
+          handleOuterBack();
         }
       }}
       onPointerUpCapture={() => { swipeCloseRef.current = null; }}
@@ -75,7 +85,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
         borderBottom: '1px solid var(--ui-border)',
       }}>
         <button
-          onClick={onBack}
+          onClick={handleOuterBack}
           style={{
             background: 'none',
             border: 'none',
@@ -122,48 +132,121 @@ export function DiaryHistory({ entries, onBack }: Props) {
         )}
       </div>
 
-      {/* Tab bar */}
-      <TabBar active={activeTab} onChange={setActiveTab} />
-
-      {/* Tab content */}
+      {/* Content — week screen, or day-detail nested as a local-state child */}
       <div style={{ flex: 1, overflowY: 'auto', touchAction: 'pan-y' }}>
-        {activeTab === 'day' ? (
-          <DayTabContent
-            sessions={daySessions}
-            selectedDate={selectedDate}
-            onPrev={() => shiftDate(-1)}
-            onNext={() => shiftDate(1)}
-            onBack={onBack}
-            onOpenEntry={setOpenEntry}
-          />
-        ) : (
-          <WeekTabContent entries={entries} />
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {dayDetailFor === null ? (
+            <motion.div
+              key="week"
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <WeekScreen entries={entries} onSelectDay={setDayDetailFor} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="day"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DayDetail
+                date={dayDetailFor}
+                sessions={daySessions}
+                onPrev={() => shiftDate(-1)}
+                onNext={() => shiftDate(1)}
+                onBackToWeek={() => setDayDetailFor(null)}
+                onBack={onBack}
+                onOpenEntry={setOpenEntry}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       </div>{/* end centered column */}
 
-      {/* Session detail overlay — outside the centered column so it spans full screen */}
+      {/* Session detail overlay — outside the centered column so it spans full screen.
+          Local state layered on top of whichever content (week screen or day-detail)
+          is currently rendered; dismissing it lands back on that same content, no
+          new wiring needed. */}
       <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
     </div>
   );
 }
 
-// ─── Day tab ─────────────────────────────────────────────────────────────────
+// ─── Week screen ─────────────────────────────────────────────────────────────
 
-interface DayTabProps {
+interface WeekScreenProps {
+  entries: DiaryEntry[];
+  onSelectDay: (date: Date) => void;
+}
+
+function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
+  const days = last7Days();
+  const windowEntries = entriesInWindow(entries, days);
+  const showInvitation = !hasSpreadCoverage(windowEntries);
+
+  return (
+    <div style={{ padding: '12px 0' }}>
+      <WeekChart entries={windowEntries} />
+      {showInvitation && (
+        <p style={{ margin: '8px 16px 0', fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
+          Patterns get clearer with more check-ins.
+        </p>
+      )}
+      <div style={{ padding: '4px 20px 0' }}>
+        {[...days].reverse().map(day => (
+          <DailySummaryRow
+            key={day.toDateString()}
+            date={day}
+            sessions={sessionsForDay(entries, day)}
+            onSelect={onSelectDay}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Day detail (child view) ─────────────────────────────────────────────────
+
+interface DayDetailProps {
+  date: Date;
   sessions: DiaryEntry[];
-  selectedDate: Date;
   onPrev: () => void;
   onNext: () => void;
+  onBackToWeek: () => void;
   onBack: () => void;
   onOpenEntry: (entry: DiaryEntry) => void;
 }
 
-function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenEntry }: DayTabProps) {
+function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpenEntry }: DayDetailProps) {
   return (
     <div>
-      <DayTabHeader date={selectedDate} onPrev={onPrev} onNext={onNext} />
+      {/* In-app back control — returns to the week screen. Distinct from the
+          outer header's "← Back", which exits History once this is already null. */}
+      <button
+        onClick={onBackToWeek}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--ui-text-2)',
+          fontSize: 11,
+          fontWeight: 500,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          padding: '10px 20px 0',
+        }}
+      >
+        ← Week
+      </button>
+
+      <DayTabHeader date={date} onPrev={onPrev} onNext={onNext} />
 
       <DayChart sessions={sessions} onDotTap={onOpenEntry} />
 
@@ -210,28 +293,6 @@ function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenE
           ))
         )}
       </div>
-    </div>
-  );
-}
-
-// ─── Week tab ────────────────────────────────────────────────────────────────
-
-interface WeekTabProps {
-  entries: DiaryEntry[];
-}
-
-function WeekTabContent({ entries }: WeekTabProps) {
-  const windowEntries = entriesInWindow(entries, last7Days());
-  const showInvitation = !hasSpreadCoverage(windowEntries);
-
-  return (
-    <div style={{ padding: '12px 0' }}>
-      <WeekChart entries={windowEntries} />
-      {showInvitation && (
-        <p style={{ margin: '8px 16px 0', fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
-          Patterns get clearer with more check-ins.
-        </p>
-      )}
     </div>
   );
 }
