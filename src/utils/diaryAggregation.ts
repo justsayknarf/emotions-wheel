@@ -54,6 +54,22 @@ export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] 
   return entries.filter(e => new Date(e.timestamp).toDateString() === target);
 }
 
+/**
+ * Buckets entries by calendar day in one pass -- for callers that need every
+ * day's sessions (e.g. a week of daily summary rows), so they don't call
+ * sessionsForDay once per day and re-scan the full entry list each time.
+ */
+export function groupByDay(entries: DiaryEntry[]): Map<string, DiaryEntry[]> {
+  const buckets = new Map<string, DiaryEntry[]>();
+  for (const entry of entries) {
+    const key = dateKey(new Date(entry.timestamp));
+    const existing = buckets.get(key);
+    if (existing) existing.push(entry);
+    else buckets.set(key, [entry]);
+  }
+  return buckets;
+}
+
 /** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. */
 export function last7Days(): Date[] {
   const days: Date[] = [];

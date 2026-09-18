@@ -1,3 +1,5 @@
+import { isSameDay } from '../../utils/formatDate';
+
 interface Props {
   date: Date;
   onPrev: () => void;
@@ -19,7 +21,7 @@ const chevronStyle: React.CSSProperties = {
 };
 
 export function DayTabHeader({ date, onPrev, onNext }: Props) {
-  const isToday = date.toDateString() === new Date().toDateString();
+  const isToday = isSameDay(date, new Date());
 
   return (
     <div style={{

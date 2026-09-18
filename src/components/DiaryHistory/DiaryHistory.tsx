@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { CSSProperties } from 'react';
 import { DayTabHeader } from './DayTabHeader';
 import { DiaryEntryRow } from './DiaryEntryRow';
 import { DailySummaryRow } from './DailySummaryRow';
@@ -7,13 +8,25 @@ import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { MiniCircumplex } from './MiniCircumplex';
 import { SessionDetailCard } from './SessionDetailCard';
-import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days } from '../../utils/diaryAggregation';
+import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days, groupByDay, dateKey } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
   entries: DiaryEntry[];
   onBack: () => void;
+}
+
+// Shared shape for the two "go back one level" text buttons (outer header,
+// day-detail's in-app control) -- only size/weight differ between them.
+function backButtonStyle(fontSize: number): CSSProperties {
+  return {
+    background: 'none',
+    border: 'none',
+    color: 'var(--ui-text-2)',
+    cursor: 'pointer',
+    fontSize,
+  };
 }
 
 export function DiaryHistory({ entries, onBack }: Props) {
@@ -43,8 +56,11 @@ export function DiaryHistory({ entries, onBack }: Props) {
     });
   }
 
-  const daySessions = dayDetailFor === null ? [] : sessionsForDay(entries, dayDetailFor).sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  const daySessions = useMemo(
+    () => dayDetailFor === null ? [] : sessionsForDay(entries, dayDetailFor).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    ),
+    [entries, dayDetailFor],
   );
 
   return (
@@ -87,16 +103,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
       }}>
         <button
           onClick={handleOuterBack}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--ui-text-2)',
-            fontSize: 13,
-            cursor: 'pointer',
-            padding: '6px 0',
-            marginRight: 12,
-            letterSpacing: '0.01em',
-          }}
+          style={{ ...backButtonStyle(13), padding: '6px 0', marginRight: 12, letterSpacing: '0.01em' }}
         >
           ← Back
         </button>
@@ -190,6 +197,9 @@ function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
   const days = last7Days();
   const windowEntries = entriesInWindow(entries, days);
   const showInvitation = !hasSpreadCoverage(windowEntries);
+  // One pass over windowEntries instead of re-scanning the full entries
+  // array once per day.
+  const byDay = groupByDay(windowEntries);
 
   return (
     <div style={{ padding: '12px 0' }}>
@@ -204,7 +214,7 @@ function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
           <DailySummaryRow
             key={day.toDateString()}
             date={day}
-            sessions={sessionsForDay(entries, day)}
+            sessions={byDay.get(dateKey(day)) ?? []}
             onSelect={onSelectDay}
           />
         ))}
@@ -232,17 +242,7 @@ function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpe
           outer header's "← Back", which exits History once this is already null. */}
       <button
         onClick={onBackToWeek}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--ui-text-2)',
-          fontSize: 11,
-          fontWeight: 500,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          padding: '10px 20px 0',
-        }}
+        style={{ ...backButtonStyle(11), fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 20px 0' }}
       >
         ← Week
       </button>

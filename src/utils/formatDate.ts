@@ -30,6 +30,16 @@ export function startOfDay(d: Date): number {
   return c.getTime();
 }
 
+/** Whether two dates fall on the same local calendar day. */
+export function isSameDay(a: Date, b: Date): boolean {
+  return startOfDay(a) === startOfDay(b);
+}
+
+/** Short weekday label, e.g. "Tue" -- shared by WeekChart's day columns and DailySummaryRow. */
+export function formatWeekdayShort(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'short' });
+}
+
 // A soft relative stamp for the returning mirror, e.g. "Yesterday, late evening".
 export function formatRelative(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);

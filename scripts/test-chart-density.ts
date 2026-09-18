@@ -11,6 +11,7 @@ import {
   distinctDayCount,
   dailyAggregates,
   capDots,
+  groupByDay,
   MIN_SPREAD_DAYS,
 } from '../src/utils/diaryAggregation';
 import type { DiaryEntry, PinEntry } from '../src/types';
@@ -114,6 +115,12 @@ check('capDots: zero shows zero, no overflow', zero.shown === 0 && zero.overflow
 
 const atCap = capDots(5, 5);
 check('capDots: exactly at the cap shows all, no overflow', atCap.shown === 5 && atCap.overflow === 0, JSON.stringify(atCap));
+
+// --- groupByDay ---
+const grouped = groupByDay(mixed);
+check('groupByDay: buckets by calendar day, same as dailyAggregates', grouped.size === 2, `${grouped.size} day bucket(s)`);
+const day0Entries = [...grouped.values()].find(v => v.length === 2);
+check('groupByDay: same-day entries land in one bucket, in original order', day0Entries?.length === 2, `${day0Entries?.length} entrie(s) in the 2-entry bucket`);
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);

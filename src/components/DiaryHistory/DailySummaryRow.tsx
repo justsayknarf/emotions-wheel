@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { sessionAverage, capDots, dateKey } from '../../utils/diaryAggregation';
+import { sessionAverage, capDots } from '../../utils/diaryAggregation';
+import { isSameDay, formatWeekdayShort } from '../../utils/formatDate';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -8,18 +8,12 @@ interface Props {
   onSelect: (date: Date) => void;
 }
 
-function formatRowDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'short' });
-}
-
 // One row per day in the week screen's daily summary list. It is the sole
 // navigation surface into a day (see plan Key Technical Decisions), so it
 // must be keyboard-operable, unlike DiaryEntryRow which is only one of
 // several paths to an entry.
 export function DailySummaryRow({ date, sessions, onSelect }: Props) {
-  const [hover, setHover] = useState(false);
-
-  const isToday = date.toDateString() === new Date().toDateString();
+  const isToday = isSameDay(date, new Date());
   // Zero-pin entries have no sessionAverage -- they don't render a dot and
   // don't count toward the cap, matching DayChart's null-filtering.
   const renderableCount = sessions.filter(e => sessionAverage(e) !== null).length;
@@ -28,10 +22,7 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
 
   return (
     <button
-      key={dateKey(date)}
       onClick={() => onSelect(date)}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -42,7 +33,7 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
         borderTop: 'none',
         borderLeft: 'none',
         borderRight: 'none',
-        background: hover ? 'rgba(201,168,124,0.06)' : 'none',
+        background: 'none',
         cursor: 'pointer',
         textAlign: 'left',
         font: 'inherit',
@@ -60,7 +51,7 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
         color: isEmpty ? 'var(--ui-text-3)' : 'var(--ui-text-2)',
         opacity: isEmpty ? 0.5 : 1,
       }}>
-        {formatRowDate(date)}
+        {formatWeekdayShort(date)}
         {isToday && (
           <span style={{
             fontSize: 8,

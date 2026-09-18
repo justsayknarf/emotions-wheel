@@ -1,4 +1,5 @@
 import { last7Days, dailyAggregates, dateKey, buildWeightedSegments } from '../../utils/diaryAggregation';
+import { formatWeekdayShort } from '../../utils/formatDate';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
@@ -126,7 +127,7 @@ export function WeekChart({ entries }: Props) {
             fill="var(--ui-text-3)"
             fontFamily="inherit"
           >
-            {day.toLocaleDateString('en-US', { weekday: 'short' })}
+            {formatWeekdayShort(day)}
           </text>
         ))}
       </svg>
