@@ -26,11 +26,6 @@ export function DiaryHistory({ entries, onBack }: Props) {
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
   const swipeCloseRef = useRef<{ x: number; y: number } | null>(null);
 
-  function onDaySelect(date: Date) {
-    setSelectedDate(date);
-    setActiveTab('day');
-  }
-
   function shiftDate(delta: number) {
     setSelectedDate(prev => {
       const next = new Date(prev);
@@ -145,7 +140,6 @@ export function DiaryHistory({ entries, onBack }: Props) {
         ) : (
           <WeekTabContent
             entries={entries}
-            onDaySelect={onDaySelect}
             onOpenEntry={setOpenEntry}
           />
         )}
@@ -228,17 +222,16 @@ function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenE
 
 interface WeekTabProps {
   entries: DiaryEntry[];
-  onDaySelect: (date: Date) => void;
   onOpenEntry: (entry: DiaryEntry) => void;
 }
 
-function WeekTabContent({ entries, onDaySelect, onOpenEntry }: WeekTabProps) {
+function WeekTabContent({ entries, onOpenEntry }: WeekTabProps) {
   const windowEntries = entriesInWindow(entries, last7Days());
   const showInvitation = !hasSpreadCoverage(windowEntries);
 
   return (
     <div style={{ padding: '12px 0' }}>
-      <WeekChart entries={windowEntries} onDayTap={onDaySelect} />
+      <WeekChart entries={windowEntries} />
       {showInvitation && (
         <p style={{ margin: '8px 16px 0', fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
           Patterns get clearer with more check-ins.
