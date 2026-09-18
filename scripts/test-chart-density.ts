@@ -1,6 +1,6 @@
 // Behavioural check for the sparse-check-in-legibility pure logic
-// (src/utils/diaryAggregation.ts: gapWeight, hasSpreadCoverage, entriesInWindow,
-// nearestPins). Run: npm run check:density
+// (src/utils/diaryAggregation.ts: gapWeight, hasSpreadCoverage, entriesInWindow).
+// Run: npm run check:density
 //
 // This repo has no test runner, so this is the only automated exercise of
 // this logic. Exits non-zero on any violation.
@@ -10,9 +10,7 @@ import {
   entriesInWindow,
   distinctDayCount,
   dailyAggregates,
-  nearestPins,
   MIN_SPREAD_DAYS,
-  PIN_OVERLAP_RADIUS,
 } from '../src/utils/diaryAggregation';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
@@ -86,34 +84,6 @@ check(
   'entriesInWindow: includes entries inside and on the boundary of the range',
   filtered.some(e => e.id === inWindow.id) && filtered.some(e => e.id === boundary.id),
   `filtered ids: ${filtered.map(e => e.id).join(', ')}`,
-);
-
-// --- nearestPins ---
-const target = samplePin(0, 0);
-const close = samplePin(PIN_OVERLAP_RADIUS * 0.5, 0);
-const farOutside = samplePin(PIN_OVERLAP_RADIUS + 0.5, 0);
-const onBoundary = samplePin(PIN_OVERLAP_RADIUS, 0);
-const justPastBoundary = samplePin(PIN_OVERLAP_RADIUS + 0.001, 0);
-
-check(
-  'nearestPins: returns only the target when nothing else is within radius',
-  nearestPins([target, farOutside], target).length === 1,
-  `${nearestPins([target, farOutside], target).length} pin(s) returned`,
-);
-check(
-  'nearestPins: returns multiple when another pin is within radius',
-  nearestPins([target, close], target).length === 2,
-  `${nearestPins([target, close], target).length} pin(s) returned`,
-);
-check(
-  'nearestPins: includes a pin exactly on the boundary',
-  nearestPins([target, onBoundary], target).length === 2,
-  `${nearestPins([target, onBoundary], target).length} pin(s) returned`,
-);
-check(
-  'nearestPins: excludes a pin just past the boundary',
-  nearestPins([target, justPastBoundary], target).length === 1,
-  `${nearestPins([target, justPastBoundary], target).length} pin(s) returned`,
 );
 
 // --- Regression: dailyAggregates unchanged by the dateKey export ---

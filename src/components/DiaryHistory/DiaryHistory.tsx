@@ -5,7 +5,6 @@ import { DayTabHeader } from './DayTabHeader';
 import { DiaryEntryRow } from './DiaryEntryRow';
 import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
-import { WeekPointCloud } from './WeekPointCloud';
 import { SessionDetailCard } from './SessionDetailCard';
 import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
@@ -138,10 +137,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
             onOpenEntry={setOpenEntry}
           />
         ) : (
-          <WeekTabContent
-            entries={entries}
-            onOpenEntry={setOpenEntry}
-          />
+          <WeekTabContent entries={entries} />
         )}
       </div>
 
@@ -222,10 +218,9 @@ function DayTabContent({ sessions, selectedDate, onPrev, onNext, onBack, onOpenE
 
 interface WeekTabProps {
   entries: DiaryEntry[];
-  onOpenEntry: (entry: DiaryEntry) => void;
 }
 
-function WeekTabContent({ entries, onOpenEntry }: WeekTabProps) {
+function WeekTabContent({ entries }: WeekTabProps) {
   const windowEntries = entriesInWindow(entries, last7Days());
   const showInvitation = !hasSpreadCoverage(windowEntries);
 
@@ -237,7 +232,6 @@ function WeekTabContent({ entries, onOpenEntry }: WeekTabProps) {
           Patterns get clearer with more check-ins.
         </p>
       )}
-      <WeekPointCloud windowEntries={windowEntries} onOpenEntry={onOpenEntry} />
     </div>
   );
 }

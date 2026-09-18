@@ -1,5 +1,4 @@
-import { euclideanDist, SELECTION_RADIUS } from '../hooks/useProximity';
-import type { DiaryEntry, PinEntry } from '../types';
+import type { DiaryEntry } from '../types';
 
 export interface Aggregate {
   valence: number;
@@ -139,21 +138,4 @@ export function buildWeightedSegments(
     if (weight > MIN_RENDER_WEIGHT) segments.push({ i, j, weight });
   }
   return segments;
-}
-
-/**
- * Tap-disambiguation radius in the app's (x, y) pin-coordinate space
- * (each axis −1..1), not pixels — independent of how large the panel
- * that renders these pins happens to be. Derived from the field's own
- * `SELECTION_RADIUS` (rather than a fully independent constant) so a
- * retune of one is a visible prompt to reconsider the other, offset
- * down since the point-cloud panel's much smaller rendered size (~112px
- * suggested) needs a tighter normalized tolerance for "visually the
- * same dot" than the full-size field's hover-selection distance does.
- */
-export const PIN_OVERLAP_RADIUS = SELECTION_RADIUS - 0.03;
-
-/** Every pin (including `target`) within `radius` of `target`, for resolving an ambiguous tap. */
-export function nearestPins(pins: PinEntry[], target: PinEntry, radius: number = PIN_OVERLAP_RADIUS): PinEntry[] {
-  return pins.filter(p => euclideanDist(p.x, p.y, target.x, target.y) <= radius);
 }
