@@ -74,6 +74,30 @@ check('identical fallbacks across check-ins collapse to one', dupeFallback.shown
 const multiPin = dayTags([entry(9, [pin(['a']), pin(['a', 'b'])])], labelFor);
 check('words across one check-in\'s pins merge and dedupe', texts(multiPin).join() === 'A,B', JSON.stringify(multiPin));
 
+// --- a partly-tagged check-in keeps its untagged pins ---
+const mixedPins = dayTags([entry(9, [pin(['calm']), pin([], 'between *anxious* and *rattled*')])], labelFor);
+check(
+  'a tagged pin and an untagged pin in one check-in both show',
+  texts(mixedPins).join('|') === 'CALM|between anxious and rattled',
+  JSON.stringify(mixedPins),
+);
+
+const twoUntagged = dayTags(
+  [entry(9, [pin([], 'between *a* and *b*'), pin([], 'between *c* and *d*')])],
+  labelFor,
+);
+check(
+  'each untagged pin counts as its own single tag toward the cap',
+  texts(twoUntagged).join('|') === 'between a and b|between c and d' && twoUntagged.overflow === 0,
+  JSON.stringify(twoUntagged),
+);
+
+const capWithFallbacks = dayTags(
+  [entry(9, [pin(['x']), pin([], 'between *a* and *b*'), pin([], 'between *c* and *d*'), pin([], 'between *e* and *f*')])],
+  labelFor,
+);
+check('untagged pins overflow the cap like any other tag', capWithFallbacks.shown.length === 3 && capWithFallbacks.overflow === 1, JSON.stringify(capWithFallbacks));
+
 // --- ordering / edge cases ---
 const shuffled = dayTags([entry(15, [pin(['late'])]), entry(8, [pin(['early'])])], labelFor);
 check('tags order chronologically regardless of input order', texts(shuffled).join() === 'EARLY,LATE', JSON.stringify(shuffled));

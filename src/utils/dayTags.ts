@@ -9,12 +9,13 @@ export interface DayTags {
 }
 
 /**
- * The emotional tags for one day's check-ins, in chronological order. A
- * check-in that named words contributes those words; one that named none
+ * The emotional tags for one day's check-ins, in chronological order. Each
+ * pin that named words contributes those words; a pin that named none
  * contributes its stored region description ("between hopeful and touched")
- * as a single tag, so it counts once toward the cap. Duplicates across
- * check-ins collapse. `labelFor` is injected so this stays pure -- the
- * emotion registry can't load under the check scripts' Node runtime.
+ * as a single tag, so it counts once toward the cap. Deciding per pin keeps a
+ * partly-tagged check-in from silently dropping its untagged pins. Duplicates
+ * collapse. `labelFor` is injected so this stays pure -- the emotion registry
+ * can't load under the check scripts' Node runtime.
  */
 export function dayTags(
   entries: DiaryEntry[],
@@ -27,12 +28,12 @@ export function dayTags(
 
   const all = new Set<string>();
   for (const entry of ordered) {
-    if (entry.pins.length === 0) continue;
-    const ids = [...new Set(entry.pins.flatMap(p => p.recognizedWords))];
-    if (ids.length > 0) {
-      for (const id of ids) all.add(labelFor(id));
-    } else {
-      all.add(entry.pins[0].regionDescription.relational.replace(/\*/g, ''));
+    for (const pin of entry.pins) {
+      if (pin.recognizedWords.length > 0) {
+        for (const id of pin.recognizedWords) all.add(labelFor(id));
+      } else {
+        all.add(pin.regionDescription.relational.replace(/\*/g, ''));
+      }
     }
   }
 
