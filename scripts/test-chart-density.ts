@@ -1,6 +1,6 @@
 // Behavioural check for the sparse-check-in-legibility pure logic
-// (src/utils/diaryAggregation.ts: gapWeight, hasSpreadCoverage, entriesInWindow,
-// nearestPins). Run: npm run check:density
+// (src/utils/diaryAggregation.ts: gapWeight, hasSpreadCoverage, entriesInWindow).
+// Run: npm run check:density
 //
 // This repo has no test runner, so this is the only automated exercise of
 // this logic. Exits non-zero on any violation.
@@ -10,10 +10,12 @@ import {
   entriesInWindow,
   distinctDayCount,
   dailyAggregates,
-  nearestPins,
+  sessionsForDay,
+  capDots,
+  groupByDay,
   MIN_SPREAD_DAYS,
-  PIN_OVERLAP_RADIUS,
 } from '../src/utils/diaryAggregation';
+import { isSameDay } from '../src/utils/formatDate';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
 let failures = 0;
@@ -88,34 +90,6 @@ check(
   `filtered ids: ${filtered.map(e => e.id).join(', ')}`,
 );
 
-// --- nearestPins ---
-const target = samplePin(0, 0);
-const close = samplePin(PIN_OVERLAP_RADIUS * 0.5, 0);
-const farOutside = samplePin(PIN_OVERLAP_RADIUS + 0.5, 0);
-const onBoundary = samplePin(PIN_OVERLAP_RADIUS, 0);
-const justPastBoundary = samplePin(PIN_OVERLAP_RADIUS + 0.001, 0);
-
-check(
-  'nearestPins: returns only the target when nothing else is within radius',
-  nearestPins([target, farOutside], target).length === 1,
-  `${nearestPins([target, farOutside], target).length} pin(s) returned`,
-);
-check(
-  'nearestPins: returns multiple when another pin is within radius',
-  nearestPins([target, close], target).length === 2,
-  `${nearestPins([target, close], target).length} pin(s) returned`,
-);
-check(
-  'nearestPins: includes a pin exactly on the boundary',
-  nearestPins([target, onBoundary], target).length === 2,
-  `${nearestPins([target, onBoundary], target).length} pin(s) returned`,
-);
-check(
-  'nearestPins: excludes a pin just past the boundary',
-  nearestPins([target, justPastBoundary], target).length === 1,
-  `${nearestPins([target, justPastBoundary], target).length} pin(s) returned`,
-);
-
 // --- Regression: dailyAggregates unchanged by the dateKey export ---
 const mixed: DiaryEntry[] = [
   mkEntry(0, 8, [samplePin(0.5, -0.5)]),
@@ -130,6 +104,47 @@ check(
   Math.abs(day0.valence) < 1e-9 && Math.abs(day0.arousal) < 1e-9,
   `valence=${day0.valence}, arousal=${day0.arousal} (expected ~0,~0 — the two pins cancel out)`,
 );
+
+// --- capDots ---
+const under = capDots(3, 5);
+check('capDots: under the cap shows all, no overflow', under.shown === 3 && under.overflow === 0, JSON.stringify(under));
+
+const over = capDots(7, 5);
+check('capDots: over the cap shows the cap, overflow is the remainder', over.shown === 5 && over.overflow === 2, JSON.stringify(over));
+
+const zero = capDots(0, 5);
+check('capDots: zero shows zero, no overflow', zero.shown === 0 && zero.overflow === 0, JSON.stringify(zero));
+
+const atCap = capDots(5, 5);
+check('capDots: exactly at the cap shows all, no overflow', atCap.shown === 5 && atCap.overflow === 0, JSON.stringify(atCap));
+
+// --- groupByDay ---
+const grouped = groupByDay(mixed);
+check('groupByDay: buckets by calendar day, same as dailyAggregates', grouped.size === 2, `${grouped.size} day bucket(s)`);
+const day0Entries = [...grouped.values()].find(v => v.length === 2);
+check('groupByDay: same-day entries land in one bucket, in original order', day0Entries?.length === 2, `${day0Entries?.length} entrie(s) in the 2-entry bucket`);
+
+// --- Regression: dailyAggregates still excludes zero-pin entries after deriving from groupByDay ---
+const withZeroPin = [...mixed, mkEntry(0, 14, [])];
+const aggWithZeroPin = dailyAggregates(withZeroPin);
+check(
+  'dailyAggregates: a zero-pin entry does not shift the day-0 average',
+  aggWithZeroPin.get([...agg.keys()][0])?.valence === day0.valence,
+  `day-0 valence unchanged at ${aggWithZeroPin.get([...agg.keys()][0])?.valence}`,
+);
+
+// --- sessionsForDay / isSameDay: converged on the same dateKey-based day identity ---
+const today = new Date();
+const todayEntry = mkEntry(0, 10);
+const yesterdayEntry = mkEntry(1, 10);
+const forToday = sessionsForDay([todayEntry, yesterdayEntry], today);
+check(
+  'sessionsForDay: returns only entries matching the target calendar day',
+  forToday.length === 1 && forToday[0].id === todayEntry.id,
+  `${forToday.length} entrie(s): ${forToday.map(e => e.id).join(', ')}`,
+);
+check('isSameDay: true for two timestamps on the same calendar day', isSameDay(today, new Date(todayEntry.timestamp)), 'same-day pair');
+check('isSameDay: false across a day boundary', !isSameDay(today, new Date(yesterdayEntry.timestamp)), 'cross-day pair');
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);

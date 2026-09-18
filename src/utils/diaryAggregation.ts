@@ -1,5 +1,4 @@
-import { euclideanDist, SELECTION_RADIUS } from '../hooks/useProximity';
-import type { DiaryEntry, PinEntry } from '../types';
+import type { DiaryEntry } from '../types';
 
 export interface Aggregate {
   valence: number;
@@ -23,36 +22,48 @@ export function dateKey(d: Date): string {
 }
 
 /**
+ * Buckets entries by calendar day in one pass -- for callers that need every
+ * day's sessions (e.g. a week of daily summary rows), so they don't call
+ * sessionsForDay once per day and re-scan the full entry list each time.
+ * The single canonical day-bucketing pass -- dailyAggregates and
+ * distinctDayCount build on this rather than re-deriving their own key.
+ */
+export function groupByDay(entries: DiaryEntry[]): Map<string, DiaryEntry[]> {
+  const buckets = new Map<string, DiaryEntry[]>();
+  for (const entry of entries) {
+    const key = dateKey(new Date(entry.timestamp));
+    const existing = buckets.get(key);
+    if (existing) existing.push(entry);
+    else buckets.set(key, [entry]);
+  }
+  return buckets;
+}
+
+/**
  * Per-day aggregate across all sessions. Each day's value is the mean of
  * every pin across every session recorded on that calendar day.
- * Days with no sessions are absent from the map.
+ * Days with no sessions (or only zero-pin sessions) are absent from the map.
  */
 export function dailyAggregates(entries: DiaryEntry[]): Map<string, Aggregate> {
-  const buckets = new Map<string, { vSum: number; aSum: number; count: number }>();
-
-  for (const entry of entries) {
-    if (entry.pins.length === 0) continue;
-    const key = dateKey(new Date(entry.timestamp));
-    const existing = buckets.get(key) ?? { vSum: 0, aSum: 0, count: 0 };
-    for (const pin of entry.pins) {
-      existing.vSum += pin.x;
-      existing.aSum += pin.y;
-      existing.count += 1;
-    }
-    buckets.set(key, existing);
-  }
-
   const result = new Map<string, Aggregate>();
-  for (const [key, { vSum, aSum, count }] of buckets) {
-    result.set(key, { valence: vSum / count, arousal: aSum / count });
+  for (const [key, dayEntries] of groupByDay(entries)) {
+    let vSum = 0, aSum = 0, count = 0;
+    for (const entry of dayEntries) {
+      for (const pin of entry.pins) {
+        vSum += pin.x;
+        aSum += pin.y;
+        count += 1;
+      }
+    }
+    if (count > 0) result.set(key, { valence: vSum / count, arousal: aSum / count });
   }
   return result;
 }
 
 /** Filter entries to those recorded on the same calendar day as `date` (local time). */
 export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] {
-  const target = date.toDateString();
-  return entries.filter(e => new Date(e.timestamp).toDateString() === target);
+  const target = dateKey(date);
+  return entries.filter(e => dateKey(new Date(e.timestamp)) === target);
 }
 
 /** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. */
@@ -118,6 +129,15 @@ export interface WeightedSegment {
   weight: number;
 }
 
+/** Above this many dots in a daily summary row, the rest collapse into a "+k" overflow marker. */
+export const MAX_ROW_DOTS = 5;
+
+/** How many dots a count renders as, and how many are left over past the cap. */
+export function capDots(count: number, cap: number = MAX_ROW_DOTS): { shown: number; overflow: number } {
+  const shown = Math.min(count, cap);
+  return { shown, overflow: count - shown };
+}
+
 /**
  * Connects each pair of consecutive present indices, weighting the
  * connection by the gap between them (via `gapMsBetween`) and dropping it
@@ -139,21 +159,4 @@ export function buildWeightedSegments(
     if (weight > MIN_RENDER_WEIGHT) segments.push({ i, j, weight });
   }
   return segments;
-}
-
-/**
- * Tap-disambiguation radius in the app's (x, y) pin-coordinate space
- * (each axis −1..1), not pixels — independent of how large the panel
- * that renders these pins happens to be. Derived from the field's own
- * `SELECTION_RADIUS` (rather than a fully independent constant) so a
- * retune of one is a visible prompt to reconsider the other, offset
- * down since the point-cloud panel's much smaller rendered size (~112px
- * suggested) needs a tighter normalized tolerance for "visually the
- * same dot" than the full-size field's hover-selection distance does.
- */
-export const PIN_OVERLAP_RADIUS = SELECTION_RADIUS - 0.03;
-
-/** Every pin (including `target`) within `radius` of `target`, for resolving an ambiguous tap. */
-export function nearestPins(pins: PinEntry[], target: PinEntry, radius: number = PIN_OVERLAP_RADIUS): PinEntry[] {
-  return pins.filter(p => euclideanDist(p.x, p.y, target.x, target.y) <= radius);
 }

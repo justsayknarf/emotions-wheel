@@ -1,10 +1,10 @@
 import { last7Days, dailyAggregates, dateKey, buildWeightedSegments } from '../../utils/diaryAggregation';
+import { formatWeekdayShort } from '../../utils/formatDate';
 import { ChartLegend } from './ChartLegend';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
   entries: DiaryEntry[];
-  onDayTap: (date: Date) => void;
 }
 
 const COL_WIDTH = 44;
@@ -37,7 +37,7 @@ const SERIES = [
   { key: 'arousal' as const, color: 'var(--ui-recorded)', opacityMul: 1 },
 ];
 
-export function WeekChart({ entries, onDayTap }: Props) {
+export function WeekChart({ entries }: Props) {
   const days = last7Days();
   const aggregates = dailyAggregates(entries);
 
@@ -127,22 +127,8 @@ export function WeekChart({ entries, onDayTap }: Props) {
             fill="var(--ui-text-3)"
             fontFamily="inherit"
           >
-            {day.toLocaleDateString('en-US', { weekday: 'short' })}
+            {formatWeekdayShort(day)}
           </text>
-        ))}
-
-        {/* Per-column tap targets */}
-        {days.map((day, i) => (
-          <rect
-            key={`hit-${i}`}
-            x={i * COL_WIDTH}
-            y={0}
-            width={COL_WIDTH}
-            height={SVG_H - 14}
-            fill="transparent"
-            style={{ cursor: 'pointer' }}
-            onClick={() => onDayTap(day)}
-          />
         ))}
       </svg>
     </div>

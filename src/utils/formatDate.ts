@@ -1,3 +1,5 @@
+import { dateKey } from './diaryAggregation';
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     weekday: 'short',
@@ -28,6 +30,21 @@ export function startOfDay(d: Date): number {
   const c = new Date(d);
   c.setHours(0, 0, 0, 0);
   return c.getTime();
+}
+
+/** Whether two dates fall on the same local calendar day. */
+export function isSameDay(a: Date, b: Date): boolean {
+  return dateKey(a) === dateKey(b);
+}
+
+/** Short weekday label, e.g. "Tue" -- for WeekChart's space-constrained day columns. */
+export function formatWeekdayShort(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'short' });
+}
+
+/** Weekday + date, e.g. "Tue, Sep 16" -- shared by DayTabHeader and DailySummaryRow. */
+export function formatWeekdayAndDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 // A soft relative stamp for the returning mirror, e.g. "Yesterday, late evening".
