@@ -28,13 +28,13 @@ function entry(hour: number, pins: PinEntry[]): DiaryEntry {
   d.setHours(hour, 0, 0, 0);
   return { id: `e-${hour}-${Math.random()}`, timestamp: d.toISOString(), pins, sessionDurationMs: 1000 };
 }
-const texts = (r: ReturnType<typeof dayTags>) => r.shown.map(t => t.text);
+const texts = (r: ReturnType<typeof dayTags>) => r.shown;
 
 // --- named words ---
 const named = dayTags([entry(9, [pin(['calm', 'hopeful'])])], labelFor);
 check(
-  'named words render as tags via the injected label resolver',
-  named.shown.length === 2 && named.shown.every(t => t.kind === 'tag') && texts(named).join() === 'CALM,HOPEFUL',
+  'named words come through the injected label resolver',
+  texts(named).join() === 'CALM,HOPEFUL',
   JSON.stringify(named),
 );
 
@@ -42,7 +42,7 @@ check(
 const fallback = dayTags([entry(9, [pin([])])], labelFor);
 check(
   'a check-in with no words falls back to its region description, asterisks stripped',
-  fallback.shown.length === 1 && fallback.shown[0].kind === 'region' && fallback.shown[0].text === 'between hopeful and touched',
+  fallback.shown.length === 1 && fallback.shown[0] === 'between hopeful and touched',
   JSON.stringify(fallback),
 );
 
@@ -57,7 +57,7 @@ check('exactly three tags shows all, no overflow', exactlyThree.shown.length ===
 const twoPlusDefault = dayTags([entry(9, [pin(['a', 'b'])]), entry(12, [pin([])])], labelFor);
 check(
   'the fallback counts as one tag: two words + one fallback fills the cap with no overflow',
-  twoPlusDefault.shown.length === 3 && twoPlusDefault.overflow === 0 && twoPlusDefault.shown[2].kind === 'region',
+  twoPlusDefault.shown.length === 3 && twoPlusDefault.overflow === 0 && twoPlusDefault.shown[2] === 'between hopeful and touched',
   JSON.stringify(twoPlusDefault),
 );
 

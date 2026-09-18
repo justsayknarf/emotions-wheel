@@ -3,7 +3,6 @@ import { sessionAverage, capDots } from '../../utils/diaryAggregation';
 import { isSameDay, formatWeekdayAndDate } from '../../utils/formatDate';
 import { dayTags } from '../../utils/dayTags';
 import { labelForId } from '../../data/emotions';
-import { WordTag } from '../EmotionPreview/WordTag';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -23,7 +22,8 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
   const renderableCount = sessions.filter(e => sessionAverage(e) !== null).length;
   const { shown, overflow } = capDots(renderableCount);
   const isEmpty = renderableCount === 0;
-  const tags = useMemo(() => dayTags(sessions, labelForId), [sessions]);
+  // Lowercased so tag words and the "between X and Y" fallback read as one line of prose.
+  const tags = useMemo(() => dayTags(sessions, id => labelForId(id).toLowerCase()), [sessions]);
 
   return (
     <button
@@ -103,21 +103,10 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
       </span>
 
       {tags.shown.length > 0 && (
-        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-          {tags.shown.map(tag =>
-            tag.kind === 'tag' ? (
-              <WordTag key={`tag:${tag.text}`} label={tag.text} named />
-            ) : (
-              <span
-                key={`region:${tag.text}`}
-                style={{ fontSize: 13, color: 'var(--ui-text-2)', fontWeight: 300, lineHeight: 1.5 }}
-              >
-                {tag.text}
-              </span>
-            ),
-          )}
+        <span style={{ fontSize: 13, color: 'var(--ui-text-2)', fontWeight: 300, lineHeight: 1.5 }}>
+          {tags.shown.join(', ')}
           {tags.overflow > 0 && (
-            <span style={{ fontSize: 11, color: 'var(--ui-text-3)' }}>+{tags.overflow}</span>
+            <span style={{ fontSize: 11, color: 'var(--ui-text-3)' }}> +{tags.overflow}</span>
           )}
         </span>
       )}
