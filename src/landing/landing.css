@@ -1,0 +1,442 @@
+/* Landing page. Inherits DESIGN.md (The Night Sky Journal) unchanged. The --ui-*
+   tokens come from the same generated file the app uses, and Landing.tsx applies
+   the admin-selected theme on top, so a theme change reaches this page too.
+   index.css is not imported here because it locks the document (overflow
+   hidden, no touch scrolling), which is right for the field and wrong for a
+   page you scroll. */
+@import '../theme-tokens.css';
+
+:root {
+  /* Landing-only. Running copy on a marketing page is read, not glanced at, so
+     it sits between text-1 and text-2 to hold contrast over the sky's glow. */
+  --lp-gold-soft: color-mix(in srgb, var(--ui-gold), white 20%);
+  --lp-body: rgb(var(--ui-text-rgb) / 0.74);
+  --lp-serif: Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --lp-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --gutter: clamp(20px, 5vw, 64px);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--ui-bg);
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  scrollbar-color: rgb(var(--ui-text-rgb) / 0.18) transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-text-1);
+  font-family: var(--lp-sans);
+  font-weight: 300;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: rgb(var(--ui-gold-rgb) / 0.28); color: var(--ui-text-1); }
+
+a { color: inherit; }
+a:focus-visible,
+button:focus-visible {
+  outline: 1px solid var(--ui-gold);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+h1, h2, p { margin: 0; }
+.nb { white-space: nowrap; }
+
+.lp { position: relative; min-height: 100vh; overflow-x: clip; }
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+}
+
+/* ---------------------------------------------------------------- sky -- */
+
+.sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.aura {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(40px);
+  will-change: transform;
+}
+.aura-a {
+  /* Centered on the hero's pin, so the first thing planted has light around it. */
+  width: 62vmax; left: 58%; top: 44%; margin: -31vmax 0 0 -31vmax;
+  background: radial-gradient(circle, rgb(var(--ui-gold-rgb) / 0.17), transparent 70%);
+  animation: drift-a 23s ease-in-out infinite alternate;
+}
+.aura-b {
+  width: 48vmax; left: 66%; top: 44%;
+  background: radial-gradient(circle, rgb(var(--ui-recorded-rgb) / 0.06), transparent 70%);
+  animation: drift-b 29s ease-in-out infinite alternate;
+}
+.aura-c {
+  width: 42vmax; left: 30%; top: 58%;
+  background: radial-gradient(circle, rgb(var(--ui-recorded-rgb) / 0.05), transparent 70%);
+  animation: drift-c 19s ease-in-out infinite alternate;
+}
+@keyframes drift-a { to { transform: translate(-4vmax, 3vmax) scale(1.12); } }
+@keyframes drift-b { to { transform: translate(3vmax, -4vmax) scale(1.15); } }
+@keyframes drift-c { to { transform: translate(4vmax, 2vmax) scale(1.18); } }
+
+.word {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transition: none;
+}
+.word-dot {
+  position: absolute;
+  left: -1.5px; top: -1.5px;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: rgb(var(--ui-text-rgb) / 0.32);
+  transition: background 1.2s var(--ease-out), transform 1.2s var(--ease-out);
+  transition-delay: inherit;
+}
+.word[data-depth='deep'] .word-dot { width: 2px; height: 2px; left: -1px; top: -1px; background: rgb(var(--ui-text-rgb) / 0.16); }
+.word-label {
+  position: absolute;
+  left: 0; bottom: 8px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--lp-serif);
+  font-size: 13px;
+  color: var(--ui-text-1);
+  opacity: 0;
+  transition: opacity 1.4s var(--ease-out), color 1.4s var(--ease-out);
+  transition-delay: inherit;
+}
+.word[data-depth='surface'] .word-label { opacity: 0.08; }
+.word[data-lit='true'] .word-label { opacity: 0.78; color: var(--lp-gold-soft); }
+/* A pin's labels take turns: nearest above its dot, next below, and any further
+   word is a lit dot only, so they never stack on one spot. */
+.word[data-lit='true'][data-slot='1'] .word-label { bottom: auto; top: 8px; }
+.word[data-lit='true'][data-slot='2'] .word-label { opacity: 0; }
+.word[data-lit='true'] .word-dot { background: rgb(var(--ui-gold-rgb) / 0.85); transform: scale(1.5); }
+
+/* Resting words never sit under running copy: on wide screens the left half is
+   the copy column, so its words keep their dots and lose their labels. */
+@media (min-width: 761px) {
+  .word[data-copy='true']:not([data-lit='true']) .word-label { opacity: 0; }
+}
+
+.lines { position: absolute; inset: 0; }
+.lines line {
+  stroke: var(--ui-gold);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.22;
+  transition: stroke-dashoffset 1.6s var(--ease-out), opacity 1.6s var(--ease-out);
+}
+.lines line[data-on='true'] { stroke-dashoffset: 0; }
+.sky[data-reveal='true'] .lines line[data-on='true'] { opacity: 0.5; }
+
+.pin {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.pin-core {
+  position: absolute;
+  left: -5px; top: -5px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--ui-gold-hi), var(--ui-gold) 62%);
+  box-shadow: 0 2px 10px rgb(var(--ui-gold-rgb) / 0.4);
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.9s var(--ease-out), transform 0.9s var(--ease-out);
+}
+.pin-ring {
+  position: absolute;
+  left: -16px; top: -16px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--ui-gold-dim);
+  opacity: 0;
+}
+.pin[data-on='true'] .pin-core { opacity: 1; transform: scale(1); }
+.pin[data-on='true'] .pin-ring { animation: ripple 2.2s var(--ease-out) 1 both; }
+@keyframes ripple {
+  0%   { opacity: 0.7; transform: scale(0.3); }
+  100% { opacity: 0;   transform: scale(2.4); }
+}
+.sky[data-reveal='true'] .pin[data-on='true'] .pin-core { transform: scale(1.25); }
+
+/* The hero's pin is the page's one focal object: larger, with a quiet standing
+   ring so it reads as a place, not a speck. */
+.pin[data-n='1'] .pin-core { left: -7px; top: -7px; width: 14px; height: 14px; }
+.pin[data-n='1']::before {
+  content: '';
+  position: absolute;
+  left: -30px; top: -30px;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: 1px solid rgb(var(--ui-gold-rgb) / 0.22);
+  opacity: 0;
+  transition: opacity 1.6s var(--ease-out) 0.4s;
+}
+.pin[data-n='1'][data-on='true']::before { opacity: 1; }
+.pin-user .pin-core { left: -6px; top: -6px; width: 12px; height: 12px; }
+.word[data-pin='1'][data-lit='true'] .word-label { font-size: 15px; }
+
+/* ---------------------------------------------------------------- nav -- */
+
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Same left and right edges as the page's content column. */
+  padding: 18px max(var(--gutter), calc((100vw - 1200px) / 2 + var(--gutter)));
+  background: linear-gradient(to bottom, rgb(var(--ui-bg-rgb) / 0.78), rgb(var(--ui-bg-rgb) / 0));
+}
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  color: var(--ui-text-1);
+}
+.mark-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--ui-gold-hi), var(--ui-gold) 62%);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 1px solid var(--ui-gold-dim);
+  border-radius: 22px;
+  background: rgb(var(--ui-gold-rgb) / 0.08);
+  color: var(--ui-gold);
+  font-family: var(--lp-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.25s ease-out, border-color 0.25s ease-out, color 0.25s ease-out, transform 0.25s var(--ease-out);
+}
+.btn:hover { background: rgb(var(--ui-gold-rgb) / 0.16); border-color: var(--ui-gold); color: var(--lp-gold-soft); }
+.btn:active { transform: scale(0.98); }
+.btn-lg { min-height: 52px; padding: 0 30px; border-radius: 26px; font-size: 15px; }
+
+/* --------------------------------------------------------------- hero -- */
+
+.hero {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  padding-block: 96px 64px;
+}
+.hero-copy { max-width: 35rem; }
+h1 {
+  font-family: var(--lp-serif);
+  font-weight: 300;
+  font-size: clamp(2.5rem, 1.2rem + 4.4vw, 4.75rem);
+  line-height: 1.06;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.lede {
+  margin-top: 28px;
+  max-width: 30rem;
+  font-size: 18px;
+  line-height: 1.62;
+  color: var(--lp-body);
+}
+.actions { margin-top: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+.fine { font-size: 13px; color: var(--ui-text-2); }
+
+/* ----------------------------------------------------------- sections -- */
+
+.sec { padding-block: clamp(88px, 18vh, 200px); }
+.sec-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 24px;
+  align-items: center;
+}
+.sec-copy { grid-column: 1 / span 5; }
+.sec-demo { grid-column: 7 / span 5; }
+.sec-grid-left { grid-template-columns: minmax(0, 36rem); }
+.sec-grid-left .sec-copy,
+.sec-grid-left .sec-demo { grid-column: 1; }
+.sec-grid-left .sec-demo { margin-top: 48px; }
+
+h2 {
+  font-family: var(--lp-serif);
+  font-weight: 300;
+  font-size: clamp(2rem, 1.2rem + 2.6vw, 3.25rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.sec-copy p {
+  margin-top: 22px;
+  max-width: 32rem;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--lp-body);
+}
+
+/* The sample card is the one place glass belongs: it sits over the live sky,
+   the same frosted card the app lays over its own field. */
+.card {
+  background: rgb(var(--ui-surface-rgb) / 0.56);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.card-head {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ui-text-2);
+}
+.card-body { padding: 20px 20px 24px; }
+
+.readout { display: flex; align-items: center; gap: 22px; }
+.relational {
+  font-family: var(--lp-serif);
+  font-size: 19px;
+  line-height: 1.35;
+  color: var(--ui-text-1);
+}
+.narrative { margin-top: 4px; font-size: 14px; color: var(--ui-text-2); }
+.sliders { display: flex; flex-direction: column; gap: 22px; margin-top: 26px; }
+
+/* AxisSlider styles itself inline for the app's dense card: its end labels are
+   8px at 22% opacity. On a page they are how a visitor learns what the axes
+   are, so lift them just enough to read. */
+.sliders span[style] { font-size: 10px !important; color: var(--ui-text-2) !important; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chips-note { margin-top: 18px; font-size: 13px; color: var(--ui-text-2); min-height: 1.6em; }
+.demo-note { margin-top: 14px; font-size: 13px; color: var(--ui-text-2); }
+
+.sample-label {
+  margin-bottom: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ui-text-2);
+}
+.words-demo .sample-label { margin-bottom: 14px; }
+.words-demo .chips { margin-top: 16px; }
+
+/* WeekChart is the app's own component and styles itself for a dense card:
+   opaque surface, 7-9px labels at 22% opacity. On the page it carries the
+   payoff, so it goes translucent over the sky like the other cards and its
+   labels come up to a readable tier. */
+.diary-card > div:first-child {
+  background: rgb(var(--ui-surface-rgb) / 0.56) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
+}
+.diary-card svg text { fill: var(--ui-text-2) !important; font-size: 8.5px !important; }
+.diary-card span[style] { color: var(--ui-text-2) !important; font-size: 10px !important; }
+.diary-card { display: flex; flex-direction: column; gap: 28px; }
+.diary-card > div:first-child { margin: 0 !important; }
+.diary-points { display: flex; align-items: center; gap: 22px; }
+.diary-points p { font-size: 14px; color: var(--ui-text-2); max-width: 16rem; }
+
+/* -------------------------------------------------------------- close -- */
+
+.close {
+  min-height: 100svh;
+  display: flex;
+  align-items: flex-end;
+  padding-block: 96px 16vh;
+}
+.close-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0; }
+.cue {
+  font-family: var(--lp-serif);
+  font-weight: 300;
+  font-size: clamp(2.4rem, 1rem + 5vw, 4.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.close-sub { margin: 20px 0 40px; font-size: 18px; color: var(--lp-body); }
+
+.foot { position: relative; z-index: 1; padding: 0 0 28px; }
+.foot-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 32px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+/* ------------------------------------------------------------- narrow -- */
+
+@media (max-width: 760px) {
+  .hero { align-items: flex-end; padding-block: 96px 8vh; }
+  .lede { font-size: 17px; }
+  .sec-grid { display: block; }
+  .sec-demo { margin-top: 40px; }
+  .sec-copy p { font-size: 16px; }
+  .word[data-depth='surface']:not([data-lit='true']) .word-label { opacity: 0; }
+  /* Past the hero, copy runs edge to edge and would sit under the labels. */
+  .sky:not([data-pins='0']):not([data-pins='1']) .word[data-lit='true'] .word-label { opacity: 0; }
+  .lines line { opacity: 0.14; }
+  /* The gutter chain is the constellation on a phone; lines to the hero pin
+     would cut across the copy. The hero's own pin steps aside after the hero. */
+  .lines line[data-edge='hero'] { display: none; }
+  .sky:not([data-pins='0']):not([data-pins='1']) .pin[data-n='1'] { opacity: 0; transition: opacity 0.8s var(--ease-out); }
+  .wrap { padding-inline: 20px 34px; }
+  .sky[data-reveal='true'] .lines line[data-on='true'] { opacity: 0.3; }
+  .readout { gap: 16px; }
+  .relational { font-size: 17px; }
+  .close { padding-bottom: 14vh; }
+  .foot-inner { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .aura { animation: none; }
+  .pin[data-on='true'] .pin-ring { animation: none; }
+  .word-dot, .word-label, .lines line, .pin-core { transition-duration: 0.01ms !important; transition-delay: 0s !important; }
+}

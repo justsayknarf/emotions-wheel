@@ -14,3 +14,11 @@ dist/
 .obsidian/core-plugins.json
 .obsidian/graph.json
 .obsidian/workspace.json
+
+# Impeccable design-tool session state and review captures (design.json and surfaces/ are kept)
+.impeccable/review/
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/hook.cache.json
+.impeccable/landing-round.json
+.impeccable/landing-brief.md
