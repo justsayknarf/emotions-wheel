@@ -869,7 +869,7 @@ export function EmotionDrawer({
           now that there's no box border to inset from. */}
       {isPanelLayout && (
         <div style={groupHeaderStyle}>
-          {`Previous check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+          Previous check-in
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -948,7 +948,7 @@ export function EmotionDrawer({
         <>
           {isPanelLayout && !isFocus && previousPins.length > 0 && (
             <div style={groupHeaderStyle}>
-              {`${justSaved ? "Today's" : 'Previous'} check-in  ·  ${previousPins.length} ${previousPins.length === 1 ? 'pin' : 'pins'}`}
+              {`${justSaved ? "Today's" : 'Previous'} check-in`}
             </div>
           )}
           {/* docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md:
@@ -1053,7 +1053,7 @@ export function EmotionDrawer({
               matches what's actually there. 'rail'/'sheet' keep it. */}
           {isPanelLayout && !isFocus && (
             <div style={groupHeaderStyle}>
-              {`Draft check-in  ·  ${pins.length} ${pins.length === 1 ? 'pin' : 'pins'}`}
+              Draft check-in
             </div>
           )}
           {draftCards}
@@ -1340,8 +1340,8 @@ export function EmotionDrawer({
   // only place "Today's check-in" needs saying, since the sheet variant
   // never renders the panel-layout-only groupHeaderStyle text above.
   const peekMicroLabel = canSave ? 'Draft' : justSaved ? "Today's check-in" : 'Last check-in';
-  const peekDetailLabel = canSave ? `${pins.length} pin${pins.length === 1 ? '' : 's'}` : timeLabel;
-  const peekAriaSubject = canSave ? `draft, ${peekDetailLabel}` : justSaved ? "today's check-in" : 'last check-in';
+  const peekDetailLabel = canSave ? null : timeLabel;
+  const peekAriaSubject = canSave ? 'draft' : justSaved ? "today's check-in" : 'last check-in';
   const handleButton = !isReopened && (
     <button
       ref={sheetHandleRef}
@@ -1377,9 +1377,11 @@ export function EmotionDrawer({
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={MICRO_LABEL}>{peekMicroLabel}</span>
-          <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
-            {peekDetailLabel}
-          </span>
+          {peekDetailLabel && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ui-text-2)', letterSpacing: '0.01em' }}>
+              {peekDetailLabel}
+            </span>
+          )}
         </span>
         {/* Points up while peeked (inviting expand), down while expanded (inviting collapse) */}
         <motion.span
