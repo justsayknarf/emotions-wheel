@@ -28,6 +28,9 @@ const RECEDE_MIN_OPACITY = 0.4;
 const RECEDE_MIN_SCALE = 0.85;
 // The named pair grows slightly past its resting size to claim the eye.
 const PAIR_SCALE_BOOST = 1.16;
+// text-sm (14px) over text-xs (12px): what a selected deep word scales by to
+// match a primary (surface) word.
+const DEEP_TO_PRIMARY_SCALE = 14 / 12;
 
 // Map coordinate [-1, 1] to [5%, 95%] of container dimension
 function toPercent(v: number): number {
@@ -54,18 +57,25 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   const { opacity, scale, isCandidate, nearness } = proximity;
 
   const resolvedOpacity = isSelected || isHighlighted ? 1 : opacity;
-  const resolvedScale = isCandidate ? 1.3 : (isSelected ? 1 : (isHighlighted ? 1.05 : scale));
+  // A recognized (tagged) word steps up to the primary tier's size: deep words
+  // are text-xs, surface words text-sm, so a selected deep word scales by the
+  // ratio. Done as a spring-animated scale rather than a class swap so the word
+  // grows smoothly when the tag is picked. Surface words are already primary.
+  const selectedScale = emotion.depth === 'deep' ? DEEP_TO_PRIMARY_SCALE : 1;
+  const resolvedScale = isCandidate ? 1.3 : (isSelected ? selectedScale : (isHighlighted ? 1.05 : scale));
 
   // Card emphasis, layered on top of the resting treatment. 'pair' forces the
   // gold, lifted read even for a word that wasn't otherwise highlighted;
   // 'recede' scales opacity + size down toward the floors above.
+  // A tagged word never recedes — it's the one the user just picked.
+  const receding = emphasis === 'recede' && !isSelected;
   const s = Math.max(0, Math.min(1, recedeStrength));
   const emphasisOpacity =
-    emphasis === 'recede' ? resolvedOpacity * (1 - s * (1 - RECEDE_MIN_OPACITY)) : resolvedOpacity;
+    receding ? resolvedOpacity * (1 - s * (1 - RECEDE_MIN_OPACITY)) : resolvedOpacity;
   const emphasisScale =
     emphasis === 'pair'
       ? resolvedScale * PAIR_SCALE_BOOST
-      : emphasis === 'recede'
+      : receding
         ? resolvedScale * (1 - s * (1 - RECEDE_MIN_SCALE))
         : resolvedScale;
 
@@ -136,9 +146,13 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
         style={{
           display: 'inline-block',
           fontFamily: FIELD_FONT,
-          color: isSelected || emphasis === 'pair'
-            ? 'var(--ui-gold)'
-            : isHighlighted
+          // A selected tag takes the cool recorded hue so it stands apart from
+          // every gold (pair/highlighted) and bone (ambient) word on the field.
+          color: isSelected
+            ? 'var(--ui-recorded)'
+            : emphasis === 'pair'
+              ? 'var(--ui-gold)'
+              : isHighlighted
               ? 'rgb(var(--ui-gold-rgb) / 0.7)'
               : proximityColor,
           // Depth tiers (U5): surface words are the landmarks — the larger size
@@ -149,10 +163,10 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
           // treatment is unchanged.
           fontWeight: emphasis === 'pair' || isSelected ? 500 : isHighlighted ? 400 : isSurface ? 300 : 400,
           letterSpacing: isSelected ? '0.01em' : '0.02em',
-          textShadow: emphasis === 'pair'
-            ? '0 0 14px rgb(var(--ui-gold-rgb) / 0.45)'
-            : isSelected
-              ? '0 0 16px rgb(var(--ui-gold-rgb) / 0.4)'
+          textShadow: isSelected
+            ? '0 0 16px rgb(var(--ui-recorded-rgb) / 0.4)'
+            : emphasis === 'pair'
+              ? '0 0 14px rgb(var(--ui-gold-rgb) / 0.45)'
               : isHighlighted
                 ? '0 0 10px rgb(var(--ui-gold-rgb) / 0.2)'
                 : proximityGlow,
