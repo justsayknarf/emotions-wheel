@@ -36,10 +36,10 @@ const ACCENT = {
 } as const;
 
 // A single draggable axis. Reports the value live while dragging (onDrag) and
-// once more on release (onCommit) — the caller commits on release. The origin
-// tick marks where the pin was first dropped, so travel from the felt drop is
-// visible. A gesture the user never finished (onCancel) reverts instead of
-// committing.
+// once more on release (onCommit) — the caller commits on release. An optional
+// origin tick marks a reference point (DepartureFloat's previous check-in, or
+// its pin's first drop). A gesture the user never finished (onCancel) reverts
+// instead of committing.
 export function AxisSlider({
   labelLow,
   labelHigh,
@@ -58,13 +58,13 @@ export function AxisSlider({
   labelLow: string;
   labelHigh: string;
   value: number;
-  origin: number;
+  // Omitted where an anchor tick already marks the reference point, so the
+  // slider never carries two marks.
+  origin?: number;
   accent?: 'gold' | 'recorded';
   // The previous check-in's anchor value on this axis, rendered as a second
-  // tick distinct from the origin tick above — recorded-dim rather than
-  // text-3, and carrying `anchorLabel` (e.g. "TUE") so the two ticks read as
-  // different *kinds* of thing, not two of the same. Omitted when there's no
-  // previous check-in to compare against.
+  // tick — recorded-dim, carrying `anchorLabel` (e.g. "TUE"). Omitted when
+  // there's no previous check-in to compare against.
   anchorValue?: number;
   anchorLabel?: string;
   onGrab?: () => void;
@@ -145,14 +145,11 @@ export function AxisSlider({
             right: value >= 0 ? `${100 - p}%` : '50%',
           }}
         />
-        {/* origin tick — where this pin was dropped */}
-        <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--ui-text-3)', left: `${pct(origin)}%` }} />
-        {/* anchor tick — the previous check-in's own value on this axis.
-            Deliberately not styled like the plain origin tick above: two
-            ticks that looked like the same kind of mark is exactly the
-            overload the field-side reveal decisions were made to avoid.
-            Renders even when it coincides with the origin tick — nothing
-            doubles, since the origin tick never carries a label of its own. */}
+        {/* origin tick — a plain reference point, where the caller supplies one */}
+        {origin !== undefined && (
+          <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1, background: 'var(--ui-text-3)', left: `${pct(origin)}%` }} />
+        )}
+        {/* anchor tick — the previous check-in's own value on this axis. */}
         {anchorValue !== undefined && (
           <>
             <div style={{ position: 'absolute', top: -3, bottom: -3, width: 1.5, background: 'var(--ui-recorded-dim)', left: `${pct(anchorValue)}%` }} />

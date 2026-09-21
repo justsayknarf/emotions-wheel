@@ -215,8 +215,6 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   const draftRef = useRef<{ x: number; y: number } | null>(null);
   const curX = draft?.x ?? pin.x;
   const curY = draft?.y ?? pin.y;
-  const originX = pin.origin?.x ?? pin.x;
-  const originY = pin.origin?.y ?? pin.y;
   // Which axis is actively being dragged, so the card can fade everything
   // except the one slider actually being touched — set on every drag frame
   // (not just grab) so it's always correct even if a pointer capture is lost
@@ -423,7 +421,6 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelLow="Calm"
             labelHigh="Activated"
             value={curX}
-            origin={originX}
             anchorValue={anchor?.x}
             anchorLabel={anchorLabel ?? undefined}
             onGrab={onSelect}
@@ -437,7 +434,6 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             labelLow="Negative"
             labelHigh="Positive"
             value={curY}
-            origin={originY}
             anchorValue={anchor?.y}
             anchorLabel={anchorLabel ?? undefined}
             onGrab={onSelect}
