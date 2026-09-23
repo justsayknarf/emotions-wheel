@@ -21,6 +21,7 @@
     "check:tags": "npx tsx scripts/test-day-tags.ts",
     "check:landing": "npx tsx scripts/test-landing-sky.ts",
     "check:theme": "npx tsx scripts/test-theme.ts",
+    "check:diary": "npx tsx scripts/test-diary-parse.ts",
     "sync:theme": "npx tsx scripts/sync-theme-tokens.ts",
     "preview": "vite preview"
   },

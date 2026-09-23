@@ -1,50 +1,90 @@
 import type { DiaryEntry } from '../types';
 import { updateEntryInList } from '../data/checkIn';
+import { parseDiary } from '../data/diaryParse';
 
 const DIARY_KEY = 'emotion-selector-diary';
-const MAX_ENTRIES = 500;
-const PRUNE_COUNT = 50;
+// Where an unreadable diary is moved so a later save can't overwrite it.
+// Suffixed with a timestamp so repeated incidents never collide.
+const UNREADABLE_PREFIX = `${DIARY_KEY}-unreadable-`;
 
-export function readDiary(): DiaryEntry[] {
+// Reads the diary and reports whether it is safe to write back over.
+// A corrupt or legacy-format diary is copied to its own key before the main
+// key is cleared; if that copy fails (quota, storage disabled), the diary is
+// reported unwritable so callers leave the original bytes alone.
+function loadDiary(): { entries: DiaryEntry[]; writable: boolean } {
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(DIARY_KEY);
-    if (!raw) return [];
-    const entries = JSON.parse(raw) as Array<Record<string, unknown>>;
-    // Migrate: old entries have `emotions` field, not `pins` — clear and start fresh.
-    if (entries.length > 0 && 'emotions' in entries[0] && !('pins' in entries[0])) {
-      localStorage.removeItem(DIARY_KEY);
-      return [];
-    }
-    return entries as unknown as DiaryEntry[];
+    raw = localStorage.getItem(DIARY_KEY);
   } catch {
-    return [];
+    return { entries: [], writable: false };
+  }
+
+  const parsed = parseDiary(raw);
+  if (parsed.status === 'ok') return { entries: parsed.entries, writable: true };
+  if (parsed.status === 'empty') return { entries: [], writable: true };
+
+  try {
+    localStorage.setItem(`${UNREADABLE_PREFIX}${Date.now()}`, raw as string);
+    localStorage.removeItem(DIARY_KEY);
+    console.error(`Diary could not be read (${parsed.status}); set aside under ${UNREADABLE_PREFIX}*.`);
+    return { entries: [], writable: true };
+  } catch {
+    return { entries: [], writable: false };
   }
 }
 
-export function appendEntry(entry: DiaryEntry): void {
-  const entries = readDiary();
-  const next = [...entries, entry];
-  const pruned = entries.length >= MAX_ENTRIES
-    ? next.slice(PRUNE_COUNT)    // remove oldest PRUNE_COUNT, then append
-    : next;
-  localStorage.setItem(DIARY_KEY, JSON.stringify(pruned));
+function writeDiary(entries: DiaryEntry[]): boolean {
+  try {
+    localStorage.setItem(DIARY_KEY, JSON.stringify(entries));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function readDiary(): DiaryEntry[] {
+  return loadDiary().entries;
+}
+
+// Appends without pruning: the diary is the user's whole record, and at a few
+// hundred bytes per entry localStorage holds years of check-ins. Returns false
+// when the entry could not be saved (storage unavailable, full, or holding an
+// unreadable diary that couldn't be set aside).
+export function appendEntry(entry: DiaryEntry): boolean {
+  const { entries, writable } = loadDiary();
+  if (!writable) return false;
+  return writeDiary([...entries, entry]);
 }
 
 // Replace an existing entry in place by id, preserving array order and the
 // original entry's timestamp (see updateEntryInList). A missing id is a
-// no-op — it never appends. Wrapped in try/catch, matching readDiary's
-// degrade-quietly posture: a corrupt or unavailable store leaves the diary
-// as it was rather than throwing.
-export function updateEntry(entry: DiaryEntry): void {
-  try {
-    const entries = readDiary();
-    const next = updateEntryInList(entries, entry);
-    localStorage.setItem(DIARY_KEY, JSON.stringify(next));
-  } catch {
-    // localStorage unavailable or corrupt — degrade quietly, matching readDiary.
-  }
+// no-op — it never appends. Returns false when the write didn't happen.
+export function updateEntry(entry: DiaryEntry): boolean {
+  const { entries, writable } = loadDiary();
+  if (!writable) return false;
+  return writeDiary(updateEntryInList(entries, entry));
 }
 
 export function clearDiary(): void {
   localStorage.removeItem(DIARY_KEY);
+}
+
+// Asks the browser not to evict this site's storage under pressure or after
+// inactivity. Called after a save, once there is a record worth keeping.
+// Browsers decide silently (Chrome, Safari) or may ask the user (Firefox);
+// either way a refusal changes nothing, so the result is ignored.
+let persistenceRequested = false;
+export function requestPersistentStorage(): void {
+  if (persistenceRequested) return;
+  persistenceRequested = true;
+  try {
+    const storage = navigator.storage;
+    if (!storage?.persisted || !storage.persist) return;
+    void storage
+      .persisted()
+      .then((already) => (already ? true : storage.persist()))
+      .catch(() => {});
+  } catch {
+    // Storage API unavailable — nothing to request.
+  }
 }
