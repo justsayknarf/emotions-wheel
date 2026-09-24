@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { animate, splitText, stagger, utils } from 'animejs';
+import { animate, splitText, spring, stagger, utils } from 'animejs';
 import type { Emotion } from '../../data/emotions';
 import type { ProximityResult } from '../../hooks/useProximity';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
@@ -24,6 +24,19 @@ interface Props {
   emphasis?: 'pair' | 'recede' | null;
   // How firmly a 'recede' word steps back (0–1). Ignored otherwise.
   recedeStrength?: number;
+  // The latest tag toggle the user made from a card chip, passed only to the
+  // word it names. A change in isSelected that arrives with an unseen pulse is
+  // the user's own toggle and gets the tag moment; any other change (a reopened
+  // check-in, a save clearing the draft) just settles quietly.
+  tagPulse?: TagPulse | null;
+}
+
+// One user tag toggle. `n` is a counter so two toggles of the same word stay
+// distinct (AGENTS.md → one-shots key on a counter).
+export interface TagPulse {
+  id: string;
+  tagged: boolean;
+  n: number;
 }
 
 // Recede floors: even at full strength a pushed-back word keeps this share of
@@ -47,6 +60,18 @@ const REVEAL_DOT_DURATION_MS = 800;
 const REVEAL_DOT_GLOW_PX = 5;
 const REVEAL_DOT_GLOW_ALPHA = 0.35;
 
+// The tag moment (anime.js, one-shot). The word springs up to its tagged size
+// and eases to the recorded hue; one soft ring spreads out from it once. One
+// ring only — no bursts, the motivation model rules out rewards.
+const TAG_SPRING = spring({ stiffness: 170, damping: 11 });
+// Surface words are already primary-sized, so tagging one has no size to grow
+// into. The spring always travels at least this share, so it still lands.
+const TAG_MIN_TRAVEL = 0.08;
+const TAG_COLOR_MS = 500;
+const UNTAG_MS = 500;
+const TAG_RING_MS = 1300;
+const TAG_RING_SIZE = 30;
+
 // Map coordinate [-1, 1] to [5%, 95%] of container dimension
 function toPercent(v: number): number {
   return 5 + ((v + 1) / 2) * 90;
@@ -65,7 +90,7 @@ export const LABEL_STANDOFF = 11;
 // through the common Palatino aliases to a generic serif.
 export const FIELD_FONT = "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
-export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0 }: Props) {
+export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
   const left = (toPercent(emotion.x) / 100) * containerWidth;
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
@@ -113,12 +138,58 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
     });
   }, []);
 
+  // framer-motion keeps the label's resting motion (proximity, emphasis,
+  // position). The tag's own size step and hue live one element in, on a span
+  // anime.js owns during the tag moment, so the two never drive one transform.
+  const selectedScale = emotion.depth === 'deep' ? DEEP_TO_PRIMARY_SCALE : 1;
+  const tagScale = isSelected ? selectedScale : 1;
+  const { root, scope } = useAnimeScope<HTMLSpanElement>((self, reduced) => {
+    // Reduced motion: React has already written the end state, so every
+    // method is a no-op and the ring stays at its resting opacity 0.
+    self.add('tag', (to: number) => {
+      if (reduced) return;
+      animate('[data-tag-word]', { scale: [Math.min(1, to / (1 + TAG_MIN_TRAVEL)), to], ease: TAG_SPRING });
+      animate('[data-tag-word]', { '--tag-mix': [0, 1], duration: TAG_COLOR_MS, ease: 'out(3)' });
+      animate('[data-tag-ring]', { scale: [0.4, 2.4], opacity: [0.6, 0], duration: TAG_RING_MS, ease: 'out(3)' });
+    });
+    self.add('untag', (from: number) => {
+      if (reduced) return;
+      animate('[data-tag-word]', { scale: [from, 1], '--tag-mix': [1, 0], duration: UNTAG_MS, ease: 'out(3)' });
+    });
+    // Not the user's toggle: ease the size as framer used to, and let the hue
+    // change as it always has (instantly). Nothing replays.
+    self.add('settle', (from: number, to: number) => {
+      if (reduced || from === to) return;
+      animate('[data-tag-word]', { scale: [from, to], duration: UNTAG_MS, ease: 'out(3)' });
+    });
+  }, []);
+
+  const prevSelected = useRef(isSelected);
+  const seenPulse = useRef(tagPulse?.n);
+  useEffect(() => {
+    const was = prevSelected.current;
+    prevSelected.current = isSelected;
+    if (was === isSelected) return;
+    const methods = scope.current?.methods;
+    if (!methods) return;
+    const byUser = tagPulse != null && tagPulse.n !== seenPulse.current && tagPulse.tagged === isSelected;
+    if (byUser && isSelected) methods.tag(tagScale);
+    else if (byUser) methods.untag(selectedScale);
+    else methods.settle(was ? selectedScale : 1, tagScale);
+  }, [isSelected, tagPulse, tagScale, selectedScale, scope]);
+  // Declared after the effect above so, in the commit a pulse arrives, that
+  // effect still sees it as unseen. A pulse that matched no change (a no-op
+  // toggle) is marked seen here, so a later reopen can't be mistaken for it.
+  useEffect(() => {
+    seenPulse.current = tagPulse?.n;
+  }, [tagPulse?.n]);
+
   const resolvedOpacity = isSelected || isHighlighted ? 1 : opacity;
   // A recognized (tagged) word steps up to the primary tier's size: deep words
   // are text-xs, surface words text-sm, so a selected deep word scales by the
-  // ratio. Done as a spring-animated scale rather than a class swap so the word
-  // grows smoothly when the tag is picked. Surface words are already primary.
-  const selectedScale = emotion.depth === 'deep' ? DEEP_TO_PRIMARY_SCALE : 1;
+  // ratio (selectedScale, above). Done as an animated scale rather than a class
+  // swap so the word grows when the tag is picked. Surface words are already
+  // primary.
   const resolvedScale = isCandidate ? 1.3 : (isSelected ? selectedScale : (isHighlighted ? 1.05 : scale));
 
   // Card emphasis, layered on top of the resting treatment. 'pair' forces the
@@ -140,6 +211,12 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   // colour as well as size — for surface anchors and revealed deep words alike.
   const n = Math.max(0, Math.min(1, nearness)) * 0.85;
   const proximityColor = `color-mix(in srgb, var(--ui-gold) ${Math.round(n * 100)}%, var(--ui-text-1))`;
+  const baseColor =
+    emphasis === 'pair'
+      ? 'var(--ui-gold)'
+      : isHighlighted
+        ? 'rgb(var(--ui-gold-rgb) / 0.7)'
+        : proximityColor;
   const proximityGlow =
     n > 0.04 ? `0 0 ${Math.round(12 * n)}px rgb(var(--ui-gold-rgb) / ${(0.35 * n).toFixed(2)})` : undefined;
 
@@ -200,22 +277,15 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
         }}
       />
       <motion.span
+        ref={root}
         className={[
           emotion.depth === 'surface' ? 'text-sm' : 'text-xs',
           'tracking-wide',
         ].join(' ')}
         style={{
           display: 'inline-block',
+          position: 'relative',
           fontFamily: FIELD_FONT,
-          // A selected tag takes the cool recorded hue so it stands apart from
-          // every gold (pair/highlighted) and bone (ambient) word on the field.
-          color: isSelected
-            ? 'var(--ui-recorded)'
-            : emphasis === 'pair'
-              ? 'var(--ui-gold)'
-              : isHighlighted
-              ? 'rgb(var(--ui-gold-rgb) / 0.7)'
-              : proximityColor,
           // Depth tiers (U5): surface words are the landmarks — the larger size
           // (text-sm), kept light and airy. Deep words stay a step smaller
           // (text-xs) but carry more weight so they read at that size once
@@ -233,12 +303,48 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
                 : proximityGlow,
         }}
         initial={animateIn ? { opacity: 0, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) } : false}
-        animate={{ opacity: emphasisOpacity, scale: emphasisScale, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) }}
+        // The tag's size step is on the inner span, so framer's share excludes it.
+        animate={{ opacity: emphasisOpacity, scale: emphasisScale / tagScale, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
       >
-        <span key={emotion.label} ref={revealRoot} style={{ opacity: letterReveal ? 0 : undefined }}>
-          {emotion.label}
+        {/* The tag layer, outside the reveal layer. A selected tag takes the cool recorded hue so it
+            stands apart from every gold (pair/highlighted) and bone (ambient)
+            word on the field: --tag-mix blends it over the resting colour, 1
+            when tagged, and is what the tag moment eases. */}
+        <span
+          data-tag-word
+          style={{
+            display: 'inline-block',
+            transform: `scale(${tagScale})`,
+            '--tag-mix': isSelected ? 1 : 0,
+            color: `color-mix(in srgb, var(--ui-recorded) calc(var(--tag-mix) * 100%), ${baseColor})`,
+          } as CSSProperties}
+        >
+          {/* The reveal layer: holds only the label text, so splitText's DOM
+              rewrite never meets a React re-render. */}
+          <span key={emotion.label} ref={revealRoot} style={{ opacity: letterReveal ? 0 : undefined }}>
+            {emotion.label}
+          </span>
         </span>
+        {isSelected && (
+          <span
+            data-tag-ring
+            aria-hidden
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: TAG_RING_SIZE,
+              height: TAG_RING_SIZE,
+              marginLeft: -TAG_RING_SIZE / 2,
+              marginTop: -TAG_RING_SIZE / 2,
+              borderRadius: '50%',
+              border: '1px solid var(--ui-recorded)',
+              opacity: 0,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
       </motion.span>
     </motion.span>
   );

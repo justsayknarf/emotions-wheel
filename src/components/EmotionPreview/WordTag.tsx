@@ -4,6 +4,9 @@
 // Tone follows the surface the chip sits on: gold for a draft, recorded blue
 // for a saved check-in (R6). Every color is mixed from the tone's own token
 // so a theme swap (src/config/theme.ts) recolors the chip with it.
+import { animate } from 'animejs';
+import { useAnimeScope } from '../../hooks/useAnimeScope';
+
 export type WordTagTone = 'gold' | 'recorded';
 
 const TONES: Record<WordTagTone, { text: string; named: string; suggested: string; tint: string }> = {
@@ -20,6 +23,12 @@ const TONES: Record<WordTagTone, { text: string; named: string; suggested: strin
     tint: 'color-mix(in srgb, var(--ui-recorded) 16%, transparent)',
   },
 };
+
+// A small tactile nudge on toggle (anime.js, one-shot): a little swell when a
+// word is named, a little give when it is un-named.
+const NUDGE_TAG = 1.08;
+const NUDGE_UNTAG = 0.96;
+const NUDGE_MS = 420;
 
 const RESET: React.CSSProperties = {
   background: 'transparent',
@@ -44,9 +53,16 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
   const t = TONES[tone];
   const text = label.toLowerCase();
   const bodyPadding = onDismiss ? '4px 3px 4px 11px' : '4px 11px';
+  const { root, scope } = useAnimeScope<HTMLSpanElement>((self, reduced) => {
+    self.add('nudge', (naming: boolean) => {
+      if (reduced || !self.root) return;
+      animate(self.root, { scale: [1, naming ? NUDGE_TAG : NUDGE_UNTAG, 1], duration: NUDGE_MS, ease: 'out(3)' });
+    });
+  }, []);
 
   return (
     <span
+      ref={root}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -63,7 +79,13 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
         <button
           type="button"
           aria-pressed={named}
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            // Keyed to the click itself, so only a real toggle nudges — never
+            // a render or a chip that mounts already named.
+            scope.current?.methods.nudge(!named);
+            onToggle();
+          }}
           style={{ ...RESET, padding: bodyPadding }}
         >
           {text}{named ? ' ✓' : ''}

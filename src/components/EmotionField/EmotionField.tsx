@@ -6,7 +6,7 @@ import { getRegionDescription } from '../../data/regions';
 import { findNearbyPin } from '../../data/checkIn';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
-import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
+import { EmotionWord, LABEL_STANDOFF, type TagPulse } from './EmotionWord';
 import { labelHalfWidth, LABEL_LINE_H } from './deoverlap';
 import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
@@ -53,6 +53,8 @@ const deepEmotions = emotions.filter(e => e.depth === 'deep');
 interface Props {
   pins: PinEntry[];
   highlightedIds: Set<string>;
+  // The user's latest tag toggle; handed only to the word it names.
+  tagPulse?: TagPulse | null;
   onPinRelease: (entry: PinEntry) => void;
   // R15: a release that lands on an existing (draft) pin selects it instead
   // of minting a new one — see handleRelease's hit-test via findNearbyPin.
@@ -124,6 +126,7 @@ interface Props {
 export function EmotionField({
   pins,
   highlightedIds,
+  tagPulse = null,
   onPinRelease,
   onPinSelect,
   onFirstInteraction,
@@ -677,6 +680,7 @@ export function EmotionField({
                 containerWidth={size.width}
                 containerHeight={size.height}
                 emphasis={pairIds.has(emotion.id) ? 'pair' : null}
+                tagPulse={tagPulse?.id === emotion.id ? tagPulse : null}
               />
             </div>
           ))}
@@ -706,6 +710,7 @@ export function EmotionField({
                     offset={deepLabelOffsets.get(e.id)}
                     emphasis={pairIds.has(e.id) ? 'pair' : recedeActive ? 'recede' : null}
                     recedeStrength={tuning.recedeStrength}
+                    tagPulse={tagPulse?.id === e.id ? tagPulse : null}
                   />
                 );
               })}
