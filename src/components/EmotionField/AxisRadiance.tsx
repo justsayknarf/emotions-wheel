@@ -13,9 +13,9 @@ const DISSIPATE = 1.3;        // seconds the trail lingers after the last leg st
 const FADE_PER_FRAME = 0.055; // trail length — lower = longer trail
 const EDGE_MARGIN = 26;       // px the orb stops short of the edge (by the labels)
 
-// A soft radial glow blob, drawn additively to build the light trail — same
-// warm-core recipe as the constellation replay (PulseTrace) so the two read
-// as one visual language.
+// A soft radial glow blob, drawn additively to build the light trail — the
+// warm-core recipe the constellation replay's light trail (PulseTrace) also
+// used before the replay became a scrubbable timeline.
 function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a: number) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
   g.addColorStop(0, themeRgba('text', a));
