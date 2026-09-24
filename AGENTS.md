@@ -16,6 +16,7 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:pin` | pin coordinate adjustment |
 | `npm run check:theme` | theme drift: generated tokens, theme completeness, DESIGN.md palette, no hardcoded theme colors (see [docs/theme-system.md](docs/theme-system.md)) |
 | `npm run check:landing` | landing page sky geometry |
+| `npm run check:replay` | constellation replay timing and day labels (`src/components/Constellation/replaySchedule.ts`) |
 
 New logic gets a new `check:<short-name>` script following the same shape.
 

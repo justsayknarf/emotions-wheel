@@ -1,6 +1,6 @@
 import type { DiaryEntry } from '../types';
 
-// The "recent" window shared by the mirror's rhythm strip and the pulse-trace
+// The "recent" window shared by the mirror's rhythm strip and the drawn-in
 // constellation, so the two surfaces never disagree on what recent means.
 export const RECENT_WINDOW_DAYS = 14;
 

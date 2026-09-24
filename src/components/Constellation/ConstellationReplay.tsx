@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { recentWindow } from '../../utils/recentEntries';
 import { SessionDetailCard } from '../DiaryHistory/SessionDetailCard';
-import { PulseTrace } from './PulseTrace';
+import { DrawnConstellation } from './DrawnConstellation';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -20,12 +20,12 @@ const AXIS_LABEL: React.CSSProperties = {
   textTransform: 'uppercase',
 };
 
-// Full-surface takeover (view === 'constellation'). Plays the pulse-trace over
-// the recent window, then leaves the constellation in place for inspection —
+// Full-surface takeover (view === 'constellation'). Draws the recent window in
+// star by star (DrawnConstellation), then leaves it in place for inspection —
 // tapping a point opens its detail; dismissing returns to the mirror.
 export function ConstellationReplay({ entries, onDismiss }: Props) {
   // Memoized so its identity is stable across re-renders (e.g. opening a
-  // detail card) — the pulse animation keys on this and must not restart.
+  // detail card) — the replay timeline keys on this and must not restart.
   const windowed = useMemo(() => recentWindow(entries), [entries]);
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
 
@@ -46,7 +46,7 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
         transition={{ duration: 0.4 }}
         style={{ position: 'absolute', inset: 0 }}
       >
-        <PulseTrace entries={windowed} onPointClick={setOpenEntry} />
+        <DrawnConstellation entries={windowed} onPointClick={setOpenEntry} />
       </motion.div>
 
       {/* Header */}

@@ -25,3 +25,57 @@ html, body, #root {
 #root {
   position: relative;
 }
+
+/* Constellation replay scrubber — a native range input dressed as AxisSlider:
+   5px track, a soft gold fill up to the thumb (`--p`, 0–100%, written by the
+   replay timeline), and the same 15px gold thumb with its halo ring. */
+.replay-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 15px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+.replay-scrubber:focus { outline: none; }
+.replay-scrubber::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(to right,
+    rgb(var(--ui-gold-rgb) / 0.22) var(--p, 0%),
+    rgb(var(--ui-text-rgb) / 0.09) var(--p, 0%));
+}
+.replay-scrubber::-moz-range-track {
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(to right,
+    rgb(var(--ui-gold-rgb) / 0.22) var(--p, 0%),
+    rgb(var(--ui-text-rgb) / 0.09) var(--p, 0%));
+}
+.replay-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5px;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--ui-gold-hi), var(--ui-gold) 62%);
+  box-shadow: 0 0 0 4px rgb(var(--ui-gold-rgb) / 0.12), 0 2px 8px rgb(var(--ui-gold-rgb) / 0.35);
+}
+.replay-scrubber::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--ui-gold-hi), var(--ui-gold) 62%);
+  box-shadow: 0 0 0 4px rgb(var(--ui-gold-rgb) / 0.12), 0 2px 8px rgb(var(--ui-gold-rgb) / 0.35);
+}
+.replay-scrubber:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgb(var(--ui-gold-rgb) / 0.3), 0 2px 8px rgb(var(--ui-gold-rgb) / 0.35);
+}
+.replay-scrubber:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px rgb(var(--ui-gold-rgb) / 0.3), 0 2px 8px rgb(var(--ui-gold-rgb) / 0.35);
+}
