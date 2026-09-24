@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { animate, createSpring, stagger, utils } from 'animejs';
+import { animate, spring, stagger, utils } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { themeRgba } from '../../config/themeColor';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -29,8 +29,10 @@ import { LABEL_STANDOFF } from './EmotionWord';
 // thickened stroke.
 export const PIN_RING_SIZE = 64;
 
-const LAND_SPRING = createSpring({ stiffness: 170, damping: 11 });
-const MOVE_SPRING = createSpring({ stiffness: 120, damping: 14 });
+// Near-critically damped (ratio ≈ 0.9): the pin settles firmly with no
+// visible bounce. The sketch's 170/11 and 120/14 read as far too springy live.
+const LAND_SPRING = spring({ stiffness: 170, damping: 24 });
+const MOVE_SPRING = spring({ stiffness: 120, damping: 20 });
 
 const RING = {
   fromScale: 0.12,
