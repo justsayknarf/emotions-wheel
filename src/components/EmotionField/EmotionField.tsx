@@ -10,6 +10,7 @@ import { EmotionWord, LABEL_STANDOFF } from './EmotionWord';
 import { labelHalfWidth, LABEL_LINE_H } from './deoverlap';
 import { computeRadialFan, type FanBox } from './radialFan';
 import { WordTethers, type TetherSegment } from './WordTethers';
+import { LiveDraftGlow } from './LiveDraftGlow';
 import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
@@ -802,30 +803,15 @@ export function EmotionField({
               is never both at once (see its own declaration), so one
               marker, keyed to liveDraftAccent's hue, covers either case.
               No travel line, no origin ring for the adjust case either
-              now — the glow's own motion already reads as movement. */}
-          {liveDraft && (() => {
-            const { x: gx, y: gy } = toFieldPx(liveDraft);
-            const glowBackground = liveDraftAccent === 'recorded'
-              ? 'radial-gradient(circle, rgb(var(--ui-recorded-rgb) / 0.45) 0%, rgb(var(--ui-recorded-rgb) / 0.18) 42%, transparent 72%)'
-              : 'radial-gradient(circle, color-mix(in srgb, var(--ui-gold-hi) 50%, transparent) 0%, rgb(var(--ui-gold-rgb) / 0.2) 42%, transparent 72%)';
-            return (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: gx,
-                  top: gy,
-                  transform: 'translate(-50%, -50%)',
-                  width: 130,
-                  height: 130,
-                  borderRadius: '50%',
-                  background: glowBackground,
-                  filter: 'blur(2px)',
-                  pointerEvents: 'none',
-                  zIndex: 4,
-                }}
-              />
-            );
-          })()}
+              now — the glow's own motion already reads as movement.
+              The marker glides after the draft rather than snapping to
+              it (LiveDraftGlow); the release's rings come from the pin
+              landing's move (usePinLanding). */}
+          <LiveDraftGlow
+            target={liveDraft ? toFieldPx(liveDraft) : null}
+            accent={liveDraftAccent}
+            reducedMotion={!!reducedMotion}
+          />
 
           {/* Recorded pins — the previous check-in's pins (R10), quieter and
               in a distinct cool hue from the draft's warm gold (R11), so the
