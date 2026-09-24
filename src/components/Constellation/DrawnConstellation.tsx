@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { createDrawable, createTimeline, utils } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -13,6 +13,7 @@ import {
   WORD_MS,
   RING_DELAY_MS,
   RING_MS,
+  TAIL_MS,
 } from './replaySchedule';
 import type { DiaryEntry } from '../../types';
 
@@ -30,6 +31,10 @@ const SCRUB_STEPS = 1000;
 const RING_SIZE = 36;
 const RING_FROM_SCALE = 0.2;
 const RING_PEAK_OPACITY = 0.55;
+// The streak riding each line: the departure comet's proportions (its glow
+// width and opacity at the default strength) so the two trails read as one.
+const STREAK_GLOW_WIDTH = 5;
+const STREAK_GLOW_OPACITY = 0.35;
 
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
 
@@ -86,6 +91,7 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
   };
 
   const n = points.length;
+  const uid = useId().replace(/:/g, '');
 
   const { root, scope } = useAnimeScope<HTMLDivElement>(
     (self, reduced) => {
@@ -99,7 +105,10 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
       utils.set('[data-star]', { opacity: 0, scale: 0 });
       utils.set('[data-day], [data-words], [data-ring]', { opacity: 0 });
       const lines = createDrawable('.replay-line');
-      utils.set(lines, { draw: '0 0' });
+      const streaks = createDrawable('.replay-streak');
+      const glows = createDrawable('.replay-glow');
+      utils.set([...lines, ...streaks, ...glows], { draw: '0 0' });
+      utils.set('[data-head]', { opacity: 0 });
       const tl = createTimeline({
         autoplay: false,
         onUpdate: (t) => syncScrub(t.progress),
@@ -110,7 +119,42 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
       points.forEach((p, i) => {
         const at = s.starAt(i);
         if (i > 0) {
-          tl.add(lines[i - 1], { draw: ['0 0', '0 1'], duration: s.lineMs, ease: 'inOut(2)' }, s.lineAt(i));
+          const k = i - 1;
+          const start = s.lineAt(i);
+          // The quiet constellation line draws in under the head and stays.
+          tl.add(lines[k], { draw: ['0 0', '0 1'], duration: s.lineMs, ease: 'inOut(2)' }, start);
+          // Over it, the departure comet's look: a bright streak and its glow
+          // draw in behind a head riding the line, then the tail catches up
+          // and they're gone.
+          tl.add([streaks[k], glows[k]], {
+            draw: [
+              { from: '0 0', to: '0 1', duration: s.lineMs, ease: 'inOut(2)' },
+              { to: '1 1', duration: TAIL_MS, ease: 'in(2)' },
+            ],
+          }, start);
+          const el = self.root instanceof Element ? self.root : null;
+          const line = el?.querySelector<SVGLineElement>(`[data-line="${k}"]`);
+          const heads = el ? [...el.querySelectorAll<SVGCircleElement>(`[data-head="${k}"]`)] : [];
+          if (line && heads.length) {
+            // Read the line at render time, not at build time, so the head
+            // stays on it through a resize (its ends are in %) — and a scrub
+            // backwards puts it back where the draw is.
+            const ride = { p: 0 };
+            tl.add(ride, {
+              p: [0, 1],
+              duration: s.lineMs,
+              ease: 'inOut(2)',
+              onRender: () => {
+                const pt = line.getPointAtLength(line.getTotalLength() * ride.p);
+                for (const h of heads) {
+                  h.setAttribute('cx', `${pt.x}`);
+                  h.setAttribute('cy', `${pt.y}`);
+                }
+              },
+            }, start);
+            tl.add(heads, { opacity: [0, 1], duration: Math.min(120, s.lineMs * 0.3) }, start);
+            tl.add(heads, { opacity: 0, duration: 300, ease: 'out(2)' }, at - 40);
+          }
         }
         tl.add(`[data-star="${i}"]`, {
             scale: [0, 1],
@@ -192,20 +236,58 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
 
   return (
     <div ref={root} style={{ position: 'absolute', inset: 0 }}>
-      {/* Lines between consecutive check-ins. Percentage coordinates keep them
-          on their stars through any resize without re-measuring. */}
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-        {points.slice(1).map((p, k) => (
-          <line
-            key={p.entry.id}
-            className="replay-line"
-            x1={`${points[k].lx}%`}
-            y1={`${points[k].ly}%`}
-            x2={`${p.lx}%`}
-            y2={`${p.ly}%`}
-            style={{ stroke: 'rgb(var(--ui-recorded-rgb) / 0.45)', strokeWidth: 1.2, strokeLinecap: 'round' }}
-          />
-        ))}
+      {/* Lines between consecutive check-ins, with the departure comet's
+          streak riding each one in. Percentage coordinates keep them on
+          their stars through any resize without re-measuring. */}
+      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} aria-hidden="true">
+        <defs>
+          {points.slice(1).map((p, k) => (
+            // Teal tail → gold → a text-white head, as DepartureTrace.
+            <linearGradient
+              key={p.entry.id}
+              id={`rc-grad-${uid}-${k}`}
+              gradientUnits="userSpaceOnUse"
+              x1={`${points[k].lx}%`}
+              y1={`${points[k].ly}%`}
+              x2={`${p.lx}%`}
+              y2={`${p.ly}%`}
+            >
+              <stop offset="0" style={{ stopColor: 'rgb(var(--ui-recorded-rgb))', stopOpacity: 0.25 }} />
+              <stop offset="0.55" style={{ stopColor: 'rgb(var(--ui-recorded-rgb))', stopOpacity: 0.8 }} />
+              <stop offset="0.85" style={{ stopColor: 'rgb(var(--ui-gold-rgb))', stopOpacity: 0.95 }} />
+              <stop offset="1" style={{ stopColor: 'rgb(var(--ui-text-rgb))', stopOpacity: 1 }} />
+            </linearGradient>
+          ))}
+          <filter id={`rc-blur-${uid}`} filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" />
+          </filter>
+        </defs>
+        {points.slice(1).map((p, k) => {
+          const ends = { x1: `${points[k].lx}%`, y1: `${points[k].ly}%`, x2: `${p.lx}%`, y2: `${p.ly}%` };
+          const grad = `url(#rc-grad-${uid}-${k})`;
+          return (
+            <g key={p.entry.id}>
+              <line
+                className="replay-line"
+                data-line={k}
+                {...ends}
+                style={{ stroke: 'rgb(var(--ui-recorded-rgb) / 0.45)', strokeWidth: 1.2, strokeLinecap: 'round' }}
+              />
+              <line
+                className="replay-glow"
+                {...ends}
+                stroke={grad}
+                strokeWidth={STREAK_GLOW_WIDTH}
+                strokeLinecap="round"
+                opacity={STREAK_GLOW_OPACITY}
+                filter={`url(#rc-blur-${uid})`}
+              />
+              <line className="replay-streak" {...ends} stroke={grad} strokeWidth={1.75} strokeLinecap="round" />
+              <circle data-head={k} r={4.5} filter={`url(#rc-blur-${uid})`} style={{ fill: 'rgb(var(--ui-text-rgb))', opacity: 0 }} />
+              <circle data-head={k} r={2.2} style={{ fill: 'rgb(var(--ui-text-rgb))', opacity: 0 }} />
+            </g>
+          );
+        })}
       </svg>
 
       {/* Recorded words, igniting at their own coordinates as their check-in lands */}
