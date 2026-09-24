@@ -14,6 +14,7 @@ import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
+import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
 import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 
@@ -196,6 +197,14 @@ export function EmotionField({
     };
     onPinRelease(entry);
   }, [onPinRelease, onPinSelect, pins, recordedPins, size]);
+
+  // Pin lands, field notices (usePinLanding). Its anime scope is rooted at the
+  // field container, so the container takes both refs.
+  const landingRootRef = usePinLanding(pins, size, surfaceEmotions);
+  const setContainerRef = useCallback((el: HTMLDivElement | null) => {
+    containerRef.current = el;
+    landingRootRef.current = el;
+  }, [landingRootRef]);
 
   const { isPressed, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
@@ -533,7 +542,7 @@ export function EmotionField({
 
   return (
     <div
-      ref={containerRef}
+      ref={setContainerRef}
       onPointerEnter={handlers.onPointerEnter}
       onPointerLeave={handlers.onPointerLeave}
       onPointerDown={handlers.onPointerDown}
@@ -655,18 +664,21 @@ export function EmotionField({
             keepIds={pairIds}
           />
 
-          {/* Surface emotions — always ambient at low opacity, brighten near cursor */}
+          {/* Surface emotions — always ambient at low opacity, brighten near cursor.
+              Each sits in a zero-size wrapper that usePinLanding leans toward a
+              landing pin, clear of the transforms framer drives inside. */}
           {surfaceEmotions.map((emotion) => (
-            <EmotionWord
-              key={emotion.id}
-              emotion={emotion}
-              proximity={proximity.get(emotion.id)!}
-              isSelected={selectedIds.has(emotion.id)}
-              isHighlighted={highlightedIds.has(emotion.id)}
-              containerWidth={size.width}
-              containerHeight={size.height}
-              emphasis={pairIds.has(emotion.id) ? 'pair' : null}
-            />
+            <div key={emotion.id} data-lean-word={emotion.id} style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }}>
+              <EmotionWord
+                emotion={emotion}
+                proximity={proximity.get(emotion.id)!}
+                isSelected={selectedIds.has(emotion.id)}
+                isHighlighted={highlightedIds.has(emotion.id)}
+                containerWidth={size.width}
+                containerHeight={size.height}
+                emphasis={pairIds.has(emotion.id) ? 'pair' : null}
+              />
+            </div>
           ))}
 
           {/* Deep emotions — revealed near dwell/pins; fade in on mount, out on unmount */}
@@ -707,6 +719,7 @@ export function EmotionField({
             return (
               <div
                 key={pin.id}
+                data-field-pin={pin.id}
                 style={{
                   position: 'absolute',
                   left: px,
@@ -717,57 +730,64 @@ export function EmotionField({
                   height: 0,
                 }}
               >
-                {/* Pulse ring — one-shot on mount */}
-                <motion.div
-                  initial={{ scale: 1, opacity: 0.5 }}
-                  animate={{ scale: 4, opacity: 0 }}
-                  transition={{ duration: 0.9, ease: 'easeOut' }}
-                  style={{
-                    position: 'absolute',
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
-                    top: -4,
-                    left: -4,
-                  }}
-                />
-                {/* Emphasis pulse — two staggered sonar rings on the selected
-                    pin, echoing the replay's expanding ring pulses */}
-                {isEmphasized &&
-                  [0, 1.1].map((delay, k) => (
-                    <motion.div
-                      key={k}
-                      initial={{ scale: 0.7, opacity: 0.5 }}
-                      animate={{ scale: 3.4, opacity: 0 }}
-                      transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3, delay }}
-                      style={{
-                        position: 'absolute',
-                        width: 12,
-                        height: 12,
-                        borderRadius: '50%',
-                        border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
-                        top: -6,
-                        left: -6,
-                      }}
-                    />
-                  ))}
-                {/* Dot — larger and brighter when its card is selected */}
-                <motion.div
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                  style={{
-                    position: 'absolute',
-                    width: dotSize,
-                    height: dotSize,
-                    borderRadius: '50%',
-                    background: isEmphasized ? 'rgb(var(--ui-gold-rgb) / 1)' : 'rgb(var(--ui-gold-rgb) / 0.7)',
-                    boxShadow: isEmphasized ? '0 0 8px 1px rgb(var(--ui-gold-rgb) / 0.7)' : 'none',
-                    top: -dotSize / 2,
-                    left: -dotSize / 2,
-                  }}
-                />
+                {/* Landing rings — two thin rings usePinLanding spreads from
+                    the pin on each plant or move. Outside the body, so on a
+                    move they bloom at the destination. At rest: invisible. */}
+                {[0, 1].map((k) => (
+                  <div
+                    key={k}
+                    data-pin-ring
+                    style={{
+                      position: 'absolute',
+                      width: PIN_RING_SIZE,
+                      height: PIN_RING_SIZE,
+                      top: -PIN_RING_SIZE / 2,
+                      left: -PIN_RING_SIZE / 2,
+                      borderRadius: '50%',
+                      border: '1px solid var(--ui-gold)',
+                      opacity: 0,
+                    }}
+                  />
+                ))}
+                {/* Body — usePinLanding springs it over from the old spot when
+                    the pin moves; everything the pin *is* rides inside it. */}
+                <div data-pin-body style={{ position: 'absolute', left: 0, top: 0 }}>
+                  {/* Emphasis pulse — two staggered sonar rings on the selected
+                      pin, echoing the replay's expanding ring pulses */}
+                  {isEmphasized &&
+                    [0, 1.1].map((delay, k) => (
+                      <motion.div
+                        key={k}
+                        initial={{ scale: 0.7, opacity: 0.5 }}
+                        animate={{ scale: 3.4, opacity: 0 }}
+                        transition={{ duration: 1.9, ease: 'easeOut', repeat: Infinity, repeatDelay: 0.3, delay }}
+                        style={{
+                          position: 'absolute',
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          border: '1px solid rgb(var(--ui-gold-rgb) / 0.6)',
+                          top: -6,
+                          left: -6,
+                        }}
+                      />
+                    ))}
+                  {/* Dot — larger and brighter when its card is selected;
+                      usePinLanding settles it in on a spring when planted */}
+                  <div
+                    data-pin-dot
+                    style={{
+                      position: 'absolute',
+                      width: dotSize,
+                      height: dotSize,
+                      borderRadius: '50%',
+                      background: isEmphasized ? 'rgb(var(--ui-gold-rgb) / 1)' : 'rgb(var(--ui-gold-rgb) / 0.7)',
+                      boxShadow: isEmphasized ? '0 0 8px 1px rgb(var(--ui-gold-rgb) / 0.7)' : 'none',
+                      top: -dotSize / 2,
+                      left: -dotSize / 2,
+                    }}
+                  />
+                </div>
               </div>
             );
           })}
