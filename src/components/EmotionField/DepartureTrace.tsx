@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { createDrawable, createMotionPath, createSpring, createTimeline, utils, type Timeline } from 'animejs';
+import { createDrawable, createMotionPath, createTimeline, spring, utils, type Timeline } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 
 type Pt = { x: number; y: number };
@@ -28,8 +28,9 @@ type Timing = Pick<Props, 'travel' | 'trail' | 'hold' | 'fadeOut' | 'strength'>;
 const BOW = 0.24;
 // Below this many px there is nothing to connect — the pin landed on the ring.
 const MIN_DIST = 6;
-// Arrival spring for the bloom, as tuned in the anime.js sketch.
-const settle = createSpring({ stiffness: 170, damping: 11 });
+// Arrival spring for the bloom: near-critically damped, the same firm settle
+// as the pin landing (usePinLanding) — the sketch's 170/11 bounced.
+const settle = spring({ stiffness: 170, damping: 24 });
 
 // The old canvas streak erased `trail` of itself every frame (~60fps); its
 // visible length was the time until that decay left ~5%. The tail's catch-up
