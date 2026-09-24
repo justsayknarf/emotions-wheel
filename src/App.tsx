@@ -10,6 +10,7 @@ import { relativeDayLabel, departureAnchor } from './data/departure';
 import { resolveSessionEntrySource } from './data/source';
 import { useRevealTuning } from './config/revealTuning';
 import { EmotionField } from './components/EmotionField/EmotionField';
+import type { TagPulse } from './components/EmotionField/EmotionWord';
 import { ShaderBackground } from './components/ShaderBackground/ShaderBackground';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
@@ -75,6 +76,10 @@ function useOnboarding() {
 export default function App() {
   const { view, navigateTo, goBack } = useViewHistory('field');
   const [pins, setPins] = useState<PinEntry[]>([]);
+  // The user's latest tag toggle from a card chip, so the field word it names
+  // can play the tag moment. Only these two handlers bump it; a reopen or a
+  // save changes recognizedWords without it, and the word just settles.
+  const [tagPulse, setTagPulse] = useState<TagPulse | null>(null);
   // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
   // U1: the entry id a save most recently produced, in this page load only
   // — never persisted, never explicitly cleared. It only ever matters
@@ -833,6 +838,7 @@ export default function App() {
   }, [draggingPinId, draftId]);
 
   const handleRecognize = useCallback((emotionId: string) => {
+    setTagPulse((p) => ({ id: emotionId, tagged: true, n: (p?.n ?? 0) + 1 }));
     setPins((prev) => {
       if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
@@ -843,6 +849,7 @@ export default function App() {
   }, []);
 
   const handleDerecognize = useCallback((emotionId: string) => {
+    setTagPulse((p) => ({ id: emotionId, tagged: false, n: (p?.n ?? 0) + 1 }));
     setPins((prev) => {
       if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
@@ -1132,6 +1139,7 @@ export default function App() {
         <EmotionField
           pins={pins}
           highlightedIds={highlightedIds}
+          tagPulse={tagPulse}
           onPinRelease={handleFieldPress}
           onPinSelect={handlePinSelect}
           onFirstInteraction={handleFirstInteraction}
