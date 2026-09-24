@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { animate, createAnimatable, utils } from 'animejs';
+import { createAnimatable } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 
 // "Sliders with weight": the field's marker for a slider-driven drag glides
 // after the slider's draft coordinate instead of snapping to each input
-// event, and a single soft ring marks the commit on release.
+// event. The commit itself is marked by the pin landing's move rings
+// (usePinLanding), which fire on a slider release too.
 //
 // Visual only. The draft coordinate itself (App's adjustDraft /
 // departureDraftCoord) stays exact, and so does everything else that reads
@@ -16,12 +17,6 @@ import { useAnimeScope } from '../../hooks/useAnimeScope';
 // Glide tuning — how long the marker takes to catch up to the draft.
 const GLIDE_MS = 650;
 const GLIDE_EASE = 'out(4)';
-// The commit ring.
-const RING_MS = 1200;
-const RING_EASE = 'out(3)';
-const RING_SCALE: [number, number] = [0.6, 4.5];
-const RING_OPACITY: [number, number] = [0.6, 0];
-const RING_SIZE = 12;
 // Marker fade: quick in when a drag starts, slower out after release so the
 // marker finishes settling onto the committed spot as it goes.
 const FADE_IN_S = 0.12;
@@ -40,15 +35,10 @@ interface Props {
   target: { x: number; y: number } | null;
   // Gold for adjusting a pin that's already yours, the recorded hue pre-mint.
   accent: Accent;
-  // One-shot: bumps once per slider commit (App's handleAdjustPin).
-  commitPlay: number;
-  // Field-space coordinate the commit landed on, converted at play time.
-  commitAt: { x: number; y: number } | null;
-  toPx: (c: { x: number; y: number }) => { x: number; y: number };
   reducedMotion: boolean;
 }
 
-export function LiveDraftGlow({ target, accent, commitPlay, commitAt, toPx, reducedMotion }: Props) {
+export function LiveDraftGlow({ target, accent, reducedMotion }: Props) {
   const { root, scope } = useAnimeScope((self, reduced) => {
     const glideMs = reduced ? 0 : GLIDE_MS;
     const glide = createAnimatable('.live-draft-glide', { x: glideMs, y: glideMs, ease: GLIDE_EASE });
@@ -60,17 +50,6 @@ export function LiveDraftGlow({ target, accent, commitPlay, commitAt, toPx, redu
       const ms = jump ? 0 : glideMs;
       glide.x(x, ms, GLIDE_EASE);
       glide.y(y, ms, GLIDE_EASE);
-    });
-    self.add('pulse', (x: number, y: number) => {
-      // Reduced motion: the ring's end state is invisible, so skip it.
-      if (reduced) return;
-      utils.set('.slider-commit-ring', { x, y });
-      animate('.slider-commit-ring', {
-        scale: RING_SCALE,
-        opacity: RING_OPACITY,
-        duration: RING_MS,
-        ease: RING_EASE,
-      });
     });
   }, []);
 
@@ -94,14 +73,6 @@ export function LiveDraftGlow({ target, accent, commitPlay, commitAt, toPx, redu
     activeRef.current = true;
   }, [tx, ty, scope]);
 
-  // Keyed on the counter, measured at play time (AGENTS.md → Motion).
-  useEffect(() => {
-    if (commitPlay === 0 || !commitAt) return;
-    const { x, y } = toPx(commitAt);
-    scope.current?.methods.pulse(x, y);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commitPlay]);
-
   const visible = target !== null;
   const fade = reducedMotion ? 'none' : `opacity ${visible ? FADE_IN_S : FADE_OUT_S}s ease`;
 
@@ -123,20 +94,6 @@ export function LiveDraftGlow({ target, accent, commitPlay, commitAt, toPx, redu
           }}
         />
       </div>
-      <div
-        className="slider-commit-ring"
-        style={{
-          position: 'absolute',
-          width: RING_SIZE,
-          height: RING_SIZE,
-          marginLeft: -RING_SIZE / 2,
-          marginTop: -RING_SIZE / 2,
-          borderRadius: '50%',
-          border: '1px solid rgb(var(--ui-gold-rgb) / 0.8)',
-          opacity: 0,
-          zIndex: 10,
-        }}
-      />
     </div>
   );
 }

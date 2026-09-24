@@ -92,12 +92,6 @@ export default function App() {
   // (EmotionDrawer's draggingPinId derivation below). Never persisted; cleared
   // on release or cancel (handleAdjustPin / CoordinateCard's cancelAxis).
   const [adjustDraft, setAdjustDraft] = useState<{ pinId: string; x: number; y: number } | null>(null);
-  // One-shot commit ring on the field (LiveDraftGlow): bumped only by a
-  // slider commit (handleAdjustPin). A pre-mint DepartureFloat release mints
-  // through handlePinRelease instead, where the new pin's own mount pulse
-  // already marks the landing.
-  const [sliderCommitPlay, setSliderCommitPlay] = useState(0);
-  const [sliderCommitAt, setSliderCommitAt] = useState<{ x: number; y: number } | null>(null);
   // Derived at render, not a separate state — the single source for "which
   // card's slider is currently being dragged," read by EmotionDrawer to hide
   // sibling chrome (U5) and by the field-press gesture (U3) to skip peeking
@@ -876,8 +870,6 @@ export default function App() {
     setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
     setAdjustDraft(null);
     fireDepartureTrace(x, y);
-    setSliderCommitAt({ x, y });
-    setSliderCommitPlay((n) => n + 1);
   }, [fireDepartureTrace]);
 
   // U5: the card list's scroll position across a drag's shrink/restore. Capture
@@ -1155,8 +1147,6 @@ export default function App() {
           departureTraceTo={departureTraceTo}
           recedeProgress={recedeProgress}
           departureDraft={departureDraftCoord}
-          sliderCommitPlay={sliderCommitPlay}
-          sliderCommitAt={sliderCommitAt}
           // Matches handleFieldPress's own guard exactly (see its 2026-09-08
           // bug-fix comment) — otherwise the cursor/hover cue would keep
           // reading "not clickable" through the post-save settle window

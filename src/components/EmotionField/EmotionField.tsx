@@ -113,10 +113,6 @@ interface Props {
   // shares (see `liveDraft`). A drag is treated as press-equivalent, not
   // hover-equivalent — no dwell delay.
   departureDraft?: { x: number; y: number } | null;
-  // One-shot: bumps once per slider commit (App's handleAdjustPin), paired
-  // with the committed field-space coordinate — pulses the commit ring.
-  sliderCommitPlay?: number;
-  sliderCommitAt?: { x: number; y: number } | null;
   // docs/plans/2026-09-02-001-feat-newtab-departure-float-plan.md, U4: true
   // while a direct field press is a deliberate no-op (the pre-mint
   // departure-float landing, where the slider is the only commit path) —
@@ -144,8 +140,6 @@ export function EmotionField({
   departureTraceTo = null,
   recedeProgress = 0,
   departureDraft = null,
-  sliderCommitPlay = 0,
-  sliderCommitAt = null,
   dropDisabled = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -811,13 +805,11 @@ export function EmotionField({
               No travel line, no origin ring for the adjust case either
               now — the glow's own motion already reads as movement.
               The marker glides after the draft rather than snapping to
-              it, and a slider commit pulses one ring (LiveDraftGlow). */}
+              it (LiveDraftGlow); the release's rings come from the pin
+              landing's move (usePinLanding). */}
           <LiveDraftGlow
             target={liveDraft ? toFieldPx(liveDraft) : null}
             accent={liveDraftAccent}
-            commitPlay={sliderCommitPlay}
-            commitAt={sliderCommitAt}
-            toPx={toFieldPx}
             reducedMotion={!!reducedMotion}
           />
 
