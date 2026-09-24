@@ -1,6 +1,12 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { readDiary, appendEntry, updateEntry as updateEntryInStore, clearDiary } from '../store/diary';
+import {
+  readDiary,
+  appendEntry,
+  updateEntry as updateEntryInStore,
+  clearDiary,
+  requestPersistentStorage,
+} from '../store/diary';
 import type { DiaryEntry, PinEntry } from '../types';
 
 export function useDiary() {
@@ -15,7 +21,8 @@ export function useDiary() {
         sessionDurationMs: Date.now() - sessionStartMs,
         source,
       };
-      appendEntry(entry);
+      if (appendEntry(entry)) requestPersistentStorage();
+      else console.error('Check-in could not be saved to this browser.');
       setEntries(readDiary());
       return entry;
     },
@@ -23,7 +30,7 @@ export function useDiary() {
   );
 
   const updateEntry = useCallback((entry: DiaryEntry): void => {
-    updateEntryInStore(entry);
+    if (!updateEntryInStore(entry)) console.error('Check-in edit could not be saved to this browser.');
     setEntries(readDiary());
   }, []);
 

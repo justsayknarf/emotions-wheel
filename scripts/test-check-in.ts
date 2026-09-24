@@ -112,12 +112,12 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
   );
 }
 
-// --- updateEntryInList: survives a diary at the prune ceiling ---
+// --- updateEntryInList: survives a large diary ---
 {
-  // Mirrors src/store/diary.ts's MAX_ENTRIES (500) — appendEntry prunes once
-  // the diary reaches this size. updateEntryInList itself never prunes or
-  // appends; it only ever replaces in place, so a diary already at the
-  // ceiling should come back at exactly the same length.
+  // 500 was the diary's old prune ceiling; the store no longer prunes, but a
+  // large diary is still the case worth covering. updateEntryInList never
+  // prunes or appends; it only ever replaces in place, so a large diary
+  // should come back at exactly the same length.
   const MAX_ENTRIES = 500;
   const before: DiaryEntry[] = Array.from({ length: MAX_ENTRIES }, (_, i) =>
     entry(`bulk-${i}`, `2026-01-01T00:00:${String(i % 60).padStart(2, '0')}.000Z`, [pin(`p-${i}`, 0, 0)]),
@@ -130,12 +130,12 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
   const after = updateEntryInList(before, correction);
 
   check(
-    'diary at prune ceiling keeps its length after update',
+    'large diary keeps its length after update',
     after.length === MAX_ENTRIES,
     `length ${after.length}`,
   );
   check(
-    'no entries dropped at the ceiling',
+    'no entries dropped from a large diary',
     after.every((e, i) => e.id === before[i].id || e.id === targetId),
     'every id still present at its original index',
   );
@@ -154,8 +154,9 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
 // try/catch-and-degrade posture rather than propagating the error.
 {
   let threw = false;
+  let saved: boolean | undefined;
   try {
-    updateEntry(entry('any-id', '2026-08-01T00:00:00.000Z', [pin('p1', 0, 0)]));
+    saved = updateEntry(entry('any-id', '2026-08-01T00:00:00.000Z', [pin('p1', 0, 0)]));
   } catch {
     threw = true;
   }
@@ -163,6 +164,11 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
     'updateEntry wrapper degrades quietly when the store is unavailable',
     !threw,
     threw ? 'threw instead of degrading' : 'did not throw',
+  );
+  check(
+    'updateEntry reports the write did not happen',
+    saved === false,
+    `returned ${saved}`,
   );
 }
 
