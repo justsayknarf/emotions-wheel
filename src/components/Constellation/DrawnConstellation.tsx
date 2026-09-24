@@ -11,6 +11,8 @@ import {
   LABEL_MS,
   WORD_DELAY_MS,
   WORD_MS,
+  RING_DELAY_MS,
+  RING_MS,
 } from './replaySchedule';
 import type { DiaryEntry } from '../../types';
 
@@ -23,6 +25,11 @@ interface Props {
 const START_DELAY_MS = 400;
 // Scrubber resolution: the range input runs 0..SCRUB_STEPS.
 const SCRUB_STEPS = 1000;
+// Landing ring: final diameter (px). It grows from a fraction of this to 1×,
+// so the border ends at a crisp 1px rather than a thickened stroke.
+const RING_SIZE = 36;
+const RING_FROM_SCALE = 0.2;
+const RING_PEAK_OPACITY = 0.55;
 
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
 
@@ -90,7 +97,7 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
       // doesn't render a child's from-values until the playhead reaches it —
       // so without this, later words sat fully visible before their star.
       utils.set('[data-star]', { opacity: 0, scale: 0 });
-      utils.set('[data-day], [data-words]', { opacity: 0 });
+      utils.set('[data-day], [data-words], [data-ring]', { opacity: 0 });
       const lines = createDrawable('.replay-line');
       utils.set(lines, { draw: '0 0' });
       const tl = createTimeline({
@@ -112,6 +119,12 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
             duration: STAR_MS,
             ease: 'outBack(2)',
           }, at);
+        tl.add(`[data-ring="${i}"]`, {
+            scale: [RING_FROM_SCALE, 1],
+            opacity: [RING_PEAK_OPACITY, 0],
+            duration: RING_MS,
+            ease: 'out(3)',
+          }, at + RING_DELAY_MS);
         if (dayLabels[i]) {
           tl.add(`[data-day="${i}"]`, { opacity: [0, 1], duration: LABEL_MS, ease: 'out(2)' }, at + LABEL_DELAY_MS);
         }
@@ -247,6 +260,22 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
                 placeItems: 'center',
               }}
             >
+              <span
+                data-ring={i}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: RING_SIZE,
+                  height: RING_SIZE,
+                  margin: `${-RING_SIZE / 2}px 0 0 ${-RING_SIZE / 2}px`,
+                  borderRadius: '50%',
+                  border: `1px solid ${isNow ? 'var(--ui-gold)' : 'var(--ui-recorded)'}`,
+                  opacity: 0,
+                  pointerEvents: 'none',
+                }}
+              />
               <span
                 data-star={i}
                 style={{

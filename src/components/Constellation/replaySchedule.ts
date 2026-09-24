@@ -16,6 +16,9 @@ export const LABEL_MS = 500;
 /** A star's words ignite just after it lands, then settle to a faint glow. */
 export const WORD_DELAY_MS = 120;
 export const WORD_MS = 1300;
+/** A ring pulses out once from each star as it lands, then fades. */
+export const RING_DELAY_MS = 180;
+export const RING_MS = 1200;
 /**
  * Longest the arrivals may be spread over. A long history compresses its
  * spacing to fit rather than playing for a minute; a short one keeps STEP_MS.
@@ -44,7 +47,7 @@ export function replaySchedule(count: number): ReplaySchedule {
   const starAt = (i: number) => i * step;
   const lineAt = (i: number) => starAt(i) - lineMs;
   const last = starAt(hops);
-  const total = count === 0 ? 0 : last + Math.max(STAR_MS, LABEL_DELAY_MS + LABEL_MS, WORD_DELAY_MS + WORD_MS);
+  const total = count === 0 ? 0 : last + Math.max(STAR_MS, LABEL_DELAY_MS + LABEL_MS, WORD_DELAY_MS + WORD_MS, RING_DELAY_MS + RING_MS);
   return { step, lineMs, starAt, lineAt, total };
 }
 
