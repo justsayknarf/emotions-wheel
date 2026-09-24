@@ -1,6 +1,10 @@
-import { motion } from 'framer-motion';
+import { useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { animate, splitText, stagger, utils } from 'animejs';
 import type { Emotion } from '../../data/emotions';
 import type { ProximityResult } from '../../hooks/useProximity';
+import { useAnimeScope } from '../../hooks/useAnimeScope';
+import { themeRgba } from '../../config/themeColor';
 
 interface Props {
   emotion: Emotion;
@@ -32,6 +36,17 @@ const PAIR_SCALE_BOOST = 1.16;
 // match a primary (surface) word.
 const DEEP_TO_PRIMARY_SCALE = 14 / 12;
 
+// Deep-word reveal: when a deep word surfaces, its letters resolve from the
+// centre outward, blur to sharp, rather than the whole word fading on.
+const REVEAL_CHAR_STAGGER_MS = 42;
+const REVEAL_CHAR_DURATION_MS = 900;
+const REVEAL_CHAR_RISE_PX = 6;
+const REVEAL_CHAR_BLUR_PX = 6;
+// The dot comes up with the letters and glows briefly as it lands.
+const REVEAL_DOT_DURATION_MS = 800;
+const REVEAL_DOT_GLOW_PX = 5;
+const REVEAL_DOT_GLOW_ALPHA = 0.35;
+
 // Map coordinate [-1, 1] to [5%, 95%] of container dimension
 function toPercent(v: number): number {
   return 5 + ((v + 1) / 2) * 90;
@@ -55,6 +70,48 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
   const { opacity, scale, isCandidate, nearness } = proximity;
+
+  // A deep word mounts when it is revealed (AnimatePresence in EmotionField),
+  // so mount is the hidden→revealed transition. Decided once: the letters
+  // play only on that arrival, never on later re-renders. Under reduced motion
+  // the word keeps the plain container fade instead.
+  const reduceMotion = useReducedMotion();
+  const [letterReveal] = useState(() => animateIn && emotion.depth === 'deep' && !reduceMotion);
+  const dotRef = useRef<HTMLSpanElement>(null);
+  // Scoped to a dedicated inner span whose only child is the label text, so
+  // splitText's DOM rewrite never meets a React re-render; the scope reverts
+  // the split (restoring the text) on unmount.
+  const { root: revealRoot } = useAnimeScope<HTMLSpanElement>((scope, reduced) => {
+    const label = scope.root as HTMLSpanElement;
+    const dot = dotRef.current;
+    if (!letterReveal || !label || !dot) return;
+    // Both start hidden via their React style; the scope reveals them.
+    utils.set([label, dot], { opacity: 1 });
+    if (reduced) return;
+    const delay = enterDelay * 1000;
+    const { chars } = splitText(label, { chars: { class: 'reveal-char' }, accessible: true });
+    animate(chars, {
+      opacity: [0, 1],
+      y: [REVEAL_CHAR_RISE_PX, 0],
+      filter: [`blur(${REVEAL_CHAR_BLUR_PX}px)`, 'blur(0px)'],
+      delay: stagger(REVEAL_CHAR_STAGGER_MS, { from: 'center', start: delay }),
+      duration: REVEAL_CHAR_DURATION_MS,
+      ease: 'out(3)',
+      // Drop the settled blur(0px) so resting letters carry no filter layer.
+      onComplete: () => utils.set(chars, { filter: 'none' }),
+    });
+    animate(dot, {
+      opacity: [0, 1],
+      boxShadow: [
+        `0 0 0px ${themeRgba('text', 0)}`,
+        `0 0 ${REVEAL_DOT_GLOW_PX}px ${themeRgba('text', REVEAL_DOT_GLOW_ALPHA)}`,
+        `0 0 0px ${themeRgba('text', 0)}`,
+      ],
+      delay,
+      duration: REVEAL_DOT_DURATION_MS,
+      ease: 'out(3)',
+    });
+  }, []);
 
   const resolvedOpacity = isSelected || isHighlighted ? 1 : opacity;
   // A recognized (tagged) word steps up to the primary tier's size: deep words
@@ -117,7 +174,9 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
       // AnimatePresence). The label owns proximity opacity + scale; the dot holds
       // its own steady opacity. So a deep word's dot+label arrive and leave
       // together, while a surface dot never ramps with the cursor.
-      initial={animateIn ? { opacity: 0 } : false}
+      // A letter-revealed deep word skips this fade: its letters carry the
+      // arrival instead (see useAnimeScope above).
+      initial={animateIn && !letterReveal ? { opacity: 0 } : false}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 1.5, ease: 'easeOut' } }}
       transition={animateIn ? { opacity: { duration: 2, ease: 'easeOut', delay: enterDelay } } : undefined}
@@ -125,7 +184,9 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
       {/* Coordinate dot — self-contained fragment so a future soft "zone" halo
           can swap in here without touching the label/anchor grammar (KTD8). */}
       <span
+        ref={dotRef}
         style={{
+          opacity: letterReveal ? 0 : undefined,
           position: 'absolute',
           left: '50%',
           top: '50%',
@@ -175,7 +236,9 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
         animate={{ opacity: emphasisOpacity, scale: emphasisScale, x: offset?.dx ?? 0, y: -LABEL_STANDOFF + (offset?.dy ?? 0) }}
         transition={{ type: 'spring', stiffness: 120, damping: 20 }}
       >
-        {emotion.label}
+        <span key={emotion.label} ref={revealRoot} style={{ opacity: letterReveal ? 0 : undefined }}>
+          {emotion.label}
+        </span>
       </motion.span>
     </motion.span>
   );
