@@ -63,7 +63,7 @@ const REVEAL_DOT_GLOW_ALPHA = 0.35;
 // The tag moment (anime.js, one-shot). The word springs up to its tagged size
 // and eases to the recorded hue; one soft ring spreads out from it once. One
 // ring only — no bursts, the motivation model rules out rewards.
-const TAG_SPRING = spring({ stiffness: 170, damping: 11 });
+const TAG_SPRING = spring({ stiffness: 170, damping: 24 });
 // Surface words are already primary-sized, so tagging one has no size to grow
 // into. The spring always travels at least this share, so it still lands.
 const TAG_MIN_TRAVEL = 0.08;
