@@ -85,5 +85,26 @@ function check(name: string, ok: boolean, detail: string) {
   check('no focus: colliding words still fan out', allMoved, 'every overlapping word has a non-zero offset');
 }
 
+// A far straggler (a tag left behind by an adjust drag) must not set the ring
+// for the focus's own neighbourhood: the dense words fan no farther than they
+// would without it.
+{
+  const words: Array<[string, string, number, number]> = [
+    ['awe', 'Awe', 0.14, 0.11], ['interested', 'Interested', 0.14, 0.11], ['grounded', 'Grounded', 0.14, 0.12],
+    ['renewed', 'Renewed', 0.11, 0.15], ['free', 'Free', 0.14, 0.18], ['worthy', 'Worthy', 0.15, 0.21],
+  ];
+  const near = words.map(([id, label, x, y]) => fanBox(id, label, x, y, true));
+  const strays = [fanBox('brave', 'Brave', 0.62, 0.55, true), fanBox('eager', 'Eager', 0.62, 0.56, true)];
+  const focus = { x: toPxX(0.14), y: toPxY(0.14) };
+  const reach = 0.35 * 0.45 * W;
+  const maxNear = (off: Map<string, { dx: number; dy: number }>) => Math.max(...near.map((b) => mag(off.get(b.id)!)));
+  const alone = maxNear(computeRadialFan(near, [focus], undefined, reach));
+  const withStrays = computeRadialFan([...near, ...strays], [focus], undefined, reach);
+  check('straggler: ring unaffected', maxNear(withStrays) <= alone,
+    `max near offset ${maxNear(withStrays)} <= ${alone} without stragglers`);
+  const strayMax = Math.max(...strays.map((b) => mag(withStrays.get(b.id)!)));
+  check('straggler: steps off locally', strayMax < 60, `max straggler offset ${strayMax} < 60`);
+}
+
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);
