@@ -1,3 +1,5 @@
+import { memo } from 'react';
+import { useReducedMotion } from 'framer-motion';
 import { ShaderGradientCanvas, ShaderGradient } from '@shadergradient/react';
 import { useTheme } from '../../config/theme';
 
@@ -18,9 +20,17 @@ import { useTheme } from '../../config/theme';
 // cameraZoom, lightType, reflection, the `shader` variant, uAmplitude,
 // uFrequency, uTime, wireframe and zoomOut stay hardcoded — they're not part
 // of the admin theme page's Shape/Colors/Motion/View panel.
-export function ShaderBackground() {
+//
+// Memoized: it takes no props, and App re-renders on every slider/drag move.
+// Each ShaderGradient re-render rebuilds its material and recompiles the WebGL
+// program, which stalled the main thread mid-drag. Theme changes still reach it
+// through useTheme's context.
+export const ShaderBackground = memo(function ShaderBackground() {
   const { theme } = useTheme();
   const s = theme.shader;
+  // Reduced motion holds the gradient still (a static frame at uTime), whatever
+  // the theme's own animate setting.
+  const reduceMotion = useReducedMotion();
   return (
     <ShaderGradientCanvas
       style={{ position: 'absolute', inset: 0 }}
@@ -29,7 +39,7 @@ export function ShaderBackground() {
       pixelDensity={s.pixelDensity}
     >
       <ShaderGradient
-        animate={s.animate}
+        animate={reduceMotion ? 'off' : s.animate}
         brightness={s.brightness}
         cAzimuthAngle={s.cAzimuthAngle}
         cDistance={s.cDistance}
@@ -64,4 +74,4 @@ export function ShaderBackground() {
       />
     </ShaderGradientCanvas>
   );
-}
+});
