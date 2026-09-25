@@ -88,11 +88,16 @@ function uncross(work: WorkBox[]): void {
  * With no focus (nothing the field could resolve as a reveal centre), the
  * revealed dots' own centroid stands in, so colliding labels still separate
  * instead of stacking at home.
+ *
+ * `reach` (px) bounds which words share a focus's ring. A conflicted word whose
+ * dot sits farther out — a tag left behind by an adjust drag, say — steps off
+ * along its own ray instead, so one straggler cannot push the whole ring out.
  */
 export function computeRadialFan(
   boxes: FanBox[],
   revealFoci: Focus[],
   tuning: RevealTuning = DEFAULT_TUNING,
+  reach = Infinity,
 ): Map<string, Offset> {
   const offsets = new Map<string, Offset>();
   const movable = boxes.filter((b) => b.movable);
@@ -157,10 +162,6 @@ export function computeRadialFan(
       .map((m) => ({ ...m, x: m.cx, y: m.cy, ang0: Math.atan2(m.cy - f.y, m.cx - f.x), ang: 0 }));
     if (fanSet.length === 0) continue;
 
-    const mean = circMean(fanSet.map((m) => m.ang0));
-    fanSet.sort((a, b) => relAngle(a.ang0, mean) - relAngle(b.ang0, mean));
-    const n = fanSet.length;
-
     const march = (m: WorkBox, startR: number) => {
       let r = startR;
       for (let s = 0; s < 90; s++) {
@@ -171,25 +172,33 @@ export function computeRadialFan(
       }
       placed.push(m);
     };
-
-    if (n === 1) {
-      // A lone conflicting word just steps out along its own ray until it
-      // clears — the shortest tether that resolves the overlap, no full ring.
-      const m = fanSet[0];
+    // A conflicting word steps out along its own ray until it clears — the
+    // shortest tether that resolves the overlap, no full ring.
+    const stepOut = (m: WorkBox) => {
       m.ang = m.ang0;
       march(m, Math.hypot(m.cx - f.x, m.cy - f.y));
-    } else {
+    };
+
+    const ring = fanSet.filter((m) => Math.hypot(m.dotX - f.x, m.dotY - f.y) <= reach);
+    const mean = circMean(ring.map((m) => m.ang0));
+    ring.sort((a, b) => relAngle(a.ang0, mean) - relAngle(b.ang0, mean));
+    const n = ring.length;
+
+    if (n === 1) {
+      stepOut(ring[0]);
+    } else if (n > 1) {
       // Several conflicting words: seat them on one ring just outside the
       // farthest of them, fanned evenly by angle, for a clean arc.
       const arc = Math.min(Math.PI * 1.6, (0.55 + n * 0.30) * tuning.arcScale);
       const baseR =
-        Math.max(tuning.ringBase, ...fanSet.map((m) => Math.hypot(m.cx - f.x, m.cy - f.y))) +
+        Math.max(tuning.ringBase, ...ring.map((m) => Math.hypot(m.cx - f.x, m.cy - f.y))) +
         tuning.ringGap;
-      fanSet.forEach((m, k) => {
+      ring.forEach((m, k) => {
         m.ang = mean + (k / (n - 1) - 0.5) * arc;
         march(m, baseR);
       });
     }
+    fanSet.filter((m) => !ring.includes(m)).forEach(stepOut);
 
     uncross(fanSet);
     for (const m of fanSet) offsets.set(m.id, { dx: m.x - m.cx, dy: m.y - m.cy });

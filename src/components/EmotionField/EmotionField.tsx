@@ -345,6 +345,12 @@ export function EmotionField({
 
   // The deep words currently on screen: revealed by dwell, by a pin, or fixed
   // because they are selected/highlighted.
+  //
+  // During an adjust drag the highlighted set is stale — App derives it from
+  // the committed pin, not the live position — so it drops out until release
+  // re-derives it at the new spot. Kept, it doubled the revealed words (the
+  // live neighbourhood plus the old one) and the fan flung them all far out.
+  // Tagged words (selectedIds) stay: they are the user's choice, not a guess.
   const revealedDeep = useMemo(
     () =>
       deepEmotions.filter(
@@ -352,9 +358,9 @@ export function EmotionField({
           dwellOpacityMap.has(e.id) ||
           deepOpacityMap.has(e.id) ||
           selectedIds.has(e.id) ||
-          highlightedIds.has(e.id),
+          (!adjustDraft && highlightedIds.has(e.id)),
       ),
-    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds],
+    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds, adjustDraft],
   );
 
   // Live cursor proximity for the revealed deep words, so they react to the
@@ -476,7 +482,11 @@ export function EmotionField({
       const l = anchorMark.label;
       if (l) boxes.push(obstacle('label', anchorMark.x + l.dx, anchorMark.y + l.dy, l.halfW, l.halfH));
     }
-    return computeRadialFan(boxes, fociPx, tuning);
+    // A focus's reach is the reveal radius in pixels — toPercent maps one
+    // coordinate unit to 45% of the field — on the longer axis, since the field
+    // is not square. Only words inside it set that focus's ring.
+    const reach = VISIBILITY_RADIUS * 0.45 * Math.max(size.width, size.height);
+    return computeRadialFan(boxes, fociPx, tuning, reach);
   }, [revealedDeep, fociPx, anchorMark, size.width, size.height, tuning]);
 
   // A tether is drawn (and then faded) from each fanned label back to its dot,

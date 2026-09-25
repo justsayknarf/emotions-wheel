@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { animate, splitText, spring, stagger, utils } from 'animejs';
 import type { Emotion } from '../../data/emotions';
@@ -90,7 +90,27 @@ export const LABEL_STANDOFF = 11;
 // through the common Palatino aliases to a generic serif.
 export const FIELD_FONT = "Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
 
-export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
+// Every drag move re-renders the field, but most words are nowhere near the
+// moving point. `proximity` and `offset` arrive as fresh objects each move even
+// when their values are unchanged, so they compare by value; every other prop
+// compares by identity as memo would. A new prop is covered automatically.
+function propsEqual(prev: Props, next: Props): boolean {
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)] as Array<keyof Props>);
+  for (const k of keys) {
+    if (k === 'proximity') {
+      const a = prev.proximity, b = next.proximity;
+      if (a.opacity !== b.opacity || a.scale !== b.scale || a.isCandidate !== b.isCandidate || a.nearness !== b.nearness) return false;
+    } else if (k === 'offset') {
+      const a = prev.offset, b = next.offset;
+      if (a?.dx !== b?.dx || a?.dy !== b?.dy) return false;
+    } else if (!Object.is(prev[k], next[k])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
   const left = (toPercent(emotion.x) / 100) * containerWidth;
   const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
 
@@ -348,4 +368,4 @@ export function EmotionWord({ emotion, proximity, isSelected, isHighlighted, con
       </motion.span>
     </motion.span>
   );
-}
+}, propsEqual);
