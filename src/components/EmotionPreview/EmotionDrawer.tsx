@@ -588,6 +588,10 @@ export function EmotionDrawer({
   // unconditional `layout` every other card keeps, so removing its siblings
   // never triggers framer-motion's layout reflow on the card the user's
   // finger is on mid-drag.
+  //
+  // The rail turns `layout` off for any slider drag too, not just the sheet's
+  // shrink: every drag move re-renders the card, and a `layout` card measures
+  // the DOM on each render (~90ms of forced reads per drag, profiled).
   const visibleDraftPins = dragShrinkActive
     ? reversedPins.filter((pin) => pin.id === draggingPinId)
     : reversedPins;
@@ -679,7 +683,7 @@ export function EmotionDrawer({
       {visibleDraftPins.map((pin) => (
         <motion.div
           key={pin.id}
-          layout={!dragShrinkActive}
+          layout={draggingPinId === null}
           data-pin-id={pin.id}
           initial={{ opacity: 0, y: -10, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
