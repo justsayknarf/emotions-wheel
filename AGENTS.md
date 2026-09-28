@@ -17,6 +17,9 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:theme` | theme drift: generated tokens, theme completeness, DESIGN.md palette, no hardcoded theme colors (see [docs/theme-system.md](docs/theme-system.md)) |
 | `npm run check:landing` | landing page sky geometry |
 | `npm run check:replay` | constellation replay timing and day labels (`src/components/Constellation/replaySchedule.ts`) |
+| `npm run check:sky` | night-sky projection: orientation, press round-trip, horizon, flat parity (`src/utils/skyProjection.ts`) |
+| `npm run check:camera` | night-sky camera: pan cap, no overshoot, carry during flights, tilt limit, target order (`src/utils/skyCamera.ts`) |
+| `npm run check:slider` | weighted slider: edge resistance, no overshoot, grab zone, flight timing (`src/utils/sliderWeight.ts`) |
 
 New logic gets a new `check:<short-name>` script following the same shape.
 
