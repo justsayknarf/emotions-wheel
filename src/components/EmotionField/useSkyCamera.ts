@@ -20,6 +20,12 @@ export function useSkyCamera(opts: {
   const camRef = useRef(cam);
   const targetRef = useRef(target);
   const prevTargetRef = useRef<FieldCoord | null>(null);
+  // The previous tick's timestamp. Lives across effect restarts: the effect
+  // restarts on every target change (each slider onDrag), and re-seeding the
+  // clock there would hand the next tick a fraction of a frame, stalling the
+  // spring and the fov ease for as long as the target keeps moving. Null
+  // means the loop is asleep; only a wake seeds it.
+  const lastRef = useRef<number | null>(null);
   // Written in a layout effect rather than during render (react-hooks/refs);
   // layout effects run before the loop effect below, so its first tick
   // already reads this render's target.
@@ -28,17 +34,21 @@ export function useSkyCamera(opts: {
   });
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      lastRef.current = null;
+      return;
+    }
     let raf = 0;
-    let last = performance.now();
+    if (lastRef.current === null) lastRef.current = performance.now();
     const tick = (now: number) => {
-      const dt = Math.min(0.05, Math.max(0, now - last) / 1000);
-      last = now;
+      const dt = Math.min(0.05, Math.max(0, now - (lastRef.current ?? now)) / 1000);
+      lastRef.current = now;
       const next = stepCamera(camRef.current, { target: targetRef.current, prevTarget: prevTargetRef.current, lean, reduced }, dt, params);
       prevTargetRef.current = targetRef.current;
       camRef.current = next;
       setCam(next);
-      if (!isSettled(next, targetRef.current, lean, params)) raf = requestAnimationFrame(tick);
+      if (isSettled(next, targetRef.current, lean, params)) lastRef.current = null;
+      else raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
