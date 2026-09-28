@@ -2,15 +2,10 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { PinEntry } from '../../types';
 
-// Maps coordinate [-1, 1] to [5%, 95%] — matches EmotionField/EmotionWord.
-function toPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
-}
-
 interface Props {
   // The selected pin the thread connects to.
   pin: PinEntry;
-  // The left field plane, used to map the pin coordinate to pixels.
+  // The left field plane: the pin is found inside it and measured against it.
   fieldPlaneRef: React.RefObject<HTMLDivElement | null>;
   // The rail's scroll container. The selected card is found inside it by
   // data-pin-id, so the endpoint tracks the actual selected card and its scroll
@@ -38,8 +33,15 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
       const plane = fieldPlaneRef.current;
       if (!plane) return;
       const rect = plane.getBoundingClientRect();
-      const px = (toPercent(pin.x) / 100) * rect.width;
-      const py = (toPercent(-pin.y) / 100) * rect.height;
+      // The pin's drawn position, not a recomputed one: the field may be
+      // drawn through the night-sky projection, which only EmotionField knows.
+      // The pin wrapper is a 0×0 box at the pin centre, so its left/top are
+      // the centre.
+      const pinEl = plane.querySelector(`[data-field-pin="${CSS.escape(pin.id)}"]`) as HTMLElement | null;
+      if (!pinEl) return;
+      const pr = pinEl.getBoundingClientRect();
+      const px = pr.left - rect.left;
+      const py = pr.top - rect.top;
       // Fallback endpoint (no card found yet): the field plane's right
       // edge, which is where the rail — and the card inside it — normally
       // sit immediately adjacent to. Overridden below whenever the actual

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
-import { findNearbyPin } from '../../data/checkIn';
+import { findNearbyPinPx } from '../../data/checkIn';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord, LABEL_STANDOFF, type TagPulse } from './EmotionWord';
@@ -18,6 +18,7 @@ import { DepartureTrace } from './DepartureTrace';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
 import { useRevealTuning } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
+import { flatProjection, type FieldProjection } from '../../utils/skyProjection';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
 // coordinate. Above the resting standoff (so a merely-lifted label has none),
@@ -149,13 +150,13 @@ export function EmotionField({
   const [size, setSize] = useState({ width: 0, height: 0 });
   const tuning = useRevealTuning();
   const reducedMotion = useReducedMotion();
-  // Field-space [-1,1] -> container px. Recreated each render (cheap, no
-  // memo) — used by the always-mounted DepartureTrace below the same way
-  // the adjust overlay and recorded-pin blocks already convert inline.
-  const toFieldPx = (c: { x: number; y: number }) => ({
-    x: (toPercent(c.x) / 100) * size.width,
-    y: (toPercent(-c.y) / 100) * size.height,
-  });
+  // Every coordinate → px placement in this field goes through `proj`, so
+  // the flat field and the night-sky field (Task 6) share one code path.
+  const proj: FieldProjection = useMemo(
+    () => flatProjection({ width: size.width, height: size.height }),
+    [size.width, size.height],
+  );
+  const toFieldPx = (c: { x: number; y: number }) => proj.toPx(c);
 
   // U1: this stays the source of truth for layout math (word/pin positions,
   // fan geometry, etc. below) — it is NOT used for gesture-time coordinate
@@ -183,7 +184,7 @@ export function EmotionField({
     // throughout (U4): searching both arrays here does not fold recordedPins
     // into `pins` itself, so selectedIds/pairIds/deepOpacityMap/fociPx above
     // still derive from draft pins only.
-    const nearby = findNearbyPin(center, [...pins, ...recordedPins], size);
+    const nearby = findNearbyPinPx(proj.toPx(center), [...pins, ...recordedPins], proj);
     if (nearby) {
       onPinSelect(nearby.id);
       return;
@@ -200,11 +201,11 @@ export function EmotionField({
       regionDescription: getRegionDescription(center.x, center.y, emotions),
     };
     onPinRelease(entry);
-  }, [onPinRelease, onPinSelect, pins, recordedPins, size]);
+  }, [onPinRelease, onPinSelect, pins, recordedPins, proj]);
 
   // Pin lands, field notices (usePinLanding). Its anime scope is rooted at the
   // field container, so the container takes both refs.
-  const landingRootRef = usePinLanding(pins, size, surfaceEmotions);
+  const landingRootRef = usePinLanding(pins, size, surfaceEmotions, proj);
   const setContainerRef = useCallback((el: HTMLDivElement | null) => {
     containerRef.current = el;
     landingRootRef.current = el;
@@ -216,6 +217,14 @@ export function EmotionField({
     onFirstInteraction,
     hasInteracted,
     onGestureActiveChange,
+    // Presses arrive in the (possibly transformed) rect's px; rescale them to
+    // layout px, the space `proj` works in. Before ResizeObserver's first
+    // callback `size` is still 0, so fall back to a projection over the rect
+    // itself — the flat mapping, exactly what getCoord computed before.
+    toCoord: (lx, ly, rect) =>
+      size.width === 0 || size.height === 0
+        ? flatProjection(rect).fromPx(lx, ly)
+        : proj.fromPx(lx * (size.width / rect.width), ly * (size.height / rect.height)),
   });
   // U1: hover-only (no active press) — the receded field's pointer/hover
   // affordance should read as "backgrounded but reachable," not fight with
@@ -391,10 +400,10 @@ export function EmotionField({
   const recordedAnchor = recordedPins.length > 0 ? recordedPins[recordedPins.length - 1] : null;
   const fociPx = useMemo(() => {
     if (size.width === 0) return [] as Array<{ x: number; y: number }>;
-    const toPx = (c: { x: number; y: number }) => ({
-      x: (toPercent(c.x) / 100) * size.width,
-      y: (toPercent(-c.y) / 100) * size.height,
-    });
+    const toPx = (c: { x: number; y: number }) => {
+      const p = proj.toPx(c);
+      return { x: p.x, y: p.y };
+    };
     const arr: Array<{ x: number; y: number }> = [];
     if (dwellCenter) arr.push(toPx(dwellCenter));
     // Without this, a deep word revealed by a departure drag (no pin, no
@@ -415,7 +424,7 @@ export function EmotionField({
       for (const p of pins) arr.push(toPx(p));
     }
     return arr;
-  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, emphasizedRecordedPin, size.width, size.height]);
+  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, emphasizedRecordedPin, size.width, proj]);
 
   // Lay the revealed labels out as a fan around their nearest focus: each rides
   // a ray out of the cursor/pin, with a no-crossing pass so their tethers never
@@ -429,22 +438,24 @@ export function EmotionField({
   const anchorMark = useMemo(() => {
     if (!recordedAnchor || size.width === 0) return null;
     const ringSize = recordedAnchor.id === emphasizedPinId ? ANCHOR_RING_SIZE.emphasized : ANCHOR_RING_SIZE.rest;
-    const x = (toPercent(recordedAnchor.x) / 100) * size.width;
-    const y = (toPercent(-recordedAnchor.y) / 100) * size.height;
+    const { x, y } = proj.toPx(recordedAnchor);
     const label = previousCheckInLabel
       ? placeAnchorLabel(
           { x, y, size: ringSize },
           (previousCheckInLabel.length * ANCHOR_LABEL_CHAR_W) / 2,
-          surfaceEmotions.map((e) => ({
-            x: (toPercent(e.x) / 100) * size.width,
-            y: (toPercent(-e.y) / 100) * size.height - LABEL_STANDOFF,
-            halfW: labelHalfWidth(e.label, e.depth),
-            halfH: LABEL_LINE_H / 2,
-          })),
+          surfaceEmotions.map((e) => {
+            const p = proj.toPx(e);
+            return {
+              x: p.x,
+              y: p.y - LABEL_STANDOFF,
+              halfW: labelHalfWidth(e.label, e.depth),
+              halfH: LABEL_LINE_H / 2,
+            };
+          }),
         )
       : null;
     return { id: recordedAnchor.id, x, y, ringSize, label };
-  }, [recordedAnchor, emphasizedPinId, previousCheckInLabel, size.width, size.height]);
+  }, [recordedAnchor, emphasizedPinId, previousCheckInLabel, size.width, proj]);
 
   const deepLabelOffsets = useMemo(() => {
     if (size.width === 0 || revealedDeep.length === 0) {
@@ -454,8 +465,7 @@ export function EmotionField({
       e: (typeof emotions)[number],
       movable: boolean,
     ): FanBox => {
-      const dotX = (toPercent(e.x) / 100) * size.width;
-      const dotY = (toPercent(-e.y) / 100) * size.height;
+      const { x: dotX, y: dotY } = proj.toPx(e);
       return {
         id: e.id,
         dotX,
@@ -487,7 +497,7 @@ export function EmotionField({
     // is not square. Only words inside it set that focus's ring.
     const reach = VISIBILITY_RADIUS * 0.45 * Math.max(size.width, size.height);
     return computeRadialFan(boxes, fociPx, tuning, reach);
-  }, [revealedDeep, fociPx, anchorMark, size.width, size.height, tuning]);
+  }, [revealedDeep, fociPx, anchorMark, size.width, size.height, proj, tuning]);
 
   // A tether is drawn (and then faded) from each fanned label back to its dot,
   // staggered so the nearest word to a focus draws first.
@@ -499,8 +509,7 @@ export function EmotionField({
       const dispX = o.dx;
       const dispY = o.dy - LABEL_STANDOFF;
       if (Math.hypot(dispX, dispY) <= TETHER_THRESHOLD) continue;
-      const cx = (toPercent(e.x) / 100) * size.width;
-      const cyCoord = (toPercent(-e.y) / 100) * size.height;
+      const { x: cx, y: cyCoord } = proj.toPx(e);
       const d = fociPx.length
         ? Math.min(...fociPx.map((f) => Math.hypot(cx - f.x, cyCoord - f.y)))
         : 0;
@@ -531,7 +540,7 @@ export function EmotionField({
     }
     raw.sort((a, b) => a.d - b.d);
     return raw.map(({ seg }, i) => ({ ...seg, delay: i * tuning.staggerStep }));
-  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height, tuning]);
+  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, proj, tuning]);
 
   // Axes read legibly at rest and brighten (emphasis) while the intro runs.
   const crosshairColor = `rgb(var(--ui-gold-rgb) / ${axisEmphasis ? 0.22 : 0.1})`;
@@ -681,20 +690,23 @@ export function EmotionField({
           {/* Surface emotions — always ambient at low opacity, brighten near cursor.
               Each sits in a zero-size wrapper that usePinLanding leans toward a
               landing pin, clear of the transforms framer drives inside. */}
-          {surfaceEmotions.map((emotion) => (
-            <div key={emotion.id} data-lean-word={emotion.id} style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }}>
-              <EmotionWord
-                emotion={emotion}
-                proximity={proximity.get(emotion.id)!}
-                isSelected={selectedIds.has(emotion.id)}
-                isHighlighted={highlightedIds.has(emotion.id)}
-                containerWidth={size.width}
-                containerHeight={size.height}
-                emphasis={pairIds.has(emotion.id) ? 'pair' : null}
-                tagPulse={tagPulse?.id === emotion.id ? tagPulse : null}
-              />
-            </div>
-          ))}
+          {surfaceEmotions.map((emotion) => {
+            const at = proj.toPx(emotion);
+            return (
+              <div key={emotion.id} data-lean-word={emotion.id} style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }}>
+                <EmotionWord
+                  emotion={emotion}
+                  proximity={proximity.get(emotion.id)!}
+                  isSelected={selectedIds.has(emotion.id)}
+                  isHighlighted={highlightedIds.has(emotion.id)}
+                  x={at.x}
+                  y={at.y}
+                  emphasis={pairIds.has(emotion.id) ? 'pair' : null}
+                  tagPulse={tagPulse?.id === emotion.id ? tagPulse : null}
+                />
+              </div>
+            );
+          })}
 
           {/* Deep emotions — revealed near dwell/pins; fade in on mount, out on unmount */}
           <AnimatePresence>
@@ -707,6 +719,7 @@ export function EmotionField({
                 const enterDelay = !isFixed && dwell ? dwell.rank * 0.08 : 0;
                 // Reveal drives opacity; the live cursor drives size + colour.
                 const live = deepProximity.get(e.id);
+                const at = proj.toPx(e);
                 return (
                   <EmotionWord
                     key={e.id}
@@ -714,8 +727,8 @@ export function EmotionField({
                     proximity={{ opacity, scale: live?.scale ?? 1, isCandidate: false, nearness: live?.nearness ?? 0 }}
                     isSelected={selectedIds.has(e.id)}
                     isHighlighted={highlightedIds.has(e.id)}
-                    containerWidth={size.width}
-                    containerHeight={size.height}
+                    x={at.x}
+                    y={at.y}
                     enterDelay={enterDelay}
                     animateIn
                     offset={deepLabelOffsets.get(e.id)}
@@ -728,8 +741,7 @@ export function EmotionField({
           </AnimatePresence>
 
           {pins.map((pin) => {
-            const px = (toPercent(pin.x) / 100) * size.width;
-            const py = (toPercent(-pin.y) / 100) * size.height;
+            const { x: px, y: py } = proj.toPx(pin);
             const isEmphasized = pin.id === emphasizedPinId;
             const dotSize = isEmphasized ? 7 : 4;
             return (
@@ -850,8 +862,7 @@ export function EmotionField({
               the filled-dot treatment (LC3) and their own breathing halo
               unchanged, below. */}
           {recordedPins.map((pin, i) => {
-            const px = (toPercent(pin.x) / 100) * size.width;
-            const py = (toPercent(-pin.y) / 100) * size.height;
+            const { x: px, y: py } = proj.toPx(pin);
             const isEmphasized = pin.id === emphasizedPinId;
             const isAnchor = i === recordedPins.length - 1;
 
