@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions } from '../../data/emotions';
@@ -16,9 +16,11 @@ import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
-import { useRevealTuning } from '../../config/revealTuning';
+import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
-import { flatProjection, type FieldProjection } from '../../utils/skyProjection';
+import { flatProjection, skyProjection } from '../../utils/skyProjection';
+import { cameraTarget } from '../../utils/skyCamera';
+import { useSkyCamera } from './useSkyCamera';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
 // coordinate. Above the resting standoff (so a merely-lifted label has none),
@@ -151,11 +153,29 @@ export function EmotionField({
   const tuning = useRevealTuning();
   const reducedMotion = useReducedMotion();
   // Every coordinate → px placement in this field goes through `proj`, so
-  // the flat field and the night-sky field (Task 6) share one code path.
-  const proj: FieldProjection = useMemo(
-    () => flatProjection({ width: size.width, height: size.height }),
-    [size.width, size.height],
-  );
+  // the flat field and the night-sky field share one code path. In sky mode
+  // `proj` changes every camera frame (useSkyCamera); in flat mode it only
+  // changes with the stage size.
+  const sky = tuning.skyField;
+  const cameraParams = useMemo(() => cameraParamsFrom(tuning), [tuning]);
+  const newestDraftPin = pins.length ? pins[pins.length - 1] : null;
+  // The emphasized pin, whichever group it belongs to (draft or recorded).
+  const emphasizedAny = emphasizedPinId
+    ? pins.find((p) => p.id === emphasizedPinId) ?? recordedPins.find((p) => p.id === emphasizedPinId) ?? null
+    : null;
+  const skyTarget = cameraTarget({
+    liveDraft: departureDraft ?? adjustDraft,
+    emphasizedPin: emphasizedAny,
+    newestDraftPin,
+    recordedAnchor: recordedPins.length ? recordedPins[recordedPins.length - 1] : null,
+  });
+  const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
+    enabled: sky,
+    target: skyTarget,
+    lean: pins.length > 0 || departureDraft !== null,
+    params: cameraParams,
+    size,
+  });
   const toFieldPx = (c: { x: number; y: number }) => proj.toPx(c);
 
   // U1: this stays the source of truth for layout math (word/pin positions,
@@ -174,6 +194,14 @@ export function EmotionField({
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
+  // Things outside the field that measure drawn positions from the DOM (the
+  // rail Tether reads [data-field-pin]) can't see a camera frame: App doesn't
+  // re-render for one. Tell them, once the frame's positions are committed.
+  useLayoutEffect(() => {
+    if (!sky) return;
+    containerRef.current?.dispatchEvent(new CustomEvent('fieldprojectionchange', { bubbles: true }));
+  }, [sky, proj]);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
     // R15: before minting a new pin, check whether the release lands close
@@ -220,10 +248,13 @@ export function EmotionField({
     // Presses arrive in the (possibly transformed) rect's px; rescale them to
     // layout px, the space `proj` works in. Before ResizeObserver's first
     // callback `size` is still 0, so fall back to a projection over the rect
-    // itself — the flat mapping, exactly what getCoord computed before.
+    // itself — the flat mapping, exactly what getCoord computed before, or
+    // the sky from the camera's current gaze.
     toCoord: (lx, ly, rect) =>
       size.width === 0 || size.height === 0
-        ? flatProjection(rect).fromPx(lx, ly)
+        ? sky
+          ? skyProjection({ look: skyLook, fovDeg: skyFovDeg, width: rect.width, height: rect.height }).fromPx(lx, ly)
+          : flatProjection(rect).fromPx(lx, ly)
         : proj.fromPx(lx * (size.width / rect.width), ly * (size.height / rect.height)),
   });
   // U1: hover-only (no active press) — the receded field's pointer/hover
@@ -360,16 +391,18 @@ export function EmotionField({
   // re-derives it at the new spot. Kept, it doubled the revealed words (the
   // live neighbourhood plus the old one) and the fan flung them all far out.
   // Tagged words (selectedIds) stay: they are the user's choice, not a guess.
+  // Words behind the sky camera don't render.
   const revealedDeep = useMemo(
     () =>
       deepEmotions.filter(
         (e) =>
-          dwellOpacityMap.has(e.id) ||
-          deepOpacityMap.has(e.id) ||
-          selectedIds.has(e.id) ||
-          (!adjustDraft && highlightedIds.has(e.id)),
+          (dwellOpacityMap.has(e.id) ||
+            deepOpacityMap.has(e.id) ||
+            selectedIds.has(e.id) ||
+            (!adjustDraft && highlightedIds.has(e.id))) &&
+          proj.toPx(e).visible,
       ),
-    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds, adjustDraft],
+    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds, adjustDraft, proj],
   );
 
   // Live cursor proximity for the revealed deep words, so they react to the
@@ -400,28 +433,29 @@ export function EmotionField({
   const recordedAnchor = recordedPins.length > 0 ? recordedPins[recordedPins.length - 1] : null;
   const fociPx = useMemo(() => {
     if (size.width === 0) return [] as Array<{ x: number; y: number }>;
-    const toPx = (c: { x: number; y: number }) => {
-      const p = proj.toPx(c);
-      return { x: p.x, y: p.y };
-    };
     const arr: Array<{ x: number; y: number }> = [];
-    if (dwellCenter) arr.push(toPx(dwellCenter));
+    // A focus behind the sky camera has no screen position to fan out of.
+    const push = (c: { x: number; y: number }) => {
+      const p = proj.toPx(c);
+      if (p.visible) arr.push({ x: p.x, y: p.y });
+    };
+    if (dwellCenter) push(dwellCenter);
     // Without this, a deep word revealed by a departure drag (no pin, no
     // dwell) would fan out of computeRadialFan's no-focus fallback (the
     // revealed dots' centroid) rather than out of the live coordinate.
-    if (departureDraft) arr.push(toPx(departureDraft));
+    if (departureDraft) push(departureDraft);
     // Same live-position substitution as deepOpacityMap above — an adjust
     // drag fans out from where the pin actually is right now, not its
     // stale pre-drag position.
     if (emphasizedPinId) {
       if (adjustDraft) {
-        arr.push(toPx(adjustDraft));
+        push(adjustDraft);
       } else {
         const emphasizedPin = pins.find((p) => p.id === emphasizedPinId) ?? emphasizedRecordedPin;
-        if (emphasizedPin) arr.push(toPx(emphasizedPin));
+        if (emphasizedPin) push(emphasizedPin);
       }
     } else {
-      for (const p of pins) arr.push(toPx(p));
+      for (const p of pins) push(p);
     }
     return arr;
   }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, emphasizedRecordedPin, size.width, proj]);
@@ -438,13 +472,16 @@ export function EmotionField({
   const anchorMark = useMemo(() => {
     if (!recordedAnchor || size.width === 0) return null;
     const ringSize = recordedAnchor.id === emphasizedPinId ? ANCHOR_RING_SIZE.emphasized : ANCHOR_RING_SIZE.rest;
-    const { x, y } = proj.toPx(recordedAnchor);
+    const { x, y, visible } = proj.toPx(recordedAnchor);
+    // Behind the sky camera the mark doesn't draw, so it is no obstacle.
+    if (!visible) return null;
     const label = previousCheckInLabel
       ? placeAnchorLabel(
           { x, y, size: ringSize },
           (previousCheckInLabel.length * ANCHOR_LABEL_CHAR_W) / 2,
-          surfaceEmotions.map((e) => {
+          surfaceEmotions.flatMap((e) => {
             const p = proj.toPx(e);
+            if (!p.visible) return [];
             return {
               x: p.x,
               y: p.y - LABEL_STANDOFF,
@@ -477,8 +514,9 @@ export function EmotionField({
         movable,
       };
     };
+    // Surface words behind the sky camera don't draw, so they're no obstacle.
     const boxes: FanBox[] = [
-      ...surfaceEmotions.map((e) => fanBox(e, false)),
+      ...surfaceEmotions.filter((e) => proj.toPx(e).visible).map((e) => fanBox(e, false)),
       ...revealedDeep.map((e) => fanBox(e, true)),
     ];
     // The anchor mark's ring and day label are fixed obstacles too, so no
@@ -590,27 +628,34 @@ export function EmotionField({
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}
     >
-      {/* Ambient watercolor aura — the deepest layer, pure background mood */}
-      <FieldAura />
+      {/* The flat field's own layers. The night sky (skyField) draws none of
+          them: the aura, the signal, the crosshairs and the radiance all
+          assume a flat plane with a fixed centre. */}
+      {!sky && (
+        <>
+          {/* Ambient watercolor aura — the deepest layer, pure background mood */}
+          <FieldAura />
 
-      {/* Light-signaling — still-center pool + outward intensity gradient,
-          beneath every other layer (U4) */}
-      <FieldSignal />
+          {/* Light-signaling — still-center pool + outward intensity gradient,
+              beneath every other layer (U4) */}
+          <FieldSignal />
 
-      {/* Crosshairs — the resting axis lines (emphasis brightens their colour). */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+          {/* Crosshairs — the resting axis lines (emphasis brightens their colour). */}
+          <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+          <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
 
-      {/* Radiating light — a soft glow pulses from the centre out to the labels
-          (vertical pair first, then horizontal), drawn as an additive canvas
-          trail so it reads as continuous light rather than dots. */}
-      <AxisRadiance
-        play={play}
-        delay={tuning.axisPulseDelay}
-        stagger={tuning.axisPulseStagger}
-        duration={tuning.axisPulseDuration}
-        strength={tuning.axisPulseStrength}
-      />
+          {/* Radiating light — a soft glow pulses from the centre out to the labels
+              (vertical pair first, then horizontal), drawn as an additive canvas
+              trail so it reads as continuous light rather than dots. */}
+          <AxisRadiance
+            play={play}
+            delay={tuning.axisPulseDelay}
+            stagger={tuning.axisPulseStagger}
+            duration={tuning.axisPulseDuration}
+            strength={tuning.axisPulseStrength}
+          />
+        </>
+      )}
 
       {/* Departure connector (U6/R6) — always mounted, self-gating on
           `play`, same shape as AxisRadiance above. */}
@@ -641,8 +686,9 @@ export function EmotionField({
         Activated
       </motion.div>
 
-      {/* Axis position indicators — visible only while dragging */}
-      {isRevealed && revealCenter && (
+      {/* Axis position indicators — visible only while dragging. Flat only:
+          in the sky the edges no longer map linearly to a coordinate. */}
+      {!sky && isRevealed && revealCenter && (
         <>
           {/* Arousal: slides left–right along the bottom edge */}
           <div style={{
@@ -692,6 +738,7 @@ export function EmotionField({
               landing pin, clear of the transforms framer drives inside. */}
           {surfaceEmotions.map((emotion) => {
             const at = proj.toPx(emotion);
+            if (!at.visible) return null;
             return (
               <div key={emotion.id} data-lean-word={emotion.id} style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }}>
                 <EmotionWord
@@ -741,7 +788,8 @@ export function EmotionField({
           </AnimatePresence>
 
           {pins.map((pin) => {
-            const { x: px, y: py } = proj.toPx(pin);
+            const { x: px, y: py, visible } = proj.toPx(pin);
+            if (!visible) return null;
             const isEmphasized = pin.id === emphasizedPinId;
             const dotSize = isEmphasized ? 7 : 4;
             return (
@@ -862,7 +910,8 @@ export function EmotionField({
               the filled-dot treatment (LC3) and their own breathing halo
               unchanged, below. */}
           {recordedPins.map((pin, i) => {
-            const { x: px, y: py } = proj.toPx(pin);
+            const { x: px, y: py, visible } = proj.toPx(pin);
+            if (!visible) return null;
             const isEmphasized = pin.id === emphasizedPinId;
             const isAnchor = i === recordedPins.length - 1;
 

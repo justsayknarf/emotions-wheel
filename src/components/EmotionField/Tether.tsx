@@ -88,9 +88,13 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
     if (rail) ro.observe(rail);
     rail?.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
+    // A night-sky camera frame moves the pin without re-rendering App, so the
+    // field announces each committed frame (EmotionField, sky mode only).
+    plane?.addEventListener('fieldprojectionchange', schedule);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       ro.disconnect();
+      plane?.removeEventListener('fieldprojectionchange', schedule);
       rail?.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };

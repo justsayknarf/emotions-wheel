@@ -1035,8 +1035,10 @@ export default function App() {
     >
       {/* Experimental (feat/shader-gradient-background): animated shader
           gradient behind everything else — sits beneath the rail backdrop
-          (zIndex 1) and field (zIndex 2) at the implicit zIndex 0. */}
-      <ShaderBackground />
+          (zIndex 1) and field (zIndex 2) at the implicit zIndex 0. The night
+          sky (skyField) draws its own backdrop, so the shader never mounts
+          behind it. */}
+      {!tuning.skyField && <ShaderBackground />}
 
       {/* Quiet rail backdrop — present on desktop so the right region reads as
           an intentional plane even before a pin is placed. review-fix:
