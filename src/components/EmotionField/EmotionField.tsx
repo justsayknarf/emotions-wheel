@@ -15,6 +15,7 @@ import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
+import { SkyBackdrop } from './SkyBackdrop';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
 import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -405,6 +406,29 @@ export function EmotionField({
     [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds, adjustDraft, proj],
   );
 
+  // The sky's stars (R6) and constellation chain (R8). Sky mode only reads them.
+  const revealedIds = useMemo(() => new Set(revealedDeep.map((e) => e.id)), [revealedDeep]);
+  const skyStars = useMemo(
+    () => emotions.map((e) => ({ id: e.id, x: e.x, y: e.y, surface: e.depth === 'surface', tagged: selectedIds.has(e.id), revealed: revealedIds.has(e.id) })),
+    [selectedIds, revealedIds],
+  );
+  // The chain for the pin the user is looking at: the emphasized pin, else the
+  // only draft pin. Tag order is recognizedWords order.
+  const constellationPin = emphasizedAny ?? (pins.length === 1 ? pins[0] : null);
+  const constellation = useMemo(() => {
+    if (!constellationPin) return [];
+    const byId = new Map(emotions.map((e) => [e.id, e]));
+    return [constellationPin, ...constellationPin.recognizedWords.map((id) => byId.get(id)).filter((e): e is NonNullable<typeof e> => !!e)];
+  }, [constellationPin]);
+
+  // R-8: in the sky an endpoint behind the camera has no screen position
+  // (toPx returns 0,0), so the comet would streak to the top-left. Null
+  // endpoints are DepartureTrace's own "don't play". Flat mode is unchanged.
+  const traceHidden =
+    sky &&
+    ((departureTraceFrom !== null && !proj.toPx(departureTraceFrom).visible) ||
+      (departureTraceTo !== null && !proj.toPx(departureTraceTo).visible));
+
   // Live cursor proximity for the revealed deep words, so they react to the
   // cursor (size + colour) the way surface anchors do. Only the scale/nearness
   // are used — a deep word's visibility stays reveal-driven, not cursor-driven.
@@ -628,6 +652,18 @@ export function EmotionField({
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}
     >
+      {/* The night sky itself — beneath words, pins and labels (Task 7). */}
+      {sky && (
+        <SkyBackdrop
+          proj={proj}
+          size={size}
+          stars={skyStars}
+          constellation={constellation}
+          liveDraft={liveDraft}
+          reducedMotion={!!reducedMotion}
+        />
+      )}
+
       {/* The flat field's own layers. The night sky (skyField) draws none of
           them: the aura, the signal, the crosshairs and the radiance all
           assume a flat plane with a fixed centre. */}
@@ -661,8 +697,8 @@ export function EmotionField({
           `play`, same shape as AxisRadiance above. */}
       <DepartureTrace
         play={departureTracePlay}
-        from={departureTraceFrom}
-        to={departureTraceTo}
+        from={traceHidden ? null : departureTraceFrom}
+        to={traceHidden ? null : departureTraceTo}
         size={size}
         toPx={toFieldPx}
         travel={tuning.departureTravel}
@@ -748,6 +784,7 @@ export function EmotionField({
                   isHighlighted={highlightedIds.has(emotion.id)}
                   x={at.x}
                   y={at.y}
+                  hideDot={sky}
                   emphasis={pairIds.has(emotion.id) ? 'pair' : null}
                   tagPulse={tagPulse?.id === emotion.id ? tagPulse : null}
                 />
@@ -776,6 +813,7 @@ export function EmotionField({
                     isHighlighted={highlightedIds.has(e.id)}
                     x={at.x}
                     y={at.y}
+                    hideDot={sky}
                     enterDelay={enterDelay}
                     animateIn
                     offset={deepLabelOffsets.get(e.id)}
