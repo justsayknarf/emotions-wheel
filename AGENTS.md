@@ -20,6 +20,7 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:sky` | night-sky projection: orientation, press round-trip, horizon, flat parity (`src/utils/skyProjection.ts`) |
 | `npm run check:camera` | night-sky camera: pan cap, no overshoot, carry during flights, tilt limit, target order (`src/utils/skyCamera.ts`) |
 | `npm run check:slider` | weighted slider: edge resistance, no overshoot, grab zone, flight timing (`src/utils/sliderWeight.ts`) |
+| `npm run check:skytheme` | night-sky theme block: every theme's sky complete and in range, Starry Night values, uniform mapping (`src/config/theme.ts`, `skyShader.ts`) |
 
 New logic gets a new `check:<short-name>` script following the same shape.
 
