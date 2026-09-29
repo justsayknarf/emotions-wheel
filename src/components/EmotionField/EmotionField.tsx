@@ -17,7 +17,7 @@ import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
-import { SkyBackdrop } from './SkyBackdrop';
+import { SkyBackdrop, type ConstellationStar } from './SkyBackdrop';
 import { SkyAurora, type SkyAuroraInputs } from './SkyAurora';
 import { canUseWebGL } from './skyShader';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
@@ -501,10 +501,18 @@ export function EmotionField({
   // The chain for the pin the user is looking at: the emphasized pin, else the
   // only draft pin. Tag order is recognizedWords order.
   const constellationPin = emphasizedAny ?? (pins.length === 1 ? pins[0] : null);
-  const constellation = useMemo(() => {
+  // Each star keyed so SkyBackdrop knows a segment across renders (a new one
+  // animates in, one already there draws at rest).
+  const constellation = useMemo<ConstellationStar[]>(() => {
     if (!constellationPin) return [];
     const byId = new Map(emotions.map((e) => [e.id, e]));
-    return [constellationPin, ...constellationPin.recognizedWords.map((id) => byId.get(id)).filter((e): e is NonNullable<typeof e> => !!e)];
+    return [
+      { key: `pin:${constellationPin.id}`, x: constellationPin.x, y: constellationPin.y },
+      ...constellationPin.recognizedWords
+        .map((id) => byId.get(id))
+        .filter((e): e is NonNullable<typeof e> => !!e)
+        .map((e) => ({ key: e.id, x: e.x, y: e.y })),
+    ];
   }, [constellationPin]);
 
   // R-8: in the sky an endpoint behind the camera has no screen position
