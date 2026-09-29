@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { flightDuration, flightValue, isGrab, stepWeighted, type SliderWeight } from '../../utils/sliderWeight';
 
 // Not exported: nothing outside this file needs these — CoordinateCard.tsx
@@ -107,15 +107,18 @@ export function AxisSlider({
   const rafRef = useRef(0);
   // The frame loop outlives the render that started it, so it calls the
   // parent through a ref and never holds a stale onDrag/onCommit/onCancel.
+  // A layout effect, so the ref already holds this render's callbacks before
+  // any frame after the commit can run.
   const cb = useRef({ onDrag, onCommit, onCancel });
-  useEffect(() => {
+  useLayoutEffect(() => {
     cb.current = { onDrag, onCommit, onCancel };
   });
 
-  // Follow the parent's value while idle (a field press moved the pin).
+  // Weighted mode only: follow the parent's value while idle (a field press
+  // moved the pin). Flat mode draws `value` directly and never reads `shown`.
   useEffect(() => {
-    if (motion.current.kind === 'idle') { shownRef.current = value; setShown(value); }
-  }, [value]);
+    if (weight && motion.current.kind === 'idle') { shownRef.current = value; setShown(value); }
+  }, [value, weight]);
 
   const run = (w: SliderWeight) => {
     cancelAnimationFrame(rafRef.current);
@@ -125,12 +128,19 @@ export function AxisSlider({
       last = now;
       const m = motion.current;
       if (m.kind === 'idle') return;
-      let v = shownRef.current;
-      if (m.kind === 'held') v = stepWeighted(v, m.target, dt, w);
-      else v = flightValue(m.from, m.to, (now - m.t0) / 1000, m.dur);
-      shownRef.current = v;
-      setShown(v);
-      cb.current.onDrag(v);
+      const prev = shownRef.current;
+      const v = m.kind === 'held'
+        ? stepWeighted(prev, m.target, dt, w)
+        : flightValue(m.from, m.to, (now - m.t0) / 1000, m.dur);
+      // A thumb held still on the pointer (or resting at a flight's end) has
+      // nothing new to report: skip the state and the parent callback so a
+      // held-still drag doesn't re-render the card, App and the field every
+      // frame.
+      if (v !== prev) {
+        shownRef.current = v;
+        setShown(v);
+        cb.current.onDrag(v);
+      }
       if (m.kind === 'flight' && now - m.t0 >= m.dur * 1000) {
         motion.current = { kind: 'idle' };
         cb.current.onCommit(m.to);

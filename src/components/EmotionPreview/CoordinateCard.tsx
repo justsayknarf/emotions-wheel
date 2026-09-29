@@ -227,8 +227,18 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // can.
   const [draggingAxis, setDraggingAxis] = useState<'x' | 'y' | null>(null);
 
+  // The coordinate this card last committed, stamped with the pin prop it was
+  // committed against. A commit reaches App through onAdjust, but `pin` only
+  // catches up on App's next render — and in sky mode the sibling slider's
+  // flight can tick in that same frame. Until the prop moves, this is the
+  // truth; once it does (App caught up, or a field press moved the pin) the
+  // prop is.
+  const committedRef = useRef<{ fromX: number; fromY: number; x: number; y: number } | null>(null);
+
   const nextFrom = (axis: 'x' | 'y', v: number) => {
-    const base = draftRef.current ?? { x: pin.x, y: pin.y };
+    const c = committedRef.current;
+    const committed = c && c.fromX === pin.x && c.fromY === pin.y ? c : null;
+    const base = draftRef.current ?? committed ?? { x: pin.x, y: pin.y };
     return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
   };
   // The local drag-state bookkeeping shared by the axis interactions below —
@@ -264,6 +274,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
+    committedRef.current = { fromX: pin.x, fromY: pin.y, ...next };
     clearLiveDraft();
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
