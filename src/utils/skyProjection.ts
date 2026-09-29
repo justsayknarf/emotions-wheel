@@ -16,8 +16,20 @@ export interface ScreenPoint {
   // 1 at the stage centre, falling off toward the edges; scales star size.
   scale: number;
 }
+// The camera behind a sky projection, for renderers that turn each pixel
+// back into a dome direction themselves (the WebGL sky, SkyAurora.tsx).
+export interface SkyFrame {
+  f: Vec3;
+  r: Vec3;
+  u: Vec3;
+  F: number;
+  cx: number;
+  cy: number;
+}
 export interface FieldProjection {
   kind: 'flat' | 'sky';
+  // Present on sky projections only.
+  frame?: SkyFrame;
   toPx(c: FieldCoord): ScreenPoint;
   // Stage-local px (0,0 = top-left) back to a field coordinate clamped to the
   // square, or null where nothing is pressable (below the horizon).
@@ -96,6 +108,7 @@ export function skyProjection(opts: {
   };
   return {
     kind: 'sky',
+    frame: { f, r, u, F, cx, cy },
     toPx: (c) => projectDir(fieldToDir(c)),
     fromPx: (px, py) => {
       const sx = (px - cx) / F;

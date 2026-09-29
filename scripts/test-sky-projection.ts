@@ -127,5 +127,22 @@ for (const look of [{ x: -0.9, y: -0.8 }, { x: 1.1, y: 0.3 }, { x: 0.2, y: 1.15 
   check('starfield seed is deterministic', same, 'two generators, same seed');
 }
 
+// The frame a WebGL renderer uses must describe the same projection:
+// a direction built from any pixel through the frame lands back on that pixel.
+{
+  const p = skyProjection({ look: { x: -0.7, y: 0.4 }, fovDeg: 72, width: W, height: H, viewport: { top: 0, height: 480 } });
+  const fr = p.frame!;
+  let worst = 0;
+  for (const [px, py] of [[40, 30], [450, 240], [860, 470], [300, 400]]) {
+    const sx = (px - fr.cx) / fr.F, sy = -(py - fr.cy) / fr.F;
+    const d = [fr.f[0] + fr.r[0] * sx + fr.u[0] * sy, fr.f[1] + fr.r[1] * sx + fr.u[1] * sy, fr.f[2] + fr.r[2] * sx + fr.u[2] * sy];
+    const l = Math.hypot(d[0], d[1], d[2]);
+    const c = dirToField([d[0] / l, d[1] / l, d[2] / l]);
+    const q = p.toPx(c);
+    worst = Math.max(worst, Math.hypot(q.x - px, q.y - py));
+  }
+  check('sky frame agrees with toPx', worst < 0.5 && flatProjection({ width: W, height: H }).frame === undefined, `worst ${worst.toFixed(4)}px; flat has no frame`);
+}
+
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }
 console.log('\nall passed');
