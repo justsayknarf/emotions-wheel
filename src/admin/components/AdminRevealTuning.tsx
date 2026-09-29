@@ -81,6 +81,8 @@ const SKY_KNOBS: Knob[] = [
   { key: 'sliderGrabPx', label: 'Grab zone', min: 8, max: 60, step: 1, fmt: (v) => `${v}px` },
   { key: 'flightBase', label: 'Flight base', min: 0.2, max: 2, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
   { key: 'flightPerUnit', label: 'Flight per unit', min: 0, max: 1.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'skyIntroDelay', label: 'Opening pan delay', min: 0, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'skyIntroDuration', label: 'Opening pan length', min: 2, max: 12, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
 ];
 
 const labelStyle: React.CSSProperties = {
@@ -243,6 +245,16 @@ export function AdminRevealTuning() {
             style={{ accentColor: 'var(--ui-gold)', cursor: 'pointer' }}
           />
           <span style={labelStyle}>Night-sky field</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={tuning.skyIntro}
+            onChange={(e) => set({ skyIntro: e.target.checked })}
+            style={{ accentColor: 'var(--ui-gold)', cursor: 'pointer' }}
+          />
+          <span style={labelStyle}>Opening pan</span>
         </label>
 
         {SKY_KNOBS.map(renderKnob)}

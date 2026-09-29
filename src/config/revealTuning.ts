@@ -107,6 +107,11 @@ export interface RevealTuning {
   /** Seconds for the shortest flight, and added per field unit travelled. */
   flightBase: number;
   flightPerUnit: number;
+  /** Night-sky opening pan: on load, rise from the horizon to the zenith while the welcome cue shows. */
+  skyIntro: boolean;
+  /** Seconds before the rise starts, and how long it takes. */
+  skyIntroDelay: number;
+  skyIntroDuration: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -146,6 +151,9 @@ export const DEFAULT_TUNING: RevealTuning = {
   sliderGrabPx: 24,
   flightBase: 0.6,
   flightPerUnit: 0.35,
+  skyIntro: true,
+  skyIntroDelay: 0.4,
+  skyIntroDuration: 5.5,
 };
 
 const KEY = 'reveal-tuning';
