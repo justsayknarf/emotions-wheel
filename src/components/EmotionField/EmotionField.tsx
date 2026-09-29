@@ -26,6 +26,7 @@ import { toPercent } from '../../utils/fieldGeometry';
 import { flatProjection, skyProjection } from '../../utils/skyProjection';
 import { cameraTarget } from '../../utils/skyCamera';
 import { useSkyCamera } from './useSkyCamera';
+import { introStart, type IntroSpec } from '../../utils/skyIntro';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
 // coordinate. Above the resting standoff (so a merely-lifted label has none),
@@ -138,6 +139,9 @@ interface Props {
   skyOccluderTop?: number | null;
   // Bumped once per saved check-in: the night sky's aurora swells once (living-sky R11).
   skySwellPlay?: number;
+  // Open with the rise from the Negative horizon to the still point (sky
+  // mode only). Read once at mount; App passes it while the welcome shows.
+  skyIntro?: boolean;
 }
 
 export function EmotionField({
@@ -162,6 +166,7 @@ export function EmotionField({
   dropDisabled = false,
   skyOccluderTop = null,
   skySwellPlay = 0,
+  skyIntro = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -192,6 +197,14 @@ export function EmotionField({
       : null),
     [skyOccluderTop, size.height],
   );
+  const [introSpec] = useState<IntroSpec | null>(() =>
+    sky && skyIntro && tuning.skyIntro
+      ? { from: introStart(cameraParams.lookMax), to: { x: 0, y: 0 }, delayS: tuning.skyIntroDelay, durationS: tuning.skyIntroDuration }
+      : null,
+  );
+  // useFieldGesture (isPressed) runs after the camera, so a press reaches
+  // the intro through this ref, written in the aurora layout effect below.
+  const introInterrupt = useRef(false);
   const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
     enabled: sky,
     target: skyTarget,
@@ -199,6 +212,8 @@ export function EmotionField({
     params: cameraParams,
     size,
     viewport: skyViewport,
+    intro: introSpec,
+    interruptRef: introInterrupt,
   });
   const toFieldPx = (c: { x: number; y: number }) => proj.toPx(c);
 
@@ -321,6 +336,7 @@ export function EmotionField({
     const moved = auroraInputs.current.proj !== proj || auroraInputs.current.moving !== moving;
     auroraInputs.current.proj = proj;
     auroraInputs.current.moving = moving;
+    introInterrupt.current = isPressed || liveDraft !== null;
     if (moved && reducedMotion) auroraInvalidate.current?.();
   });
 

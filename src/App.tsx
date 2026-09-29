@@ -1147,6 +1147,7 @@ export default function App() {
       >
         <EmotionField
           skySwellPlay={skySwellPlay}
+          skyIntro={showWelcome}
           pins={pins}
           highlightedIds={highlightedIds}
           tagPulse={tagPulse}

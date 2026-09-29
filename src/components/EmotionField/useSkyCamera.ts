@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { flatProjection, skyProjection, type FieldCoord, type FieldProjection, type SkyViewport } from '../../utils/skyProjection';
 import { initialCamera, isSettled, stepCamera, type CameraParams, type CameraState } from '../../utils/skyCamera';
+import { introLook, type IntroSpec } from '../../utils/skyIntro';
 
 // Steps the night-sky camera toward `target` on requestAnimationFrame and
 // hands back the projection for this frame. Local to EmotionField on purpose:
@@ -12,6 +13,12 @@ import { initialCamera, isSettled, stepCamera, type CameraParams, type CameraSta
 // covers the bottom of it); omitted, the whole stage. When it changes — the
 // tray peeks, expands, grows with a pin — the gaze's centre eases to the new
 // band instead of jumping the whole sky.
+//
+// `intro` (read once at mount) is the opening pan: the gaze starts at
+// `intro.from` and rises along introLook's eased curve, ignoring the spring,
+// until it lands or `interruptRef` goes true (a field press or live draft),
+// which ends the rise where it is. Either way the spring then glides from
+// there to the normal target. Reduced motion skips it entirely.
 const BAND_RATE = 5; // 1/s, exponential ease of the visible band's edges
 export function useSkyCamera(opts: {
   enabled: boolean;
@@ -20,10 +27,18 @@ export function useSkyCamera(opts: {
   params: CameraParams;
   size: { width: number; height: number };
   viewport?: SkyViewport | null;
+  intro?: IntroSpec | null;
+  interruptRef?: RefObject<boolean>;
 }): { proj: FieldProjection; look: FieldCoord; fovDeg: number } {
-  const { enabled, target, lean, params, size, viewport = null } = opts;
+  const { enabled, target, lean, params, size, viewport = null, intro = null, interruptRef } = opts;
   const reduced = !!useReducedMotion();
-  const [cam, setCam] = useState<CameraState>(() => initialCamera(target, lean, params));
+  // Mount-only: later renders' arguments are ignored.
+  const introRef = useRef<{ spec: IntroSpec; t0: number | null; done: boolean } | null>(
+    enabled && intro && !reduced ? { spec: intro, t0: null, done: false } : null,
+  );
+  const [cam, setCam] = useState<CameraState>(() =>
+    initialCamera(enabled && intro && !reduced ? intro.from : target, lean, params),
+  );
   const camRef = useRef(cam);
   const targetRef = useRef(target);
   const prevTargetRef = useRef<FieldCoord | null>(null);
@@ -50,6 +65,27 @@ export function useSkyCamera(opts: {
     const tick = (now: number) => {
       const dt = Math.min(0.05, Math.max(0, now - (lastRef.current ?? now)) / 1000);
       lastRef.current = now;
+      const ir = introRef.current;
+      if (ir && !ir.done) {
+        if (interruptRef?.current || reduced) {
+          // A touch ends the rise where it is (R14); so does reduced motion
+          // switching on mid-rise.
+          ir.done = true;
+        } else {
+          if (ir.t0 === null) ir.t0 = now;
+          const { look, done } = introLook((now - ir.t0) / 1000, ir.spec);
+          const stepped = stepCamera(camRef.current, { target: targetRef.current, prevTarget: null, lean, reduced }, dt, params);
+          const next = { look, vel: { x: 0, y: 0 }, fovDeg: stepped.fovDeg };
+          camRef.current = next;
+          setCam(next);
+          prevTargetRef.current = null; // the hand-off never "carries" a jump
+          if (done) ir.done = true;
+          // Keep ticking whatever isSettled would say: the rise owns the gaze.
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+        prevTargetRef.current = null;
+      }
       const next = stepCamera(camRef.current, { target: targetRef.current, prevTarget: prevTargetRef.current, lean, reduced }, dt, params);
       prevTargetRef.current = targetRef.current;
       camRef.current = next;
@@ -60,7 +96,7 @@ export function useSkyCamera(opts: {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // target.x/y wake the loop; the loop itself reads targetRef.
-  }, [enabled, target.x, target.y, lean, reduced, params]);
+  }, [enabled, target.x, target.y, lean, reduced, params, interruptRef]);
 
   // The band's edges as insets from the stage's top and bottom, so a stage
   // resize applies at once while a band change eases.
