@@ -16,6 +16,8 @@ import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
 import { SkyBackdrop } from './SkyBackdrop';
+import { SkyAurora, type SkyAuroraInputs } from './SkyAurora';
+import { canUseWebGL } from './skyShader';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
 import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -300,6 +302,23 @@ export function EmotionField({
   // already yours, the cool recorded hue for a coordinate that isn't yet.
   const liveDraft = departureDraft ?? adjustDraft;
   const liveDraftAccent: 'gold' | 'recorded' = departureDraft ? 'recorded' : 'gold';
+
+  // The WebGL sky beneath the stars (SkyAurora). WebGL decided once per
+  // mount; without it the 2D backdrop paints the sky (R7). Per-frame values
+  // reach the shader through this ref, never props, so a camera frame
+  // re-renders nothing but this field.
+  const [webgl] = useState(() => sky && canUseWebGL());
+  const auroraInputs = useRef<SkyAuroraInputs>({ proj, moving: false, swell: 0 });
+  // R3F's invalidate, for reduced motion's frameloop="demand".
+  const auroraInvalidate = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const moving = isPressed || liveDraft !== null;
+    const moved = auroraInputs.current.proj !== proj || auroraInputs.current.moving !== moving;
+    auroraInputs.current.proj = proj;
+    auroraInputs.current.moving = moving;
+    if (moved && reducedMotion) auroraInvalidate.current?.();
+  });
+
   // A departure/adjust drag takes over as the reveal center whenever it's
   // active — press-equivalent (not hover-equivalent), same as the field's
   // own onPointerDown already treats a real press. liveDraft and a field
@@ -669,6 +688,7 @@ export function EmotionField({
       }}
     >
       {/* The night sky itself — beneath words, pins and labels (Task 7). */}
+      {sky && webgl && <SkyAurora inputs={auroraInputs} invalidateRef={auroraInvalidate} reducedMotion={!!reducedMotion} />}
       {sky && (
         <SkyBackdrop
           proj={proj}
@@ -677,6 +697,7 @@ export function EmotionField({
           constellation={constellation}
           liveDraft={liveDraft}
           reducedMotion={!!reducedMotion}
+          paintSky={!webgl}
         />
       )}
 

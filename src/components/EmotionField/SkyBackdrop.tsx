@@ -19,14 +19,20 @@ interface Props {
   constellation: FieldCoord[];
   liveDraft: FieldCoord | null;
   reducedMotion: boolean;
+  // Paint the soft sky (gradient, horizon haze, band) here. False when the
+  // WebGL SkyAurora layer beneath paints it instead; this canvas then only
+  // clears and draws the crisp layers on top.
+  paintSky: boolean;
 }
 
-// The night sky behind the words: an opaque gradient deepest at the zenith, a
-// warm glow hugging the horizon, a barely-there band of faint dots along a
-// tilted great circle, a seeded starfield, every emotion as a star, the
-// constellation chain and the live draft's comet trail. Words themselves stay
-// DOM (EmotionWord).
-export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reducedMotion }: Props) {
+// The night sky behind the words: a seeded starfield, every emotion as a star,
+// the constellation chain and the live draft's comet trail. Words themselves
+// stay DOM (EmotionWord). The soft sky (gradient deepest at the zenith, warm
+// horizon glow, milky way, aurora) is SkyAurora's WebGL shader beneath this
+// canvas; only without WebGL (`paintSky`) does this canvas paint a 2D
+// stand-in: an opaque gradient, a warm glow hugging the horizon and a
+// barely-there band of faint dots along a tilted great circle.
+export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reducedMotion, paintSky }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const trail = useRef<Array<{ c: FieldCoord; t: number }>>([]);
 
@@ -90,69 +96,71 @@ export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reduc
         return `${b}${a})`;
       };
 
-      // Sky: deepest at the zenith, lifting toward the horizon. Every stop is
-      // opaque: the sky never turns see-through, however low the gaze.
-      const zen = proj.toPx({ x: 0, y: 0 });
-      const R = Math.max(size.width, size.height) * 1.6;
-      const g = ctx.createRadialGradient(zen.x, zen.y, 0, zen.x, zen.y, R);
-      g.addColorStop(0, rgba('bg', 1));
-      g.addColorStop(1, rgba('surface', 1));
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, size.width, size.height);
+      if (paintSky) {
+        // Sky: deepest at the zenith, lifting toward the horizon. Every stop is
+        // opaque: the sky never turns see-through, however low the gaze.
+        const zen = proj.toPx({ x: 0, y: 0 });
+        const R = Math.max(size.width, size.height) * 1.6;
+        const g = ctx.createRadialGradient(zen.x, zen.y, 0, zen.x, zen.y, R);
+        g.addColorStop(0, rgba('bg', 1));
+        g.addColorStop(1, rgba('surface', 1));
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, size.width, size.height);
 
-      // Warm horizon glow: thin rings of sky from the horizon up to
-      // HAZE_TOP, each a single filled path (no overlap, so nothing stacks),
-      // fading out with height. Only visible when the gaze tilts low.
-      ctx.fillStyle = rgba('gold', 1);
-      for (let k = 0; k < HAZE_RINGS; k++) {
-        const e0 = (k / HAZE_RINGS) * HAZE_TOP, e1 = ((k + 1) / HAZE_RINGS) * HAZE_TOP;
-        ctx.beginPath();
-        let any = false;
-        for (let i = 0; i < HAZE_STEPS; i++) {
-          const z0 = (i / HAZE_STEPS) * Math.PI * 2, z1 = ((i + 1) / HAZE_STEPS) * Math.PI * 2;
-          const p = [ringPx(proj, e0, z0), ringPx(proj, e0, z1), ringPx(proj, e1, z1), ringPx(proj, e1, z0)];
-          if (p.some((q) => !q)) continue;
-          ctx.moveTo(p[0]!.x, p[0]!.y);
-          for (let j = 1; j < 4; j++) ctx.lineTo(p[j]!.x, p[j]!.y);
-          ctx.closePath();
-          any = true;
+        // Warm horizon glow: thin rings of sky from the horizon up to
+        // HAZE_TOP, each a single filled path (no overlap, so nothing stacks),
+        // fading out with height. Only visible when the gaze tilts low.
+        ctx.fillStyle = rgba('gold', 1);
+        for (let k = 0; k < HAZE_RINGS; k++) {
+          const e0 = (k / HAZE_RINGS) * HAZE_TOP, e1 = ((k + 1) / HAZE_RINGS) * HAZE_TOP;
+          ctx.beginPath();
+          let any = false;
+          for (let i = 0; i < HAZE_STEPS; i++) {
+            const z0 = (i / HAZE_STEPS) * Math.PI * 2, z1 = ((i + 1) / HAZE_STEPS) * Math.PI * 2;
+            const p = [ringPx(proj, e0, z0), ringPx(proj, e0, z1), ringPx(proj, e1, z1), ringPx(proj, e1, z0)];
+            if (p.some((q) => !q)) continue;
+            ctx.moveTo(p[0]!.x, p[0]!.y);
+            for (let j = 1; j < 4; j++) ctx.lineTo(p[j]!.x, p[j]!.y);
+            ctx.closePath();
+            any = true;
+          }
+          if (!any) continue;
+          const f = 1 - k / HAZE_RINGS;
+          ctx.globalAlpha = HAZE_ALPHA * f * f;
+          ctx.fill();
         }
-        if (!any) continue;
-        const f = 1 - k / HAZE_RINGS;
-        ctx.globalAlpha = HAZE_ALPHA * f * f;
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+        ctx.globalAlpha = 1;
 
-      // The band: barely there, beneath the stars.
-      const tb = themeRgba('text', 1);
-      if (!puff.current || puff.current.key !== tb) {
-        const pc = document.createElement('canvas');
-        pc.width = pc.height = PUFF * 2;
-        const pctx = pc.getContext('2d');
-        if (pctx) {
-          const pg = pctx.createRadialGradient(PUFF, PUFF, 0, PUFF, PUFF, PUFF);
-          pg.addColorStop(0, rgba('text', 1));
-          pg.addColorStop(1, rgba('text', 0));
-          pctx.fillStyle = pg;
-          pctx.fillRect(0, 0, PUFF * 2, PUFF * 2);
+        // The band: barely there, beneath the stars.
+        const tb = themeRgba('text', 1);
+        if (!puff.current || puff.current.key !== tb) {
+          const pc = document.createElement('canvas');
+          pc.width = pc.height = PUFF * 2;
+          const pctx = pc.getContext('2d');
+          if (pctx) {
+            const pg = pctx.createRadialGradient(PUFF, PUFF, 0, PUFF, PUFF, PUFF);
+            pg.addColorStop(0, rgba('text', 1));
+            pg.addColorStop(1, rgba('text', 0));
+            pctx.fillStyle = pg;
+            pctx.fillRect(0, 0, PUFF * 2, PUFF * 2);
+          }
+          puff.current = { key: tb, cv: pc };
         }
-        puff.current = { key: tb, cv: pc };
-      }
-      ctx.fillStyle = rgba('text', 1);
-      for (const s of band) {
-        const q = projectDir(proj, s.d);
-        if (!q) continue;
-        if (s.puff) {
-          const r = PUFF * q.scale;
-          ctx.globalAlpha = PUFF_ALPHA;
-          ctx.drawImage(puff.current.cv, q.x - r, q.y - r, r * 2, r * 2);
-        } else {
-          ctx.globalAlpha = s.a;
-          ctx.fillRect(q.x, q.y, 0.8, 0.8);
+        ctx.fillStyle = rgba('text', 1);
+        for (const s of band) {
+          const q = projectDir(proj, s.d);
+          if (!q) continue;
+          if (s.puff) {
+            const r = PUFF * q.scale;
+            ctx.globalAlpha = PUFF_ALPHA;
+            ctx.drawImage(puff.current.cv, q.x - r, q.y - r, r * 2, r * 2);
+          } else {
+            ctx.globalAlpha = s.a;
+            ctx.fillRect(q.x, q.y, 0.8, 0.8);
+          }
         }
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
 
       // Background stars.
       for (const s of field) {
@@ -214,7 +222,7 @@ export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reduc
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [proj, size, stars, constellation, liveDraft, reducedMotion, field, band]);
+  }, [proj, size, stars, constellation, liveDraft, reducedMotion, paintSky, field, band]);
 
   return <canvas ref={ref} aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} />;
 }
