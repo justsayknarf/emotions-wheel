@@ -39,6 +39,8 @@ Note that the specs predate much of what shipped; where they disagree with the c
 
 **What ships today:** the field and pin-planting loop, the card tray with adjustable pins, a returning-user mirror, the diary with history views (day/week charts, entry detail), CSV export, constellation replay, a grounding-cue welcome, and an admin emotion editor at `src/admin/`.
 
+- A night-sky field behind the `skyField` tuning flag (`?field=sky`): the field drawn as the inside of a dome, with the still point overhead, every word a star and tags drawn as a constellation. The card's sliders are weighted and tap-to-fly in that mode. Off by default; the datum is still the flat (x, y). See `docs/plans/2026-09-28-001-feat-night-sky-field-plan.md`.
+
 ## Tech Stack
 
 React 19 · TypeScript · Vite · framer-motion · @use-gesture/react · Tailwind 4. No backend, no accounts — everything is client-side and `localStorage`-backed. Deployed to GitHub Pages; `vite.config.ts` sets `base: '/emotions-wheel/'`.
