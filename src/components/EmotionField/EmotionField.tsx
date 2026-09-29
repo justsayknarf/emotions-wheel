@@ -326,10 +326,14 @@ export function EmotionField({
 
   // One saved check-in → one swell: the aurora brightens and settles.
   const swellTarget = useRef({ v: 0 });
+  const swellAnim = useRef<{ cancel: () => unknown } | null>(null);
   const { root: swellRoot, scope: swellScope } = useAnimeScope<HTMLDivElement>((scope, reduced) => {
     scope.add('swell', () => {
       if (reduced) return; // no swell under reduced motion (R11)
-      animate(swellTarget.current, {
+      // A second save mid-swell stops the first; the new one starts from the
+      // current value, so the envelope never jumps and always ends at 0.
+      swellAnim.current?.cancel();
+      swellAnim.current = animate(swellTarget.current, {
         v: [{ to: 1, duration: 800, ease: 'out(2)' }, { to: 0, duration: 2400, ease: 'inOut(2)' }],
         onUpdate: () => { auroraInputs.current.swell = swellTarget.current.v; },
       });
