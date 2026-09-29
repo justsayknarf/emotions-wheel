@@ -33,8 +33,11 @@ export function useSkyCamera(opts: {
   const { enabled, target, lean, params, size, viewport = null, intro = null, interruptRef } = opts;
   const reduced = !!useReducedMotion();
   // Mount-only: later renders' arguments are ignored.
-  const introRef = useRef<{ spec: IntroSpec; t0: number | null; done: boolean } | null>(
-    enabled && intro && !reduced ? { spec: intro, t0: null, done: false } : null,
+  // `elapsed` advances by the tick's capped dt, not wall-clock time, so a
+  // main-thread stall (they cluster at load, exactly when the rise runs)
+  // pauses the rise instead of jumping the sky under the viewer's finger.
+  const introRef = useRef<{ spec: IntroSpec; elapsed: number; done: boolean } | null>(
+    enabled && intro && !reduced ? { spec: intro, elapsed: 0, done: false } : null,
   );
   const [cam, setCam] = useState<CameraState>(() =>
     initialCamera(enabled && intro && !reduced ? intro.from : target, lean, params),
@@ -72,8 +75,8 @@ export function useSkyCamera(opts: {
           // switching on mid-rise.
           ir.done = true;
         } else {
-          if (ir.t0 === null) ir.t0 = now;
-          const { look, done } = introLook((now - ir.t0) / 1000, ir.spec);
+          ir.elapsed += dt;
+          const { look, done } = introLook(ir.elapsed, ir.spec);
           const stepped = stepCamera(camRef.current, { target: targetRef.current, prevTarget: null, lean, reduced }, dt, params);
           const next = { look, vel: { x: 0, y: 0 }, fovDeg: stepped.fovDeg };
           camRef.current = next;

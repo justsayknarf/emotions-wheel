@@ -204,7 +204,11 @@ export function EmotionField({
   );
   // useFieldGesture (isPressed) runs after the camera, so a press reaches
   // the intro through this ref, written in the aurora layout effect below.
+  // It latches: a tap whose down and up both land between two camera ticks
+  // (a load-time stall) would otherwise read false; a pin planted since
+  // mount counts as interaction too.
   const introInterrupt = useRef(false);
+  const [mountPinCount] = useState(pins.length);
   const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
     enabled: sky,
     target: skyTarget,
@@ -336,7 +340,7 @@ export function EmotionField({
     const moved = auroraInputs.current.proj !== proj || auroraInputs.current.moving !== moving;
     auroraInputs.current.proj = proj;
     auroraInputs.current.moving = moving;
-    introInterrupt.current = isPressed || liveDraft !== null;
+    if (moving || pins.length !== mountPinCount) introInterrupt.current = true;
     if (moved && reducedMotion) auroraInvalidate.current?.();
   });
 
