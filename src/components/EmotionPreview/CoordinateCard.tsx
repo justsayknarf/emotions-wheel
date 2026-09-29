@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
@@ -234,6 +234,12 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // truth; once it does (App caught up, or a field press moved the pin) the
   // prop is.
   const committedRef = useRef<{ fromX: number; fromY: number; x: number; y: number } | null>(null);
+  // The stale window only lasts until the next render, which carries App's
+  // answer — so the stamp never outlives it (a later prop that happens to
+  // match the stamp must not resurrect an old commit).
+  useLayoutEffect(() => {
+    committedRef.current = null;
+  });
 
   const nextFrom = (axis: 'x' | 'y', v: number) => {
     const c = committedRef.current;

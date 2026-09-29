@@ -19,7 +19,9 @@ export function sliderWeightFrom(weight: number, grabPx = 24, flightBase = 0.6, 
 
 export function stepWeighted(v: number, target: number, dt: number, w: SliderWeight): number {
   const d = target - v;
-  if (Math.abs(d) < 1e-4) return target;
+  // Snap once within ~0.2px on a phone-width track, so a held-still thumb
+  // stops reporting sub-pixel steps within a moment of reaching the pointer.
+  if (Math.abs(d) < 1e-3) return target;
   const outward = Math.sign(d) === Math.sign(v) ? Math.abs(v) : 0;
   const vmax = w.speed * (1 - w.edge * outward * outward) * dt;
   return v + Math.max(-vmax, Math.min(vmax, d * w.gain * dt));

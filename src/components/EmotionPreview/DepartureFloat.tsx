@@ -134,8 +134,12 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
   const departPendingRef = useRef(false);
   const pendingAdjustRef = useRef<{ x: number; y: number } | null>(null);
   useLayoutEffect(() => {
-    // Any render after onDepart has App's answer: the pin, or a refusal.
+    // Any render after a commit has App's answer: the pin, or a refusal. The
+    // committed stamp only bridges the frames before it — cleared here so it
+    // can't outlive them (after Discard, `base` is the anchor again and would
+    // match a stale pre-mint stamp).
     departPendingRef.current = false;
+    committedRef.current = null;
     const pending = pendingAdjustRef.current;
     pendingAdjustRef.current = null;
     if (pending && pin) onAdjust(pin.id, pending.x, pending.y);
