@@ -3,8 +3,8 @@ import type { FieldCoord } from './skyProjection';
 // The opening camera move of the night-sky field
 // (docs/plans/2026-09-28-002-feat-living-sky-plan.md): while the welcome cue
 // shows, the gaze starts low over the Negative horizon and rises to the
-// still point overhead. Pure, so check:intro can prove it stays under the
-// pan speed cap and lands exactly.
+// still point overhead. Pure, so check:intro can prove it stays under its
+// own speed ceiling (skyIntroMaxDeg) and lands exactly.
 
 export interface IntroSpec {
   from: FieldCoord;

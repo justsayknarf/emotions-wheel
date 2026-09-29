@@ -83,6 +83,7 @@ const SKY_KNOBS: Knob[] = [
   { key: 'flightPerUnit', label: 'Flight per unit', min: 0, max: 1.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
   { key: 'skyIntroDelay', label: 'Opening pan delay', min: 0, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
   { key: 'skyIntroDuration', label: 'Opening pan length', min: 2, max: 12, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'skyIntroMaxDeg', label: 'Opening pan speed cap', min: 20, max: 90, step: 1, fmt: (v) => `${v}°/s` },
 ];
 
 const labelStyle: React.CSSProperties = {

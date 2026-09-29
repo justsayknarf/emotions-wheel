@@ -9,7 +9,9 @@ function check(name: string, ok: boolean, detail: string) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
   if (!ok) failures++;
 }
-const spec: IntroSpec = { from: introStart(P.lookMax), to: { x: 0, y: 0 }, delayS: 0.4, durationS: 5.5 };
+const spec: IntroSpec = { from: introStart(P.lookMax), to: { x: 0, y: 0 }, delayS: 0.2, durationS: 3.0 };
+// The opening pan's own ceiling (skyIntroMaxDeg's default), not the camera's pan cap.
+const INTRO_CAP = degToField(45);
 
 // Starts on the horizon side the screen calls "down".
 {
@@ -30,7 +32,7 @@ const spec: IntroSpec = { from: introStart(P.lookMax), to: { x: 0, y: 0 }, delay
   check('stays landed afterwards', late.look.y === 0 && late.done, 'elapsed 60s');
 }
 
-// Rises monotonically, starts and ends at rest, and never outruns the pan cap.
+// Rises monotonically, starts and ends at rest, and never outruns its ceiling.
 {
   const DT = 1 / 60;
   let prev = introLook(0, spec).look.y, mono = true, peak = 0, first = -1, last = -1;
@@ -44,15 +46,15 @@ const spec: IntroSpec = { from: introStart(P.lookMax), to: { x: 0, y: 0 }, delay
   }
   check('rises without dipping back', mono, 'monotone');
   check('starts and ends at rest', first < 0.01 && last < 1e-9, `first-frame speed ${first.toFixed(4)}, last ${last}`);
-  const cap = degToField(P.maxDegPerSec);
-  check('never faster than the pan cap', peak <= cap && introPeakSpeed(spec) <= cap, `peak ${peak.toFixed(3)} (analytic ${introPeakSpeed(spec).toFixed(3)}) ≤ cap ${cap.toFixed(3)} field/s`);
+  const cap = INTRO_CAP;
+  check('never faster than the intro ceiling (45°/s)', peak <= cap && introPeakSpeed(spec) <= cap, `peak ${peak.toFixed(3)} (analytic ${introPeakSpeed(spec).toFixed(3)}) ≤ cap ${cap.toFixed(3)} field/s`);
 }
 
-// Any admin duration is clamped to the cap (R13): a too-short one is
+// Any admin duration is clamped to the ceiling (R13): a too-short one is
 // lengthened until it isn't too fast, and one already under it is untouched.
 {
-  const cap = degToField(P.maxDegPerSec);
-  const fast: IntroSpec = { ...spec, durationS: 0.2 };
+  const cap = INTRO_CAP;
+  const fast: IntroSpec = { ...spec, durationS: 0.5 };
   check('a too-short duration is over the cap before clamping', introPeakSpeed(fast) > cap, `peak ${introPeakSpeed(fast).toFixed(3)} > cap ${cap.toFixed(3)}`);
   const clamped = clampIntroDuration(fast, cap);
   const DT = 1 / 240;

@@ -109,9 +109,16 @@ export interface RevealTuning {
   flightPerUnit: number;
   /** Night-sky opening pan: on load, rise from the horizon to the zenith while the welcome cue shows. */
   skyIntro: boolean;
-  /** Seconds before the rise starts, and how long it takes. */
+  /** Seconds the gaze holds on the horizon before the rise starts. */
   skyIntroDelay: number;
+  /** Seconds the rise takes, lengthened if need be so it never outruns skyIntroMaxDeg. */
   skyIntroDuration: number;
+  /**
+   * The opening pan's own speed ceiling, degrees of sky per second. Separate
+   * from skyPanMaxDeg (the camera's cap for every other glide) so the rise can
+   * be brisker than a jump without loosening the camera.
+   */
+  skyIntroMaxDeg: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -152,8 +159,9 @@ export const DEFAULT_TUNING: RevealTuning = {
   flightBase: 0.6,
   flightPerUnit: 0.35,
   skyIntro: true,
-  skyIntroDelay: 0.4,
-  skyIntroDuration: 5.5,
+  skyIntroDelay: 0.2,
+  skyIntroDuration: 3.0,
+  skyIntroMaxDeg: 45,
 };
 
 const KEY = 'reveal-tuning';

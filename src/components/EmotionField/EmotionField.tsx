@@ -199,10 +199,12 @@ export function EmotionField({
   );
   const [introSpec] = useState<IntroSpec | null>(() =>
     sky && skyIntro && tuning.skyIntro
-      // Clamped so no admin duration outruns the pan speed cap (R13).
+      // Clamped so no admin duration outruns the opening pan's own ceiling
+      // (R13), skyIntroMaxDeg — not the camera's pan cap, which governs
+      // every other glide.
       ? clampIntroDuration(
           { from: introStart(cameraParams.lookMax), to: { x: 0, y: 0 }, delayS: tuning.skyIntroDelay, durationS: tuning.skyIntroDuration },
-          degToField(cameraParams.maxDegPerSec),
+          degToField(tuning.skyIntroMaxDeg),
         )
       : null,
   );
