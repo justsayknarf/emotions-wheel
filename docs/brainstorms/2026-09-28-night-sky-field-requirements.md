@@ -45,7 +45,7 @@ The flat field shows the whole vocabulary at once, as a chart would. The product
 - R7. Word labels keep the existing DOM rendering, reveal rules, radial fan, word tethers and tag pulse, positioned at the projected star plus their current offsets. In sky mode the label drops its own dot, because the star is drawn on the canvas.
 - R8. Constellation lines join the emphasized pin (or the only draft pin) to its recognized words in order, as a chain. They draw along great circles and never cross behind the camera.
 - R9. The flat-only layers (crosshairs, `FieldAura`, `FieldSignal`, `AxisRadiance` and the reveal-centre edge ticks) are hidden in sky mode. The four axis labels stay at the stage edges.
-- R10. The pin, the previous-check-in ring and label, the live-draft glow, the departure comet and the card tether all sit at projected positions.
+- R10. The pin, the previous-check-in ring and label, the live-draft glow, the departure comet and the card tether all sit at projected positions. The departure comet is re-projected every frame (drawn on the sky canvas along the great circle), so both of its ends stay on their stars while the camera glides to the new pin.
 
 **Camera motion**
 
@@ -60,7 +60,7 @@ The flat field shows the whole vocabulary at once, as a chart would. The product
 - R16. A press further than 24px from the thumb starts a flight to the pressed value. It is eased in-out (cosine), lasts `0.6 + 0.35 · |Δ|` seconds, reports `onDrag` each frame and commits on arrival.
 - R17. Pressing the thumb mid-flight stops the flight at its current value and continues as a weighted drag. Unmounting mid-flight reverts through `onCancel`.
 - R18. While held, a faint gold ring marks the pointer's value and a tether joins it to the thumb.
-- R19. A fading comet trail (1.6s) follows the live draft across the sky while it moves.
+- R19. ~~A fading comet trail follows the live draft across the sky while it moves.~~ Dropped 2026-09-29 at Frank's request: a slider drag leaves no trail.
 
 **Rollout**
 

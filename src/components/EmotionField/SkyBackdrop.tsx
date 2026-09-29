@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { themeRgba, type ThemeChannel } from '../../config/themeColor';
 import { dirToField, fieldToDir, greatCircle, mulberry32, type FieldCoord, type FieldProjection, type Vec3 } from '../../utils/skyProjection';
-import { pruneTrail, segmentDone, segmentDraw, trailWindow, type TrailPoint } from '../../utils/comet';
+import { departureDraw, departureSizes, departureTailMs, segmentDone, segmentDraw, type DepartureTiming } from '../../utils/comet';
 import {
   GLOW_BLUR,
   HEAD_CORE_R,
@@ -33,7 +33,11 @@ interface Props {
   // star (`pin:<id>` for the pin, the emotion id for a word), so a segment is
   // known by its two ends across renders.
   constellation: ConstellationStar[];
-  liveDraft: FieldCoord | null;
+  // The departure comet (R10): previous check-in → newly committed pin,
+  // replayed each time `play` increments. Drawn here rather than by the flat
+  // field's DepartureTrace so its ends stay on their stars as the camera
+  // glides to the new pin.
+  departure: SkyDeparture;
   reducedMotion: boolean;
   // Paint the soft sky (gradient, horizon haze, band) here. False when the
   // WebGL SkyAurora layer beneath paints it instead; this canvas then only
@@ -42,16 +46,35 @@ interface Props {
 }
 
 // The night sky behind the words: a seeded starfield, every emotion as a star,
-// the constellation chain and the live draft's comet trail. Words themselves
+// the constellation chain and the departure comet. Words themselves
 // stay DOM (EmotionWord). The soft sky (gradient deepest at the zenith, warm
 // horizon glow, milky way, aurora) is SkyAurora's WebGL shader beneath this
 // canvas; only without WebGL (`paintSky`) does this canvas paint a 2D
 // stand-in: an opaque gradient, a warm glow hugging the horizon and a
 // barely-there band of faint dots along a tilted great circle.
-export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reducedMotion, paintSky }: Props) {
+export function SkyBackdrop({ proj, size, stars, constellation, departure, reducedMotion, paintSky }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
-  // The live draft's recent positions, one per change (ms, rAF clock).
-  const trail = useRef<TrailPoint[]>([]);
+
+  // The departure in flight, captured when `play` increments: its ends in
+  // field coordinates (projected afresh every frame) and its start time.
+  // Reduced motion plays nothing, as DepartureTrace.
+  // Keyed on `play` alone, like DepartureTrace: an unrelated re-render or a
+  // tuning change mid-flight never restarts or reshapes it.
+  const flight = useRef<Flight | null>(null);
+  useLayoutEffect(() => {
+    const d = departure;
+    if (d.play === 0 || !d.from || !d.to || reducedMotion) { flight.current = null; return; }
+    if (flight.current?.play === d.play) return;
+    flight.current = {
+      a: d.from,
+      b: d.to,
+      start: performance.now(),
+      play: d.play,
+      timing: { travelMs: d.travel * 1000, tailMs: departureTailMs(d.trail), holdMs: d.hold * 1000, fadeMs: d.fadeOut * 1000 },
+      sizes: departureSizes(d.strength),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departure.play, reducedMotion]);
 
   // The constellation's segments by `from→to` key. `born` is when an animated
   // segment appeared (performance.now clock, which rAF shares); null draws it
@@ -253,32 +276,6 @@ export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reduc
         strokeRange(ctx, arcPath(proj, g.a, g.b), 0, 1, rgba('recorded', QUIET_LINE_OPACITY * k), QUIET_LINE_WIDTH);
       }
 
-      // Live draft trail (R19), in the replay's look: the streak trails the
-      // moving pin over the last TAIL_MS of its path, a head rides at the
-      // pin, and once it stops the tail catches up and both are gone.
-      // Reduced motion draws no trail: it is motion by definition.
-      if (reducedMotion) trail.current = [];
-      else {
-        const last = trail.current[trail.current.length - 1];
-        if (liveDraft && (!last || last.x !== liveDraft.x || last.y !== liveDraft.y)) trail.current.push({ x: liveDraft.x, y: liveDraft.y, t: now });
-        trail.current = pruneTrail(trail.current, now, TAIL_MS);
-        const w = trailWindow(trail.current, now, TAIL_MS);
-        if (w.head > 0) {
-          busy = true;
-          const pts = w.points.map((p) => { const q = proj.toPx(p); return q.visible ? q : null; });
-          const ends = pathEnds(pts);
-          if (ends) {
-            const grad = streakGradient(ctx, ends[0], ends[1], rgba);
-            if (grad) {
-              blur(() => strokeRange(ctx, pts, 0, 1, grad, STREAK_GLOW_WIDTH, STREAK_GLOW_OPACITY));
-              strokeRange(ctx, pts, 0, 1, grad, STREAK_CORE_WIDTH);
-            }
-          }
-          const h = pts[pts.length - 1];
-          if (h) drawHead(ctx, h, w.head, rgba, blur);
-        } else if (!liveDraft) trail.current = [];
-      }
-
       // Every emotion is a star (R6).
       for (const s of stars) {
         const q = proj.toPx(s);
@@ -295,14 +292,27 @@ export function SkyBackdrop({ proj, size, stars, constellation, liveDraft, reduc
         ctx.beginPath(); ctx.arc(q.x, q.y, rad, 0, Math.PI * 2); ctx.fill();
       }
 
+      // The departure comet, DepartureTrace's timeline along the great circle
+      // from the previous check-in to the new pin, both ends re-projected
+      // every frame so it stays on the dome while the camera moves.
+      const fl = flight.current;
+      if (fl) {
+        const dd = departureDraw(now - fl.start, fl.timing);
+        if (dd.done) flight.current = null;
+        else {
+          busy = true;
+          drawDeparture(ctx, arcPath(proj, fl.a, fl.b), proj.toPx(fl.b), dd, fl.sizes, rgba, blur);
+        }
+      }
+
       // Reduced motion: one frame per prop change, then idle — unless
       // something is still animating (nothing does today: under reduced
-      // motion every segment draws at rest and there is no trail).
+      // motion every segment draws at rest and no departure plays).
       if (!reducedMotion || busy) raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [proj, size, stars, constellation, liveDraft, reducedMotion, paintSky, field, band]);
+  }, [proj, size, stars, constellation, departure.play, reducedMotion, paintSky, field, band]);
 
   return <canvas ref={ref} aria-hidden style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} />;
 }
@@ -336,6 +346,24 @@ function projectDir(proj: FieldProjection, d: Vec3) {
 
 export interface ConstellationStar extends FieldCoord {
   key: string;
+}
+interface Flight {
+  a: FieldCoord;
+  b: FieldCoord;
+  start: number;
+  play: number;
+  timing: DepartureTiming;
+  sizes: ReturnType<typeof departureSizes>;
+}
+export interface SkyDeparture {
+  play: number;
+  from: FieldCoord | null;
+  to: FieldCoord | null;
+  travel: number;   // seconds
+  trail: number;    // decay (0..1), see departureTailMs
+  hold: number;     // seconds
+  fadeOut: number;  // seconds
+  strength: number;
 }
 interface Segment {
   a: ConstellationStar;
@@ -429,4 +457,42 @@ function blurrer(ctx: CanvasRenderingContext2D, dpr: number, rgba: Rgba) {
       ctx.shadowColor = 'transparent';
     }
   };
+}
+
+// DepartureTrace's comet on canvas: a blurred glow and a gradient core along
+// the arc's tail..head stretch, a head riding it, then a bloom and a spreading
+// gold halo at the pin. The gradient runs the arc's full visible length
+// (anchor → pin), as the SVG's userSpaceOnUse gradient does.
+function drawDeparture(
+  ctx: CanvasRenderingContext2D,
+  path: Px[],
+  pin: { x: number; y: number; visible: boolean },
+  d: ReturnType<typeof departureDraw>,
+  z: ReturnType<typeof departureSizes>,
+  rgba: Rgba,
+  blur: (fn: () => void) => void,
+) {
+  const ends = pathEnds(path);
+  if (ends && d.head > d.tail) {
+    const grad = streakGradient(ctx, ends[0], ends[1], rgba);
+    if (grad) {
+      blur(() => strokeRange(ctx, path, d.tail, d.head, grad, z.glowWidth, z.glowAlpha));
+      strokeRange(ctx, path, d.tail, d.head, grad, STREAK_CORE_WIDTH);
+    }
+  }
+  const h = pointAt(path, d.head);
+  if (h && d.headAlpha > 0) {
+    ctx.fillStyle = rgba('text', d.headAlpha);
+    blur(() => { ctx.beginPath(); ctx.arc(h.x, h.y, z.headR, 0, Math.PI * 2); ctx.fill(); });
+    ctx.beginPath(); ctx.arc(h.x, h.y, z.coreR, 0, Math.PI * 2); ctx.fill();
+  }
+  if (!pin.visible) return;
+  if (d.haloFade > 0) {
+    ctx.fillStyle = rgba('gold', z.haloAlpha * d.haloFade);
+    ctx.beginPath(); ctx.arc(pin.x, pin.y, z.haloR * d.haloScale, 0, Math.PI * 2); ctx.fill();
+  }
+  if (d.bloomAlpha > 0 && d.bloomScale > 0) {
+    ctx.fillStyle = rgba('text', d.bloomAlpha);
+    blur(() => { ctx.beginPath(); ctx.arc(pin.x, pin.y, z.bloomR * d.bloomScale, 0, Math.PI * 2); ctx.fill(); });
+  }
 }

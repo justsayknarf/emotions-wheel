@@ -1,59 +1,14 @@
-// Pure timing and windowing for the night sky's light trails, drawn in the
-// constellation replay's look (src/components/Constellation/cometStyle.ts).
-// No DOM, so scripts/test-comet.ts can run it under Node. SkyBackdrop turns
-// these fractions into canvas strokes.
-
-export interface TrailPoint {
-  x: number;
-  y: number;
-  /** Timestamp, ms (the canvas loop's rAF clock). */
-  t: number;
-}
-
-export interface TrailWindow {
-  /** Tail → head: the stretch of history to draw as the streak. */
-  points: TrailPoint[];
-  /** 0..1: 1 while the head is moving, easing to 0 as the tail catches up. */
-  head: number;
-}
-
-/**
- * The visible slider-drag trail: the part of `history` (oldest first, one
- * point per position change) newer than `tailMs` before `now`. The oldest
- * edge is interpolated to exactly `now - tailMs`, so the tail slides along the
- * path rather than stepping point to point. Once the head has been still for
- * `tailMs` the tail has caught up and nothing is left to draw.
- */
-export function trailWindow(history: readonly TrailPoint[], now: number, tailMs: number): TrailWindow {
-  if (history.length === 0) return { points: [], head: 0 };
-  const last = history[history.length - 1];
-  const still = Math.max(0, now - last.t);
-  const head = tailMs > 0 ? Math.max(0, 1 - still / tailMs) : 0;
-  const cut = now - tailMs;
-  let i = history.length - 1;
-  while (i > 0 && history[i - 1].t > cut) i--;
-  const points = history.slice(i);
-  // Interpolate the tail edge between the last dropped point and the first kept.
-  if (i > 0 && points[0].t > cut) {
-    const a = history[i - 1], b = points[0];
-    const k = (cut - a.t) / (b.t - a.t);
-    points.unshift({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, t: cut });
-  }
-  if (head === 0) return { points: [], head: 0 };
-  return { points, head };
-}
-
-/** Drop history the window can no longer reach (keeps one point before the cut for the interpolated edge). */
-export function pruneTrail(history: TrailPoint[], now: number, tailMs: number): TrailPoint[] {
-  const cut = now - tailMs;
-  let i = 0;
-  while (i < history.length - 1 && history[i + 1].t <= cut) i++;
-  return i === 0 ? history : history.slice(i);
-}
+// Pure timing for the night sky's light trails: the tag lines, drawn in the
+// constellation replay's look (src/components/Constellation/cometStyle.ts),
+// and the departure comet from the previous check-in to a newly committed pin
+// (DepartureTrace's timeline, redrawn on the sky canvas so it stays on the
+// dome as the camera moves). No DOM, so scripts/test-comet.ts can run it
+// under Node. SkyBackdrop turns these fractions into canvas strokes.
 
 // anime.js's power eases, so the canvas matches the replay's timeline.
 export const easeIn2 = (t: number) => t * t;
 export const easeOut2 = (t: number) => 1 - (1 - t) * (1 - t);
+export const easeOut3 = (t: number) => 1 - (1 - t) ** 3;
 export const easeInOut2 = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
@@ -88,4 +43,99 @@ export function segmentDraw(elapsedMs: number, lineMs: number, tailMs: number): 
 /** When a segment's animation is over and it can draw at rest. */
 export function segmentDone(elapsedMs: number, lineMs: number, tailMs: number): boolean {
   return elapsedMs >= Math.max(lineMs + tailMs, lineMs - 40 + 300);
+}
+
+// The old canvas streak erased `trail` of itself every frame (~60fps); its
+// visible length was the time until that decay left ~5%. The tail's catch-up
+// reuses that lifetime, so the admin slider keeps its meaning: higher
+// `trail` → shorter streak.
+export function departureTailMs(trail: number): number {
+  const d = Math.min(Math.max(trail, 0.01), 0.9);
+  const frames = Math.log(0.05) / Math.log(1 - d);
+  return Math.min(Math.max((frames / 60) * 1000, 150), 2500);
+}
+
+// The arrival bloom's spring: stiffness 170, damping 24, mass 1 (ζ ≈ 0.92,
+// the pin landing's firm settle), solved in closed form so the canvas matches
+// anime.js's spring({ stiffness: 170, damping: 24 }).
+const SPRING_W = Math.sqrt(170);
+const SPRING_Z = 24 / (2 * SPRING_W);
+const SPRING_WD = SPRING_W * Math.sqrt(1 - SPRING_Z * SPRING_Z);
+export function settleSpring(ms: number): number {
+  const t = Math.max(0, ms) / 1000;
+  return 1 - Math.exp(-SPRING_Z * SPRING_W * t) * (Math.cos(SPRING_WD * t) + ((SPRING_Z * SPRING_W) / SPRING_WD) * Math.sin(SPRING_WD * t));
+}
+
+export interface DepartureTiming {
+  /** The head's flight, anchor to pin, ms. */
+  travelMs: number;
+  /** The tail's catch-up after arrival, ms (departureTailMs). */
+  tailMs: number;
+  /** The bloom's steady hold once it arrives, ms. */
+  holdMs: number;
+  /** The bloom's final dissolve, ms. */
+  fadeMs: number;
+}
+
+export interface DepartureDraw {
+  /** How far along the arc the head has ridden (0..1). */
+  head: number;
+  /** How far the streak's tail has caught up (0..1); the streak spans tail..head. */
+  tail: number;
+  /** The head circle's opacity. */
+  headAlpha: number;
+  /** The arrival bloom at the pin: scale 0..~1 (a firm spring) and opacity 0..0.9. */
+  bloomScale: number;
+  bloomAlpha: number;
+  /** The gold halo ring: scale 0.3 → 2.2, and its fade 1 → 0 (times the halo's strength-scaled alpha). */
+  haloScale: number;
+  haloFade: number;
+  /** Everything has faded: nothing left to draw. */
+  done: boolean;
+}
+
+/**
+ * DepartureTrace's anime.js timeline at `elapsedMs` after play: the streak
+ * draws in over travelMs (inOut(2)) while the head rides, then the tail
+ * catches up over tailMs (in(2)). The head fades in over min(150, 0.2 ×
+ * travel) and out over 450ms from 50ms before it arrives, handing off to a
+ * bloom that springs in, holds for holdMs and dissolves over fadeMs (out(2)),
+ * and a gold halo that spreads and fades over max(600, 0.9 × fadeMs) (out(3)).
+ */
+export function departureDraw(elapsedMs: number, t: DepartureTiming): DepartureDraw {
+  const e = Math.max(0, elapsedMs);
+  const T = Math.max(t.travelMs, 50);
+  const arrive = T - 50;
+  const holdEnd = arrive + t.holdMs;
+  const fade = Math.max(t.fadeMs, 1);
+  const haloMs = Math.max(600, fade * 0.9);
+  const end = Math.max(T + t.tailMs, holdEnd + fade, arrive + 50 + haloMs);
+
+  const head = easeInOut2(clamp01(e / T));
+  const tail = e <= T ? 0 : t.tailMs > 0 ? easeIn2(clamp01((e - T) / t.tailMs)) : 1;
+  const fadeIn = Math.min(150, T * 0.2);
+  const headAlpha = e < arrive ? easeOut2(clamp01(e / fadeIn)) : 1 - easeOut2(clamp01((e - arrive) / 450));
+
+  const bloomScale = e < arrive ? 0 : settleSpring(e - arrive);
+  const bloomAlpha = e < arrive ? 0 : e < holdEnd ? 0.9 * easeOut2(clamp01((e - arrive) / 180)) : 0.9 * (1 - easeOut2(clamp01((e - holdEnd) / fade)));
+
+  const h = e < arrive + 50 ? 0 : easeOut3(clamp01((e - arrive - 50) / haloMs));
+  const haloScale = 0.3 + 1.9 * h;
+  const haloFade = e < arrive + 50 ? 0 : 1 - h;
+
+  return { head, tail, headAlpha, bloomScale, bloomAlpha, haloScale, haloFade, done: e >= end };
+}
+
+/** DepartureTrace's sizes for a strength (0.40 is the tuned default, which reproduces the sketch). */
+export function departureSizes(strength: number) {
+  const s = Math.max(strength, 0.05) / 0.4;
+  return {
+    glowWidth: 7 * s,
+    glowAlpha: Math.min(0.35 * s, 0.8),
+    headR: 4.5 * s,
+    coreR: Math.max(1.4, 2.2 * Math.sqrt(s)),
+    bloomR: 6 * s,
+    haloR: 16 * s,
+    haloAlpha: Math.min(0.5 * s, 0.85),
+  };
 }

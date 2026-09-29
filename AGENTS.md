@@ -22,7 +22,7 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:camera` | night-sky camera: pan cap, no overshoot, carry during flights, tilt limit, target order (`src/utils/skyCamera.ts`) |
 | `npm run check:slider` | weighted slider: edge resistance, no overshoot, grab zone, flight timing (`src/utils/sliderWeight.ts`) |
 | `npm run check:skytheme` | night-sky theme block: every theme's sky complete and in range, Starry Night values, uniform mapping (`src/config/theme.ts`, `skyShader.ts`) |
-| `npm run check:comet` | night-sky light trails in the replay's look: drag-trail window and tail catch-up, tag-line draw timeline (`src/utils/comet.ts`) |
+| `npm run check:comet` | night-sky light trails: the tag-line draw timeline (the replay's look) and the departure comet's timeline, spring and sizes (`src/utils/comet.ts`) |
 
 New logic gets a new `check:<short-name>` script following the same shape.
 

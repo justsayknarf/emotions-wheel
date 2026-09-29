@@ -17,7 +17,7 @@ import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
-import { SkyBackdrop, type ConstellationStar } from './SkyBackdrop';
+import { SkyBackdrop, type ConstellationStar, type SkyDeparture } from './SkyBackdrop';
 import { SkyAurora, type SkyAuroraInputs } from './SkyAurora';
 import { canUseWebGL } from './skyShader';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
@@ -515,13 +515,22 @@ export function EmotionField({
     ];
   }, [constellationPin]);
 
-  // R-8: in the sky an endpoint behind the camera has no screen position
-  // (toPx returns 0,0), so the comet would streak to the top-left. Null
-  // endpoints are DepartureTrace's own "don't play". Flat mode is unchanged.
-  const traceHidden =
-    sky &&
-    ((departureTraceFrom !== null && !proj.toPx(departureTraceFrom).visible) ||
-      (departureTraceTo !== null && !proj.toPx(departureTraceTo).visible));
+  // The departure comet in the sky (R10) draws on SkyBackdrop's canvas, its
+  // ends re-projected every frame as the camera glides to the new pin; the
+  // flat field's DepartureTrace measures px once at play-start instead.
+  const skyDeparture = useMemo<SkyDeparture>(
+    () => ({
+      play: departureTracePlay,
+      from: departureTraceFrom,
+      to: departureTraceTo,
+      travel: tuning.departureTravel,
+      trail: tuning.departureTrail,
+      hold: tuning.departureHold,
+      fadeOut: tuning.departureFadeOut,
+      strength: tuning.departureStrength,
+    }),
+    [departureTracePlay, departureTraceFrom, departureTraceTo, tuning.departureTravel, tuning.departureTrail, tuning.departureHold, tuning.departureFadeOut, tuning.departureStrength],
+  );
 
   // Live cursor proximity for the revealed deep words, so they react to the
   // cursor (size + colour) the way surface anchors do. Only the scale/nearness
@@ -755,7 +764,7 @@ export function EmotionField({
           size={size}
           stars={skyStars}
           constellation={constellation}
-          liveDraft={liveDraft}
+          departure={skyDeparture}
           reducedMotion={!!reducedMotion}
           paintSky={!webgl}
         />
@@ -791,11 +800,12 @@ export function EmotionField({
       )}
 
       {/* Departure connector (U6/R6) — always mounted, self-gating on
-          `play`, same shape as AxisRadiance above. */}
+          `play`, same shape as AxisRadiance above. Flat only: the sky draws
+          its own on SkyBackdrop (see skyDeparture). */}
       <DepartureTrace
-        play={departureTracePlay}
-        from={traceHidden ? null : departureTraceFrom}
-        to={traceHidden ? null : departureTraceTo}
+        play={sky ? 0 : departureTracePlay}
+        from={departureTraceFrom}
+        to={departureTraceTo}
         size={size}
         toPx={toFieldPx}
         travel={tuning.departureTravel}
