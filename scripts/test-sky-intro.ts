@@ -1,6 +1,6 @@
 // Behavioural check for the night-sky opening pan (src/utils/skyIntro.ts).
 // Run: npm run check:intro
-import { introLook, introPeakSpeed, introStart, type IntroSpec } from '../src/utils/skyIntro';
+import { clampIntroDuration, introLook, introPeakSpeed, introStart, type IntroSpec } from '../src/utils/skyIntro';
 import { degToField, DEFAULT_CAMERA_PARAMS as P } from '../src/utils/skyCamera';
 import { skyProjection } from '../src/utils/skyProjection';
 
@@ -46,6 +46,26 @@ const spec: IntroSpec = { from: introStart(P.lookMax), to: { x: 0, y: 0 }, delay
   check('starts and ends at rest', first < 0.01 && last < 1e-9, `first-frame speed ${first.toFixed(4)}, last ${last}`);
   const cap = degToField(P.maxDegPerSec);
   check('never faster than the pan cap', peak <= cap && introPeakSpeed(spec) <= cap, `peak ${peak.toFixed(3)} (analytic ${introPeakSpeed(spec).toFixed(3)}) ≤ cap ${cap.toFixed(3)} field/s`);
+}
+
+// Any admin duration is clamped to the cap (R13): a too-short one is
+// lengthened until it isn't too fast, and one already under it is untouched.
+{
+  const cap = degToField(P.maxDegPerSec);
+  const fast: IntroSpec = { ...spec, durationS: 0.2 };
+  check('a too-short duration is over the cap before clamping', introPeakSpeed(fast) > cap, `peak ${introPeakSpeed(fast).toFixed(3)} > cap ${cap.toFixed(3)}`);
+  const clamped = clampIntroDuration(fast, cap);
+  const DT = 1 / 240;
+  let prev = introLook(0, clamped).look.y, peak = 0;
+  for (let t = DT; t <= clamped.delayS + clamped.durationS + 0.5; t += DT) {
+    const y = introLook(t, clamped).look.y;
+    peak = Math.max(peak, (y - prev) / DT);
+    prev = y;
+  }
+  check('after clamping it stays under the cap', introPeakSpeed(clamped) <= cap && peak <= cap && clamped.durationS > fast.durationS,
+    `duration ${fast.durationS}s → ${clamped.durationS.toFixed(3)}s, peak ${peak.toFixed(3)} (analytic ${introPeakSpeed(clamped).toFixed(3)}) ≤ cap ${cap.toFixed(3)}`);
+  check('clamping still lands on the still point', introLook(clamped.delayS + clamped.durationS, clamped).look.y === 0, 'y=0');
+  check('an in-cap duration is left alone', clampIntroDuration(spec, cap) === spec, `${spec.durationS}s`);
 }
 
 if (failures) { console.log(`\n${failures} failed`); process.exit(1); }

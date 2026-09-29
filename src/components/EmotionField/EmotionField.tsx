@@ -24,9 +24,9 @@ import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
 import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
 import { flatProjection, skyProjection } from '../../utils/skyProjection';
-import { cameraTarget } from '../../utils/skyCamera';
+import { cameraTarget, degToField } from '../../utils/skyCamera';
 import { useSkyCamera } from './useSkyCamera';
-import { introStart, type IntroSpec } from '../../utils/skyIntro';
+import { clampIntroDuration, introStart, type IntroSpec } from '../../utils/skyIntro';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
 // coordinate. Above the resting standoff (so a merely-lifted label has none),
@@ -199,7 +199,11 @@ export function EmotionField({
   );
   const [introSpec] = useState<IntroSpec | null>(() =>
     sky && skyIntro && tuning.skyIntro
-      ? { from: introStart(cameraParams.lookMax), to: { x: 0, y: 0 }, delayS: tuning.skyIntroDelay, durationS: tuning.skyIntroDuration }
+      // Clamped so no admin duration outruns the pan speed cap (R13).
+      ? clampIntroDuration(
+          { from: introStart(cameraParams.lookMax), to: { x: 0, y: 0 }, delayS: tuning.skyIntroDelay, durationS: tuning.skyIntroDuration },
+          degToField(cameraParams.maxDegPerSec),
+        )
       : null,
   );
   // useFieldGesture (isPressed) runs after the camera, so a press reaches
@@ -331,7 +335,8 @@ export function EmotionField({
   // mount; without it the 2D backdrop paints the sky (R7). Per-frame values
   // reach the shader through this ref, never props, so a camera frame
   // re-renders nothing but this field.
-  const [webgl] = useState(() => sky && canUseWebGL());
+  const [webgl, setWebgl] = useState(() => sky && canUseWebGL());
+  const onAuroraUnavailable = useCallback(() => setWebgl(false), []);
   const auroraInputs = useRef<SkyAuroraInputs>({ proj, moving: false, swell: 0 });
   // R3F's invalidate, for reduced motion's frameloop="demand".
   const auroraInvalidate = useRef<(() => void) | null>(null);
@@ -733,7 +738,7 @@ export function EmotionField({
     >
       <div ref={swellRoot} style={{ display: 'none' }} />
       {/* The night sky itself — beneath words, pins and labels (Task 7). */}
-      {sky && webgl && <SkyAurora inputs={auroraInputs} invalidateRef={auroraInvalidate} reducedMotion={!!reducedMotion} />}
+      {sky && webgl && <SkyAurora inputs={auroraInputs} invalidateRef={auroraInvalidate} reducedMotion={!!reducedMotion} onUnavailable={onAuroraUnavailable} />}
       {sky && (
         <SkyBackdrop
           proj={proj}

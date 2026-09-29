@@ -938,6 +938,8 @@ export default function App() {
       // that produced this entry (or it isn't, and this update shouldn't
       // manufacture a confirmation moment for an entry from a past
       // session). Either way this branch leaves it untouched.
+      // Nor does it play the save swell (setSkySwellPlay): same reasoning —
+      // saving a reopened past check-in shouldn't make a moment of it.
     } else {
       // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md:
       // same mirror-expand as handleLandingSave — without it, an ordinary

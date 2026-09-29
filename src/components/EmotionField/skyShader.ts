@@ -69,7 +69,11 @@ export function hexToRgb01(hex: string): Rgb {
 }
 
 // The theme-driven (not per-frame) uniform values for one theme's shader block.
-export function skyThemeUniforms(s: ShaderTheme) {
+export type SkyThemeValues = Pick<ShaderTheme,
+  'skyZenith' | 'skyHorizon' | 'skyWarm' | 'skyAuroraLow' | 'skyAuroraHigh' | 'skyBand'
+  | 'skyAuroraStrength' | 'skyAuroraReach' | 'skyBandStrength' | 'skyAuroraCap' | 'skyWarmth'>;
+
+export function skyThemeUniforms(s: SkyThemeValues) {
   return {
     uZen: hexToRgb01(s.skyZenith),
     uHor: hexToRgb01(s.skyHorizon),
@@ -85,12 +89,17 @@ export function skyThemeUniforms(s: ShaderTheme) {
   };
 }
 
-// Whether this browser can give us a WebGL context. Called once from the
-// field; never at import (the check scripts run in Node).
+// Whether this browser can give us a WebGL2 context — three's renderer asks
+// for nothing else, so a WebGL1-only browser gets the 2D sky. Called once
+// from the field; never at import (the check scripts run in Node). The probe
+// context is released straight away rather than left for the GC, so it
+// doesn't count against the browser's live-context limit.
 export function canUseWebGL(): boolean {
   try {
-    const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return false;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return true;
   } catch {
     return false;
   }

@@ -33,3 +33,14 @@ export function introPeakSpeed(spec: IntroSpec): number {
   const dist = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
   return (Math.PI / 2) * (dist / spec.durationS);
 }
+
+// The spec with its duration lengthened, if need be, so the peak speed
+// stays at or under maxSpeed (field units per second) — R13 holds at any
+// admin setting, not just the defaults.
+export function clampIntroDuration(spec: IntroSpec, maxSpeed: number): IntroSpec {
+  if (!(maxSpeed > 0) || !Number.isFinite(maxSpeed)) return spec;
+  const dist = Math.hypot(spec.to.x - spec.from.x, spec.to.y - spec.from.y);
+  // A hair over the exact bound, so rounding never lands the peak above it.
+  const minDuration = ((Math.PI / 2) * dist / maxSpeed) * (1 + 1e-9);
+  return spec.durationS >= minDuration ? spec : { ...spec, durationS: minDuration };
+}
