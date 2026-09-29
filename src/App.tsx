@@ -1341,6 +1341,7 @@ export default function App() {
               fieldPlaneRef={fieldPlaneRef}
               railRef={railScrollRef}
               selectedPinId={effectiveSelectedPinId}
+              hidden={tuning.skyField && (adjustDraft !== null || departureDraftCoord !== null)}
             />
           )}
 

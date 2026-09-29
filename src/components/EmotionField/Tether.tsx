@@ -12,6 +12,10 @@ interface Props {
   // position rather than a stale ref.
   railRef: React.RefObject<HTMLDivElement | null>;
   selectedPinId: string | null;
+  // Night sky: fade the thread out while the card's slider is dragging or a
+  // tap-to-fly flight moves the pin, and back in on release. It stays
+  // mounted (and measuring), so it returns where the pin is without a redraw.
+  hidden?: boolean;
 }
 
 interface Geo {
@@ -23,7 +27,7 @@ interface Geo {
 
 // A soft gold thread from the active pin to its card in the rail, so the card
 // reads as a margin note on a point in emotional space rather than a panel.
-export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
+export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId, hidden = false }: Props) {
   const [geo, setGeo] = useState<Geo | null>(null);
   const rafRef = useRef<number | null>(null);
   const reduce = useReducedMotion();
@@ -113,9 +117,13 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
   const d = `M ${px} ${py} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}`;
 
   return (
-    <svg
+    <motion.svg
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 3 }}
       aria-hidden="true"
+      data-tether=""
+      initial={false}
+      animate={{ opacity: hidden ? 0 : 1 }}
+      transition={{ duration: reduce ? 0 : 0.2, ease: 'easeOut' }}
     >
       <defs>
         <linearGradient id="tether-thread" x1="0" y1="0" x2="1" y2="0">
@@ -144,6 +152,6 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
         animate={{ opacity: 0.85 }}
         transition={{ duration: 0.35, delay: reduce ? 0 : 0.9 }}
       />
-    </svg>
+    </motion.svg>
   );
 }
