@@ -135,6 +135,9 @@ export default function App() {
   // until measured (first paint) or whenever no focus card is mounted —
   // WelcomeOverlay falls back to a fixed offset in either case.
   const [focusCardTop, setFocusCardTop] = useState<number | null>(null);
+  // The mobile sheet's resting top edge (EmotionDrawer's onSheetTopChange),
+  // so the night-sky camera centres on the sky left visible above it.
+  const [sheetTop, setSheetTop] = useState<number | null>(null);
   const [welcomeNonce] = useState(0);
 
   // The axis pulse is a separate lifecycle from the welcome message: it begins
@@ -1162,6 +1165,9 @@ export default function App() {
           // reading "not clickable" through the post-save settle window
           // even after the fix above made a press there work again.
           dropDisabled={desktopLandingActive && desktopCardProgress === 0 && pins.length === 0}
+          // The field plane starts at the top of the same ancestor the
+          // sheet reports against, so its top edge is already in stage px.
+          skyOccluderTop={sideBySide ? null : sheetTop}
         />
       </div>
 
@@ -1293,6 +1299,7 @@ export default function App() {
                 onToggle={() => setMirrorExpanded((v) => !v)}
                 draggingPinId={draggingPinId}
                 onFocusCardTopChange={setFocusCardTop}
+                onSheetTopChange={setSheetTop}
               />
             )}
           </AnimatePresence>

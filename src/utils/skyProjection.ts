@@ -71,11 +71,24 @@ export function focalLength(fovDeg: number, width: number, height: number): numb
   return Math.max(width, height) / (2 * Math.tan((fovDeg * Math.PI) / 360));
 }
 
-export function skyProjection(opts: { look: FieldCoord; fovDeg: number; width: number; height: number }): FieldProjection {
+// The part of the stage the viewer can actually see, in stage px: on a phone
+// the bottom tray covers the lower part of the field, which still runs behind
+// it. The gaze centres on this band and the field of view spans it.
+export interface SkyViewport { top: number; height: number }
+
+export function skyProjection(opts: {
+  look: FieldCoord;
+  fovDeg: number;
+  width: number;
+  height: number;
+  // Defaults to the whole stage.
+  viewport?: SkyViewport;
+}): FieldProjection {
   const { f, r, u } = cameraBasis(opts.look);
-  const F = focalLength(opts.fovDeg, opts.width, opts.height);
+  const band = opts.viewport ?? { top: 0, height: opts.height };
+  const F = focalLength(opts.fovDeg, opts.width, band.height);
   const cx = opts.width / 2;
-  const cy = opts.height / 2;
+  const cy = band.top + band.height / 2;
   const projectDir = (d: Vec3): ScreenPoint => {
     const z = dot(d, f);
     if (z < 0.05) return { x: 0, y: 0, visible: false, scale: 0 };

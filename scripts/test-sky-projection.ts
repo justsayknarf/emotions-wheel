@@ -69,6 +69,34 @@ for (const look of [{ x: -0.9, y: -0.8 }, { x: 1.1, y: 0.3 }, { x: 0.2, y: 1.15 
   check('direction behind the gaze is invisible', !p.toPx({ x: 1, y: 0 }).visible, 'looking low toward Calm, Activated horizon behind');
 }
 
+// A visible band (the phone tray covering the bottom of the stage): the gaze
+// centres on the band, and presses still invert.
+{
+  const PW = 390, PH = 800;
+  const viewport = { top: 0, height: 430 };
+  const p = skyProjection({ look: { x: 0, y: 0 }, fovDeg: 84, width: PW, height: PH, viewport });
+  const c = p.toPx({ x: 0, y: 0 });
+  check('zenith draws at the viewport centre', Math.abs(c.x - PW / 2) < 0.01 && Math.abs(c.y - (viewport.top + viewport.height / 2)) < 0.01, `${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+  const inset = skyProjection({ look: { x: 0.3, y: -0.4 }, fovDeg: 64, width: PW, height: PH, viewport: { top: 40, height: 380 } });
+  const g = inset.toPx({ x: 0.3, y: -0.4 });
+  check('the gaze draws at the centre of an inset band', Math.abs(g.x - PW / 2) < 0.01 && Math.abs(g.y - 230) < 0.01, `${g.x.toFixed(2)},${g.y.toFixed(2)}`);
+  let worst = 0;
+  for (const look of [{ x: 0, y: 0 }, { x: -0.9, y: -0.8 }, { x: 0.6, y: 0.9 }]) {
+    const q = skyProjection({ look, fovDeg: 84, width: PW, height: PH, viewport });
+    for (let px = 15; px < PW; px += 60) for (let py = 15; py < PH; py += 60) {
+      const cc = q.fromPx(px, py);
+      if (!cc || Math.abs(cc.x) >= 0.999 || Math.abs(cc.y) >= 0.999) continue;
+      const back = q.toPx(cc);
+      worst = Math.max(worst, Math.hypot(back.x - px, back.y - py));
+    }
+  }
+  check('fromPx inverts toPx with a viewport', worst < 1, `worst ${worst.toFixed(3)}px`);
+  const full = skyProjection({ look: { x: 0.2, y: 0.1 }, fovDeg: 84, width: W, height: H });
+  const same = skyProjection({ look: { x: 0.2, y: 0.1 }, fovDeg: 84, width: W, height: H, viewport: { top: 0, height: H } });
+  const a = full.toPx({ x: -0.3, y: 0.5 }), b = same.toPx({ x: -0.3, y: 0.5 });
+  check('a full-stage viewport is the default projection', a.x === b.x && a.y === b.y, `${a.x.toFixed(3)},${a.y.toFixed(3)}`);
+}
+
 // R21: the flat projection is exactly today's geometry.
 {
   const flat = flatProjection({ width: W, height: H });

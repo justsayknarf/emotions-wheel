@@ -196,6 +196,13 @@ interface Props {
   // above the card's *actual* rendered top instead of a fixed guess. Fires
   // null when the 'focus' branch isn't mounted (nothing to clear against).
   onFocusCardTopChange?: (top: number | null) => void;
+  // Mobile sheet only: the sheet's resting top edge, in the same shared
+  // positioned ancestor's px (from its top), so the night-sky camera can
+  // centre on the sky the tray leaves visible. The target height, not the
+  // animated one, and held through a slider drag's drag-shrink, so the sky
+  // glides once per peek/expand rather than bobbing on every drag. Fires
+  // null when the sheet isn't mounted.
+  onSheetTopChange?: (top: number | null) => void;
 }
 
 export function EmotionDrawer({
@@ -230,6 +237,7 @@ export function EmotionDrawer({
   enteringPinId,
   scrollRef,
   onFocusCardTopChange,
+  onSheetTopChange,
   expanded = false,
   onToggle,
   draggingPinId = null,
@@ -393,6 +401,32 @@ export function EmotionDrawer({
     // this measurement for each one would double-animate the same visual
     // change CoordinateCard already animates internally.
   }, [isSheet, isReopened, sheetBodyVisible, dragShrinkActive, pins.length, scrollRef]);
+  const sheetRootRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!isSheet || !onSheetTopChange || dragShrinkActive) return;
+    const node = sheetRootRef.current;
+    if (!node) return;
+    const report = () => {
+      const ancestor = node.offsetParent as HTMLElement | null;
+      const hostHeight = ancestor ? ancestor.clientHeight : window.innerHeight;
+      // A reopened check-in sizes to its content (no JS target height), so
+      // it's measured instead.
+      const h = isReopened ? node.offsetHeight : sheetHeight ?? PEEK_BAR_HEIGHT;
+      onSheetTopChange(hostHeight - h);
+    };
+    report();
+    const observer = isReopened ? new ResizeObserver(report) : null;
+    observer?.observe(node);
+    window.addEventListener('resize', report);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', report);
+    };
+  }, [isSheet, isReopened, sheetHeight, dragShrinkActive, onSheetTopChange]);
+  useLayoutEffect(() => {
+    if (!isSheet || !onSheetTopChange) return;
+    return () => onSheetTopChange(null);
+  }, [isSheet, onSheetTopChange]);
   // Save reflects the draft's count only (R21) and is unavailable when the
   // draft holds nothing new (R19) — `pins` here is always the draft array,
   // unaffected by the previous check-in's pins.
@@ -1404,6 +1438,7 @@ export function EmotionDrawer({
 
   return (
     <motion.div
+      ref={sheetRootRef}
       initial={{ y: '100%' }}
       animate={{
         y: 0,

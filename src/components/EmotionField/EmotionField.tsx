@@ -62,7 +62,8 @@ interface Props {
   tagPulse?: TagPulse | null;
   onPinRelease: (entry: PinEntry) => void;
   // R15: a release that lands on an existing (draft) pin selects it instead
-  // of minting a new one — see handleRelease's hit-test via findNearbyPin.
+  // of minting a new one — see handleRelease's hit-test via findNearbyPinPx,
+  // measured where the pins actually draw.
   onPinSelect: (pinId: string) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
@@ -126,6 +127,11 @@ interface Props {
   // drives below, so the cursor/hover ring don't imply a click here would
   // do something.
   dropDisabled?: boolean;
+  // Night sky, phone layout: the stage-px y at which the bottom tray's resting
+  // top edge covers the stage (the field runs on behind it). The camera
+  // centres on the sky above it rather than on the whole stage. Null or
+  // omitted: nothing covers the stage.
+  skyOccluderTop?: number | null;
 }
 
 export function EmotionField({
@@ -148,6 +154,7 @@ export function EmotionField({
   recedeProgress = 0,
   departureDraft = null,
   dropDisabled = false,
+  skyOccluderTop = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -170,12 +177,21 @@ export function EmotionField({
     newestDraftPin,
     recordedAnchor: recordedPins.length ? recordedPins[recordedPins.length - 1] : null,
   });
+  // The visible band of sky: everything above the tray's top edge. A tray
+  // that sits below the stage (or no tray) leaves the whole stage.
+  const skyViewport = useMemo(
+    () => (skyOccluderTop !== null && size.height > 0 && skyOccluderTop < size.height - 0.5
+      ? { top: 0, height: Math.max(size.height * 0.25, skyOccluderTop) }
+      : null),
+    [skyOccluderTop, size.height],
+  );
   const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
     enabled: sky,
     target: skyTarget,
     lean: pins.length > 0 || departureDraft !== null,
     params: cameraParams,
     size,
+    viewport: skyViewport,
   });
   const toFieldPx = (c: { x: number; y: number }) => proj.toPx(c);
 
