@@ -38,7 +38,9 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
       // The pin wrapper is a 0×0 box at the pin centre, so its left/top are
       // the centre.
       const pinEl = plane.querySelector(`[data-field-pin="${CSS.escape(pin.id)}"]`) as HTMLElement | null;
-      if (!pinEl) return;
+      // No element: the pin isn't drawn this frame (behind the sky camera).
+      // Drop the thread rather than leave it pointing at a stale endpoint.
+      if (!pinEl) { setGeo(null); return; }
       const pr = pinEl.getBoundingClientRect();
       const px = pr.left - rect.left;
       const py = pr.top - rect.top;
