@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AxisSlider } from './AxisSlider';
+import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import type { PinEntry } from '../../types';
 
 // Matches CoordinateCard.tsx's own FIELD_SERIF — this surface is for
@@ -94,6 +95,10 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
   ref,
 ) {
   const reduced = useReducedMotion();
+  // Night-sky mode weights the sliders (drag chases, tap flies); flat keeps
+  // them jumping to the pointer.
+  const tuning = useRevealTuning();
+  const weight = useMemo(() => (tuning.skyField ? sliderWeightFromTuning(tuning) : undefined), [tuning]);
 
   // Live drag draft — mirrors CoordinateCard's own draft/draftRef pattern so
   // the untouched axis is taken from the latest in-flight value even when
@@ -227,6 +232,7 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
           onCancel={cancelDeparture}
           opacity={draggingAxis !== null && draggingAxis !== 'x' ? 0.3 : 1}
           reducedMotion={!!reduced}
+          weight={weight}
         />
         <AxisSlider
           labelLow="Negative"
@@ -239,6 +245,7 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
           onCancel={cancelDeparture}
           opacity={draggingAxis !== null && draggingAxis !== 'y' ? 0.3 : 1}
           reducedMotion={!!reduced}
+          weight={weight}
         />
         {/* No "reopen this entry instead" link here — this landing is
             centered, alone, with nothing to distinguish it from an ordinary

@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
 import { describeDelta, hasNotableDelta } from '../../data/departure';
 import { AxisSlider } from './AxisSlider';
+import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import { WordTag } from './WordTag';
 import type { PinEntry } from '../../types';
 
@@ -120,6 +121,10 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // The slot dissolve on a coordinate commit — tunable, and collapsed to an
   // instant swap when the viewer prefers reduced motion.
   const reduced = useReducedMotion();
+  // Night-sky mode weights the sliders (drag chases, tap flies); flat keeps
+  // them jumping to the pointer.
+  const tuning = useRevealTuning();
+  const weight = useMemo(() => (tuning.skyField ? sliderWeightFromTuning(tuning) : undefined), [tuning]);
   const fadeOut = reduced ? 0 : dissolve?.fadeOut ?? 0.26;
   const fadeIn = reduced ? 0 : dissolve?.fadeIn ?? 0.3;
   const hold = reduced ? 0 : dissolve?.hold ?? 0.05;
@@ -429,6 +434,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onCancel={cancelAxis}
             opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
             reducedMotion={!!reduced}
+            weight={weight}
           />
           <AxisSlider
             labelLow="Negative"
@@ -442,6 +448,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onCancel={cancelAxis}
             opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
             reducedMotion={!!reduced}
+            weight={weight}
           />
         </div>
 
