@@ -88,6 +88,8 @@ export default function App() {
   // a reopen's temporary exclusion — so staleness resolves through that
   // existing derivation rather than needing its own reset logic here.
   const [justSavedEntryId, setJustSavedEntryId] = useState<string | null>(null);
+  // One saved check-in → one swell of the night sky's aurora (living-sky R11).
+  const [skySwellPlay, setSkySwellPlay] = useState(0);
   const sessionStartRef = useRef<number>(0);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const railScrollRef = useRef<HTMLDivElement>(null);
@@ -670,6 +672,7 @@ export default function App() {
     // "Today's check-in" + suggestions) should render for, once the rail
     // reveals below.
     const entry = record(pins, sessionStartRef.current, entrySource);
+    setSkySwellPlay((n) => n + 1);
     setJustSavedEntryId(entry.id);
     setPins([]);
     setSelectedPinId(null);
@@ -945,6 +948,7 @@ export default function App() {
       // mirrorWasShown reset — no separate arming call needed here.
       setMirrorExpanded(true);
       const entry = record(pins, sessionStartRef.current, entrySource);
+      setSkySwellPlay((n) => n + 1);
       // Clear the draft so the just-recorded entry becomes the previous
       // check-in through derivePreviousCheckIn (above) rather than through a
       // second stored copy — this is what keeps a second handleRecord call
@@ -1142,6 +1146,7 @@ export default function App() {
         }}
       >
         <EmotionField
+          skySwellPlay={skySwellPlay}
           pins={pins}
           highlightedIds={highlightedIds}
           tagPulse={tagPulse}

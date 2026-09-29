@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { animate } from 'animejs';
+import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
 import { findNearbyPinPx } from '../../data/checkIn';
@@ -134,6 +136,8 @@ interface Props {
   // centres on the sky above it rather than on the whole stage. Null or
   // omitted: nothing covers the stage.
   skyOccluderTop?: number | null;
+  // Bumped once per saved check-in: the night sky's aurora swells once (living-sky R11).
+  skySwellPlay?: number;
 }
 
 export function EmotionField({
@@ -157,6 +161,7 @@ export function EmotionField({
   departureDraft = null,
   dropDisabled = false,
   skyOccluderTop = null,
+  skySwellPlay = 0,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -318,6 +323,21 @@ export function EmotionField({
     auroraInputs.current.moving = moving;
     if (moved && reducedMotion) auroraInvalidate.current?.();
   });
+
+  // One saved check-in → one swell: the aurora brightens and settles.
+  const swellTarget = useRef({ v: 0 });
+  const { root: swellRoot, scope: swellScope } = useAnimeScope<HTMLDivElement>((scope, reduced) => {
+    scope.add('swell', () => {
+      if (reduced) return; // no swell under reduced motion (R11)
+      animate(swellTarget.current, {
+        v: [{ to: 1, duration: 800, ease: 'out(2)' }, { to: 0, duration: 2400, ease: 'inOut(2)' }],
+        onUpdate: () => { auroraInputs.current.swell = swellTarget.current.v; },
+      });
+    });
+  }, []);
+  useEffect(() => {
+    if (skySwellPlay > 0) swellScope.current?.methods.swell();
+  }, [skySwellPlay, swellScope]);
 
   // A departure/adjust drag takes over as the reveal center whenever it's
   // active — press-equivalent (not hover-equivalent), same as the field's
@@ -687,6 +707,7 @@ export function EmotionField({
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}
     >
+      <div ref={swellRoot} style={{ display: 'none' }} />
       {/* The night sky itself — beneath words, pins and labels (Task 7). */}
       {sky && webgl && <SkyAurora inputs={auroraInputs} invalidateRef={auroraInvalidate} reducedMotion={!!reducedMotion} />}
       {sky && (
