@@ -451,14 +451,11 @@ export default function App() {
   // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
   // pair it draws between.
   //
-  // review-fix (2026-09-03, single-pin-checkin follow-up): under the
-  // single-pin model there's only ever one pin to depart from — moving it
-  // (via a relocate or a slider release) *is* a fresh departure from the
-  // anchor each time, not a one-off event. `play` now bumps from every
-  // commit site (mint, relocate, and handleAdjustPin's slider release)
-  // rather than only the original mint, via the shared `fireDepartureTrace`
-  // below. Live drags never call it — only their commit does — so the trail
-  // still never re-fires mid-drag.
+  // 2026-09-29 (Frank): the trail marks two moments only — the pin first
+  // being set (a fresh mint, from a field press or a departure-slider
+  // release) and the check-in being saved. Moving the pin afterwards (a
+  // relocate or a slider release) no longer fires it, so adjusting stays
+  // quiet. Both sites go through the shared `fireDepartureTrace` below.
   const [departureTracePlay, setDepartureTracePlay] = useState(0);
   const [departureTraceFrom, setDepartureTraceFrom] = useState<{ x: number; y: number } | null>(null);
   const [departureTraceTo, setDepartureTraceTo] = useState<{ x: number; y: number } | null>(null);
@@ -471,7 +468,7 @@ export default function App() {
   // reopen edits a past entry's own history, not a departure from the
   // *current* session's anchor. handlePinRelease's own call sites already
   // sit behind its own `draftId !== null` early return, so this only ever
-  // actually gates handleAdjustPin's call below — kept here anyway as the
+  // actually gates the save sites' calls below — kept here anyway as the
   // one place this invariant lives, rather than re-checked ad hoc per site.
   const fireDepartureTrace = useCallback((x: number, y: number) => {
     if (draftId !== null || previousCheckIn === null || !anchorPin) return;
@@ -494,11 +491,10 @@ export default function App() {
     // (field press or departure-slider release) relocates it in place
     // instead of appending a second — mirroring handleAdjustPin's own
     // quiet update below (no fanfare, no second pin ever visible in the
-    // card list). The light trail still fires on every relocate, same as a
-    // fresh mint — see fireDepartureTrace above.
+    // card list). A relocate doesn't fire the light trail; only the first
+    // mint and the save do — see fireDepartureTrace above.
     if (pins.length > 0) {
       setPins((prev) => (prev.length > 0 ? [adjustPin(prev[0], entry.x, entry.y)] : prev));
-      fireDepartureTrace(entry.x, entry.y);
       return;
     }
     // Every fresh mint starts a new check-in's own session clock — restores
@@ -674,12 +670,15 @@ export default function App() {
     // reveals below.
     const entry = record(pins, sessionStartRef.current, entrySource);
     setSkySwellPlay((n) => n + 1);
+    // The save's light trail, from the previous check-in to the pin just
+    // saved (this render's anchorPin is still the previous check-in).
+    fireDepartureTrace(pins[0].x, pins[0].y);
     setJustSavedEntryId(entry.id);
     setPins([]);
     setSelectedPinId(null);
     setDesktopCardProgress(1);
     scheduleLandingSettle();
-  }, [pins, record, entrySource, scheduleLandingSettle]);
+  }, [pins, record, entrySource, scheduleLandingSettle, fireDepartureTrace]);
 
   // EmotionDrawer's onMoveToRail (see its own prop comment): a returning
   // user's post-mint escape hatch out of the centered card, without saving
@@ -872,19 +871,12 @@ export default function App() {
   // Commit an adjusted coordinate (slider released): move the pin and recompute
   // its description in place. regionDescription is a stored snapshot, so it must
   // be refreshed here — highlightedIds re-derives on its own from the new x/y.
-  // origin and recognizedWords are deliberately preserved.
-  //
-  // review-fix (2026-09-03, single-pin-checkin follow-up): also fires the
-  // departure light trail, same as a fresh mint or a field-press relocate —
-  // see fireDepartureTrace's own comment (it no-ops while reopened). Fires
-  // only here, on commit — the live drag preview (onAdjustDraft/
-  // handleAdjustDraft below) never calls this, so the trail still never
-  // re-fires mid-drag.
+  // origin and recognizedWords are deliberately preserved. No light trail:
+  // it fires on the first mint and on save, not on adjustments.
   const handleAdjustPin = useCallback((pinId: string, x: number, y: number) => {
     setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
     setAdjustDraft(null);
-    fireDepartureTrace(x, y);
-  }, [fireDepartureTrace]);
+  }, []);
 
   // U5: the card list's scroll position across a drag's shrink/restore. Capture
   // happens synchronously here, before the shrink renders (the list is still
@@ -952,6 +944,9 @@ export default function App() {
       setMirrorExpanded(true);
       const entry = record(pins, sessionStartRef.current, entrySource);
       setSkySwellPlay((n) => n + 1);
+      // The save's light trail, from the previous check-in to the pin just
+      // saved (this render's anchorPin is still the previous check-in).
+      fireDepartureTrace(pins[0].x, pins[0].y);
       // Clear the draft so the just-recorded entry becomes the previous
       // check-in through derivePreviousCheckIn (above) rather than through a
       // second stored copy — this is what keeps a second handleRecord call
@@ -968,7 +963,7 @@ export default function App() {
       // picks it up via justSavedEntryId, same as handleLandingSave.
       setJustSavedEntryId(entry.id);
     }
-  }, [pins, record, updateEntry, draftId, entrySource]);
+  }, [pins, record, updateEntry, draftId, entrySource, fireDepartureTrace]);
 
   const handleDone = useCallback(() => {
     if (pins.length > 0) handleRecord();
