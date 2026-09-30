@@ -14,6 +14,7 @@ import type { TagPulse } from './components/EmotionField/EmotionWord';
 import { ShaderBackground } from './components/ShaderBackground/ShaderBackground';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
+import { Settings } from './components/Settings/Settings';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
 import { WelcomeOverlay } from './components/Welcome/WelcomeOverlay';
@@ -1345,14 +1346,17 @@ export default function App() {
             />
           )}
 
-          {entries.length > 0 && (
-            <button
-              onClick={() => navigateTo('history')}
-              style={{ ...HEADER_PILL, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20 }}
-            >
-              history
+          {/* Right-hand pills: settings always, history once there is one. */}
+          <div style={{ position: 'absolute', top: 20, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20, display: 'flex', gap: 8, zIndex: 20 }}>
+            <button onClick={() => navigateTo('settings')} style={{ ...HEADER_PILL, position: 'static' }}>
+              settings
             </button>
-          )}
+            {entries.length > 0 && (
+              <button onClick={() => navigateTo('history')} style={{ ...HEADER_PILL, position: 'static' }}>
+                history
+              </button>
+            )}
+          </div>
 
           {showMirror && (
             <button
@@ -1394,6 +1398,18 @@ export default function App() {
               entries={entries}
               onBack={goBack}
             />
+          </motion.div>
+        )}
+
+        {view === 'settings' && (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          >
+            <Settings onBack={goBack} />
           </motion.div>
         )}
 
