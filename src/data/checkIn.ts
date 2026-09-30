@@ -140,3 +140,24 @@ export function findNearbyPin(
   }
   return closest;
 }
+
+// Same rule as findNearbyPin, measured where pins actually draw — needed once
+// the field can be drawn through a non-flat projection (night sky).
+export function findNearbyPinPx(
+  press: { x: number; y: number },
+  pins: PinEntry[],
+  proj: { toPx(c: { x: number; y: number }): { x: number; y: number; visible: boolean } },
+): PinEntry | null {
+  let closest: PinEntry | null = null;
+  let closestDist = Infinity;
+  for (const pin of pins) {
+    const p = proj.toPx(pin);
+    if (!p.visible) continue;
+    const dist = Math.hypot(press.x - p.x, press.y - p.y);
+    if (dist <= TOUCH_RADIUS_PX && dist < closestDist) {
+      closest = pin;
+      closestDist = dist;
+    }
+  }
+  return closest;
+}

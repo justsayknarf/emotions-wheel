@@ -71,6 +71,21 @@ const RECEDE_KNOBS: Knob[] = [
   { key: 'fieldRecedeDuration', label: 'Recede duration', min: 0.1, max: 1.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
 ];
 
+// Night-sky field: camera and slider feel. Only read while skyField is on.
+const SKY_KNOBS: Knob[] = [
+  { key: 'skyFovRest', label: 'Sky FOV at rest', min: 60, max: 110, step: 1, fmt: (v) => `${v}°` },
+  { key: 'skyFovLean', label: 'Sky FOV leaning in', min: 40, max: 100, step: 1, fmt: (v) => `${v}°` },
+  { key: 'skyPanMaxDeg', label: 'Pan speed cap', min: 5, max: 90, step: 1, fmt: (v) => `${v}°/s` },
+  { key: 'skyPanOmega', label: 'Pan stiffness', min: 0.5, max: 5, step: 0.1, fmt: (v) => v.toFixed(1) },
+  { key: 'sliderWeight', label: 'Slider weight', min: 0, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+  { key: 'sliderGrabPx', label: 'Grab zone', min: 8, max: 60, step: 1, fmt: (v) => `${v}px` },
+  { key: 'flightBase', label: 'Flight base', min: 0.2, max: 2, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'flightPerUnit', label: 'Flight per unit', min: 0, max: 1.5, step: 0.05, fmt: (v) => `${v.toFixed(2)}s` },
+  { key: 'skyIntroDelay', label: 'Opening pan delay', min: 0, max: 3, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'skyIntroDuration', label: 'Opening pan length', min: 2, max: 12, step: 0.1, fmt: (v) => `${v.toFixed(1)}s` },
+  { key: 'skyIntroMaxDeg', label: 'Opening pan speed cap', min: 20, max: 90, step: 1, fmt: (v) => `${v}°/s` },
+];
+
 const labelStyle: React.CSSProperties = {
   fontSize: 9,
   textTransform: 'uppercase',
@@ -217,6 +232,33 @@ export function AdminRevealTuning() {
         <SectionHeader title="Recede" subtitle="field scale + blur behind the front-and-center card" />
 
         {RECEDE_KNOBS.map(renderKnob)}
+      </div>
+
+      {/* Night sky */}
+      <div style={{ ...rowStyle, borderTop: '1px solid var(--ui-border)', paddingTop: 12 }}>
+        <SectionHeader title="Night sky" subtitle="dome camera + weighted sliders" />
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={tuning.skyField}
+            onChange={(e) => set({ skyField: e.target.checked })}
+            style={{ accentColor: 'var(--ui-gold)', cursor: 'pointer' }}
+          />
+          <span style={labelStyle}>Night-sky field</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={tuning.skyIntro}
+            onChange={(e) => set({ skyIntro: e.target.checked })}
+            style={{ accentColor: 'var(--ui-gold)', cursor: 'pointer' }}
+          />
+          <span style={labelStyle}>Opening pan</span>
+        </label>
+
+        {SKY_KNOBS.map(renderKnob)}
       </div>
     </div>
   );

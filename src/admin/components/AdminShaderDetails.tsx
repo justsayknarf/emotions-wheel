@@ -177,6 +177,27 @@ export function AdminShaderDetails() {
             <FieldSlider label="Field of view" value={s.fov} min={1} max={180} step={1} onChange={(v) => set({ fov: v })} />
           </Group>
         </div>
+
+        <div>
+          <SectionLabel title="Night sky (sky mode only)" />
+          <Group>
+            <HueField label="zenith" hex={s.skyZenith} onChange={(hex) => set({ skyZenith: hex })} />
+            <HueField label="horizon" hex={s.skyHorizon} onChange={(hex) => set({ skyHorizon: hex })} />
+            <HueField label="horizon warmth" hex={s.skyWarm} onChange={(hex) => set({ skyWarm: hex })} />
+            <HueField label="aurora low" hex={s.skyAuroraLow} onChange={(hex) => set({ skyAuroraLow: hex })} />
+            <HueField label="aurora high" hex={s.skyAuroraHigh} onChange={(hex) => set({ skyAuroraHigh: hex })} />
+            <HueField label="milky way" hex={s.skyBand} onChange={(hex) => set({ skyBand: hex })} />
+            <FieldSlider label="Aurora strength" value={s.skyAuroraStrength} min={0} max={1.5} step={0.01} onChange={(v) => set({ skyAuroraStrength: v })} />
+            <FieldSlider label="Aurora speed" value={s.skyAuroraSpeed} min={0} max={5} step={0.01} onChange={(v) => set({ skyAuroraSpeed: v })} />
+            <FieldSlider label="Aurora reach (°)" value={s.skyAuroraReach} min={5} max={80} step={1} onChange={(v) => set({ skyAuroraReach: v })} />
+            <FieldSlider label="Aurora brightness cap" value={s.skyAuroraCap} min={0} max={1} step={0.01} onChange={(v) => set({ skyAuroraCap: v })} />
+            <FieldSlider label="Milky way strength" value={s.skyBandStrength} min={0} max={2} step={0.01} onChange={(v) => set({ skyBandStrength: v })} />
+            <FieldSlider label="Horizon warmth" value={s.skyWarmth} min={0} max={1} step={0.01} onChange={(v) => set({ skyWarmth: v })} />
+            <FieldSlider label="Dim while moving" value={s.skyMovingDim} min={0} max={1} step={0.01} onChange={(v) => set({ skyMovingDim: v })} />
+            <FieldSlider label="Save swell" value={s.skySwell} min={0} max={3} step={0.05} onChange={(v) => set({ skySwell: v })} />
+            <FieldSlider label="Render scale" value={s.skyRenderScale} min={0.25} max={1} step={0.05} onChange={(v) => set({ skyRenderScale: v })} />
+          </Group>
+        </div>
       </div>
     </details>
   );

@@ -7,7 +7,8 @@
 // / pin resolution adds its assertions to this same script as it lands in
 // src/data/checkIn.ts. This repo has no test runner, so this is the only
 // automated exercise of the logic. Exits non-zero on any violation.
-import { updateEntryInList, derivePreviousCheckIn, resolveActiveSelection, findNearbyPin } from '../src/data/checkIn';
+import { updateEntryInList, derivePreviousCheckIn, resolveActiveSelection, findNearbyPin, findNearbyPinPx } from '../src/data/checkIn';
+import { flatProjection } from '../src/utils/skyProjection';
 import { updateEntry } from '../src/store/diary';
 import type { DiaryEntry, PinEntry } from '../src/types';
 
@@ -464,6 +465,37 @@ const entry = (id: string, timestamp: string, pins: PinEntry[], durationMs = 100
     noPins === null,
     `resolved to ${noPins}`,
   );
+}
+
+// === findNearbyPinPx parity ===
+// The field hit-tests with findNearbyPinPx (px, through the projection). In
+// flat mode it must pick exactly what findNearbyPin (coord space) picks,
+// including right at the 26px touch radius.
+{
+  const size = { width: 800, height: 600 };
+  const flat = flatProjection(size);
+  const pins = [pin('p1', 0.0, 0.0), pin('p2', 0.5, 0.5), pin('p3', -0.4, 0.3)];
+  const unitX = (0.9 * size.width) / 2; // px per coord unit on x
+  const unitY = (0.9 * size.height) / 2;
+  const cases: Array<{ name: string; c: { x: number; y: number } }> = [
+    { name: 'on p1', c: { x: 0, y: 0 } },
+    { name: 'near p2', c: { x: 0.48, y: 0.49 } },
+    { name: 'far from all', c: { x: -0.9, y: -0.9 } },
+    { name: 'x just inside 26px of p1', c: { x: 25.9 / unitX, y: 0 } },
+    { name: 'x just outside 26px of p1', c: { x: 26.1 / unitX, y: 0 } },
+    { name: 'y just inside 26px of p3', c: { x: -0.4, y: 0.3 + 25.9 / unitY } },
+    { name: 'y just outside 26px of p3', c: { x: -0.4, y: 0.3 - 26.1 / unitY } },
+    { name: 'diagonal just inside of p2', c: { x: 0.5 + 18.3 / unitX, y: 0.5 + 18.3 / unitY } },
+    { name: 'diagonal just outside of p2', c: { x: 0.5 + 18.5 / unitX, y: 0.5 + 18.5 / unitY } },
+  ];
+  for (const { name, c } of cases) {
+    const a = findNearbyPin(c, pins, size)?.id ?? null;
+    const b = findNearbyPinPx(flat.toPx(c), pins, flat)?.id ?? null;
+    check(`findNearbyPinPx matches findNearbyPin (${name})`, a === b, `coord ${a}, px ${b}`);
+  }
+  const inside = findNearbyPinPx(flat.toPx({ x: 25.9 / unitX, y: 0 }), pins, flat)?.id ?? null;
+  const outside = findNearbyPinPx(flat.toPx({ x: 26.1 / unitX, y: 0 }), pins, flat)?.id ?? null;
+  check('the 26px boundary is where the parity cases think it is', inside === 'p1' && outside === null, `inside ${inside}, outside ${outside}`);
 }
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);

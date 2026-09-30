@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { DEFAULT_CAMERA_PARAMS, type CameraParams } from '../utils/skyCamera';
+import { sliderWeightFrom, type SliderWeight } from '../utils/sliderWeight';
 
 // Live-tunable knobs for the radial-fan reveal. Persisted to localStorage so
 // the admin page can drive them; the field subscribes and re-reads on change.
@@ -85,6 +87,38 @@ export interface RevealTuning {
   fieldRecedeBlur: number;
   /** Seconds for the base recede/return transition to ease. */
   fieldRecedeDuration: number;
+  /**
+   * Night-sky field (docs/plans/2026-09-28-001-feat-night-sky-field-plan.md).
+   * Off by default until it has been lived with; ?field=sky / ?field=flat on
+   * any app URL persists a choice (src/main.tsx).
+   */
+  skyField: boolean;
+  /** Degrees across the larger stage dimension at rest / with a draft pin. */
+  skyFovRest: number;
+  skyFovLean: number;
+  /** Ceiling on how fast the sky glides over a jump, degrees per second. */
+  skyPanMaxDeg: number;
+  /** Stiffness of that glide, 1/s (critically damped, never bounces). */
+  skyPanOmega: number;
+  /** Light (0) to Heavy (1) weighting of the card's sliders in sky mode. */
+  sliderWeight: number;
+  /** A slider press this close (px) to the thumb grabs it; further out flies. */
+  sliderGrabPx: number;
+  /** Seconds for the shortest flight, and added per field unit travelled. */
+  flightBase: number;
+  flightPerUnit: number;
+  /** Night-sky opening pan: on load, rise from the horizon to the zenith while the welcome cue shows. */
+  skyIntro: boolean;
+  /** Seconds the gaze holds on the horizon before the rise starts. */
+  skyIntroDelay: number;
+  /** Seconds the rise takes, lengthened if need be so it never outruns skyIntroMaxDeg. */
+  skyIntroDuration: number;
+  /**
+   * The opening pan's own speed ceiling, degrees of sky per second. Separate
+   * from skyPanMaxDeg (the camera's cap for every other glide) so the rise can
+   * be brisker than a jump without loosening the camera.
+   */
+  skyIntroMaxDeg: number;
 }
 
 export const DEFAULT_TUNING: RevealTuning = {
@@ -114,6 +148,20 @@ export const DEFAULT_TUNING: RevealTuning = {
   fieldRecedeScale: 0.92,
   fieldRecedeBlur: 6,
   fieldRecedeDuration: 0.5,
+  // Night-sky field — values feel-tested in the 2026-09-28 mock.
+  skyField: false,
+  skyFovRest: 84,
+  skyFovLean: 64,
+  skyPanMaxDeg: 25,
+  skyPanOmega: 1.6,
+  sliderWeight: 0.6,
+  sliderGrabPx: 24,
+  flightBase: 0.6,
+  flightPerUnit: 0.35,
+  skyIntro: true,
+  skyIntroDelay: 0.2,
+  skyIntroDuration: 3.0,
+  skyIntroMaxDeg: 45,
 };
 
 const KEY = 'reveal-tuning';
@@ -174,4 +222,12 @@ export function useRevealTuning(): RevealTuning {
     };
   }, []);
   return tuning;
+}
+
+export function cameraParamsFrom(t: RevealTuning): CameraParams {
+  return { ...DEFAULT_CAMERA_PARAMS, fovRest: t.skyFovRest, fovLean: t.skyFovLean, maxDegPerSec: t.skyPanMaxDeg, omega: t.skyPanOmega };
+}
+
+export function sliderWeightFromTuning(t: RevealTuning): SliderWeight {
+  return sliderWeightFrom(t.sliderWeight, t.sliderGrabPx, t.flightBase, t.flightPerUnit);
 }

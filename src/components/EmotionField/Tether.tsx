@@ -2,21 +2,20 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { PinEntry } from '../../types';
 
-// Maps coordinate [-1, 1] to [5%, 95%] — matches EmotionField/EmotionWord.
-function toPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
-}
-
 interface Props {
   // The selected pin the thread connects to.
   pin: PinEntry;
-  // The left field plane, used to map the pin coordinate to pixels.
+  // The left field plane: the pin is found inside it and measured against it.
   fieldPlaneRef: React.RefObject<HTMLDivElement | null>;
   // The rail's scroll container. The selected card is found inside it by
   // data-pin-id, so the endpoint tracks the actual selected card and its scroll
   // position rather than a stale ref.
   railRef: React.RefObject<HTMLDivElement | null>;
   selectedPinId: string | null;
+  // Night sky: fade the thread out while the card's slider is dragging or a
+  // tap-to-fly flight moves the pin, and back in on release. It stays
+  // mounted (and measuring), so it returns where the pin is without a redraw.
+  hidden?: boolean;
 }
 
 interface Geo {
@@ -28,7 +27,7 @@ interface Geo {
 
 // A soft gold thread from the active pin to its card in the rail, so the card
 // reads as a margin note on a point in emotional space rather than a panel.
-export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
+export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId, hidden = false }: Props) {
   const [geo, setGeo] = useState<Geo | null>(null);
   const rafRef = useRef<number | null>(null);
   const reduce = useReducedMotion();
@@ -38,8 +37,17 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
       const plane = fieldPlaneRef.current;
       if (!plane) return;
       const rect = plane.getBoundingClientRect();
-      const px = (toPercent(pin.x) / 100) * rect.width;
-      const py = (toPercent(-pin.y) / 100) * rect.height;
+      // The pin's drawn position, not a recomputed one: the field may be
+      // drawn through the night-sky projection, which only EmotionField knows.
+      // The pin wrapper is a 0×0 box at the pin centre, so its left/top are
+      // the centre.
+      const pinEl = plane.querySelector(`[data-field-pin="${CSS.escape(pin.id)}"]`) as HTMLElement | null;
+      // No element: the pin isn't drawn this frame (behind the sky camera).
+      // Drop the thread rather than leave it pointing at a stale endpoint.
+      if (!pinEl) { setGeo(null); return; }
+      const pr = pinEl.getBoundingClientRect();
+      const px = pr.left - rect.left;
+      const py = pr.top - rect.top;
       // Fallback endpoint (no card found yet): the field plane's right
       // edge, which is where the rail — and the card inside it — normally
       // sit immediately adjacent to. Overridden below whenever the actual
@@ -86,9 +94,13 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
     if (rail) ro.observe(rail);
     rail?.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
+    // A night-sky camera frame moves the pin without re-rendering App, so the
+    // field announces each committed frame (EmotionField, sky mode only).
+    plane?.addEventListener('fieldprojectionchange', schedule);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       ro.disconnect();
+      plane?.removeEventListener('fieldprojectionchange', schedule);
       rail?.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
@@ -105,9 +117,13 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
   const d = `M ${px} ${py} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}`;
 
   return (
-    <svg
+    <motion.svg
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 3 }}
       aria-hidden="true"
+      data-tether=""
+      initial={false}
+      animate={{ opacity: hidden ? 0 : 1 }}
+      transition={{ duration: reduce ? 0 : 0.2, ease: 'easeOut' }}
     >
       <defs>
         <linearGradient id="tether-thread" x1="0" y1="0" x2="1" y2="0">
@@ -136,6 +152,6 @@ export function Tether({ pin, fieldPlaneRef, railRef, selectedPinId }: Props) {
         animate={{ opacity: 0.85 }}
         transition={{ duration: 0.35, delay: reduce ? 0 : 0.9 }}
       />
-    </svg>
+    </motion.svg>
   );
 }

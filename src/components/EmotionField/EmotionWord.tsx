@@ -11,8 +11,12 @@ interface Props {
   proximity: ProximityResult;
   isSelected: boolean;
   isHighlighted: boolean;
-  containerWidth: number;
-  containerHeight: number;
+  // Stage px of the dot — where the field's projection draws this word.
+  x: number;
+  y: number;
+  // Hide the dot but keep its layout, so the fan and landing measurements
+  // don't shift (the night-sky field draws its own star instead).
+  hideDot?: boolean;
   enterDelay?: number;
   animateIn?: boolean;
   // De-overlap displacement (px) applied to the label on top of the standoff.
@@ -72,11 +76,6 @@ const UNTAG_MS = 500;
 const TAG_RING_MS = 1300;
 const TAG_RING_SIZE = 30;
 
-// Map coordinate [-1, 1] to [5%, 95%] of container dimension
-function toPercent(v: number): number {
-  return 5 + ((v + 1) / 2) * 90;
-}
-
 // The label sits this many pixels above its dot. The dot marks the true
 // coordinate; the label is a callout anchored to it. A small, uniform standoff
 // keeps the dot visible at rest and primes the "label attached to a point"
@@ -110,9 +109,9 @@ function propsEqual(prev: Props, next: Props): boolean {
   return true;
 }
 
-export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSelected, isHighlighted, containerWidth, containerHeight, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
-  const left = (toPercent(emotion.x) / 100) * containerWidth;
-  const top = (toPercent(-emotion.y) / 100) * containerHeight; // invert Y: +valence = up
+export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSelected, isHighlighted, x, y, hideDot = false, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
+  const left = x;
+  const top = y;
 
   const { opacity, scale, isCandidate, nearness } = proximity;
 
@@ -130,8 +129,9 @@ export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSel
     const label = scope.root as HTMLSpanElement;
     const dot = dotRef.current;
     if (!letterReveal || !label || !dot) return;
-    // Both start hidden via their React style; the scope reveals them.
-    utils.set([label, dot], { opacity: 1 });
+    // Both start hidden via their React style; the scope reveals them. A
+    // hidden dot (hideDot) stays hidden: only the label is revealed.
+    utils.set(hideDot ? label : [label, dot], { opacity: 1 });
     if (reduced) return;
     const delay = enterDelay * 1000;
     const { chars } = splitText(label, { chars: { class: 'reveal-char' }, accessible: true });
@@ -145,7 +145,7 @@ export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSel
       // Drop the settled blur(0px) so resting letters carry no filter layer.
       onComplete: () => utils.set(chars, { filter: 'none' }),
     });
-    animate(dot, {
+    if (!hideDot) animate(dot, {
       opacity: [0, 1],
       boxShadow: [
         `0 0 0px ${themeRgba('text', 0)}`,
@@ -283,7 +283,7 @@ export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSel
       <span
         ref={dotRef}
         style={{
-          opacity: letterReveal ? 0 : undefined,
+          opacity: hideDot || letterReveal ? 0 : undefined,
           position: 'absolute',
           left: '50%',
           top: '50%',

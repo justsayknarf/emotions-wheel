@@ -20,13 +20,14 @@ How the palette flows from one catalogue to every surface, and what to do when t
 | Components and stylesheets | Write `var(--ui-gold)` for solids, `rgb(var(--ui-gold-rgb) / 0.3)` for alpha, `var(--ui-gold-hi)` for a highlight. Never a hex or `rgba()`. |
 | Canvas code | `themeRgba('gold', a)` from `src/config/themeColor.ts`, read at draw time (canvas cannot resolve `var()`). |
 | ShaderBackground | Reads the theme's shader block through `useTheme`. |
+| SkyAurora (sky mode) | Reads the theme's `sky*` shader fields through `useTheme`; edited in admin's shader Details → Night sky. |
 | Admin Color themes page | Lists tokens from `THEME_TOKENS`, derived channels from `DERIVED_TOKENS`, and marks the shipped theme. No edit needed when tokens change. |
 | DESIGN.md | Documents the default theme's palette in its frontmatter. Checked against the catalogue. |
 
 ## Changing the look
 
 1. **Tune it** on the admin Color themes page and press "Save to file". That writes `docs/handoff/theme-settings.json`.
-2. **Fold it in.** Copy the saved `vars` and shader values into that theme's `THEMES` entry. A shared change (body text contrast, say) goes in `BONE_TEXT` and reaches nine themes at once.
+2. **Fold it in.** Copy the saved `vars` and shader values into that theme's `THEMES` entry. The `sky*` values in the saved `shader` block fold into the theme's `mkShader(…, sky)` second argument. A shared change (body text contrast, say) goes in `BONE_TEXT` and reaches nine themes at once.
 3. **Ship it.** Set `DEFAULT_THEME_ID` if the shipped theme changes.
 4. **Sync.** `npm run sync:theme` regenerates `src/theme-tokens.css`.
 5. **Document.** Update the colors in DESIGN.md's frontmatter and prose (and `.impeccable/design.json` if you keep the sidecar).

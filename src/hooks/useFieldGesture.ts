@@ -16,6 +16,10 @@ interface Options {
   // tap), and again with `false` on release or cancel. Optional — callers
   // that don't care about the tap/drag distinction can omit it.
   onGestureActiveChange?: (active: boolean) => void;
+  // Converts a press, in container-local px, to a field coordinate. Defaults
+  // to the flat mapping (pixelToCoord). The night-sky field passes its
+  // projection's fromPx, where null means "not pressable here" (below the horizon).
+  toCoord?: (localX: number, localY: number, rect: DOMRect) => { x: number; y: number } | null;
 }
 
 // Exported for scripts/test-field-gesture.ts (U1): this repo has no
@@ -50,6 +54,7 @@ export function useFieldGesture({
   onFirstInteraction,
   hasInteracted,
   onGestureActiveChange,
+  toCoord,
 }: Options) {
   const [isPressed, setIsPressed] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -127,6 +132,7 @@ export function useFieldGesture({
     // below actually uses, so it's also what gates readiness.
     const rect = containerRef.current!.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
+    if (toCoord) return toCoord(e.clientX - rect.left, e.clientY - rect.top, rect);
     return pixelToCoord(e.clientX, e.clientY, rect, rect.width, rect.height);
   }
 

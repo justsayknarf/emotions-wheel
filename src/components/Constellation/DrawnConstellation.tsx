@@ -13,8 +13,19 @@ import {
   WORD_MS,
   RING_DELAY_MS,
   RING_MS,
-  TAIL_MS,
 } from './replaySchedule';
+import {
+  TAIL_MS,
+  STREAK_GLOW_WIDTH,
+  STREAK_GLOW_OPACITY,
+  STREAK_CORE_WIDTH,
+  GLOW_BLUR,
+  HEAD_GLOW_R,
+  HEAD_CORE_R,
+  QUIET_LINE_WIDTH,
+  QUIET_LINE_OPACITY,
+  STREAK_STOPS,
+} from './cometStyle';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -31,10 +42,8 @@ const SCRUB_STEPS = 1000;
 const RING_SIZE = 36;
 const RING_FROM_SCALE = 0.2;
 const RING_PEAK_OPACITY = 0.55;
-// The streak riding each line: the departure comet's proportions (its glow
-// width and opacity at the default strength) so the two trails read as one.
-const STREAK_GLOW_WIDTH = 5;
-const STREAK_GLOW_OPACITY = 0.35;
+// The streak riding each line takes its look from cometStyle (the departure
+// comet's proportions), shared with the night sky's drag trail and tag lines.
 
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
 
@@ -252,14 +261,13 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
               x2={`${p.lx}%`}
               y2={`${p.ly}%`}
             >
-              <stop offset="0" style={{ stopColor: 'rgb(var(--ui-recorded-rgb))', stopOpacity: 0.25 }} />
-              <stop offset="0.55" style={{ stopColor: 'rgb(var(--ui-recorded-rgb))', stopOpacity: 0.8 }} />
-              <stop offset="0.85" style={{ stopColor: 'rgb(var(--ui-gold-rgb))', stopOpacity: 0.95 }} />
-              <stop offset="1" style={{ stopColor: 'rgb(var(--ui-text-rgb))', stopOpacity: 1 }} />
+              {STREAK_STOPS.map((st) => (
+                <stop key={st.at} offset={`${st.at}`} style={{ stopColor: `rgb(var(--ui-${st.channel}-rgb))`, stopOpacity: st.alpha }} />
+              ))}
             </linearGradient>
           ))}
           <filter id={`rc-blur-${uid}`} filterUnits="userSpaceOnUse" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="3" />
+            <feGaussianBlur stdDeviation={`${GLOW_BLUR}`} />
           </filter>
         </defs>
         {points.slice(1).map((p, k) => {
@@ -271,7 +279,7 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
                 className="replay-line"
                 data-line={k}
                 {...ends}
-                style={{ stroke: 'rgb(var(--ui-recorded-rgb) / 0.45)', strokeWidth: 1.2, strokeLinecap: 'round' }}
+                style={{ stroke: `rgb(var(--ui-recorded-rgb) / ${QUIET_LINE_OPACITY})`, strokeWidth: QUIET_LINE_WIDTH, strokeLinecap: 'round' }}
               />
               <line
                 className="replay-glow"
@@ -282,9 +290,9 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
                 opacity={STREAK_GLOW_OPACITY}
                 filter={`url(#rc-blur-${uid})`}
               />
-              <line className="replay-streak" {...ends} stroke={grad} strokeWidth={1.75} strokeLinecap="round" />
-              <circle data-head={k} r={4.5} filter={`url(#rc-blur-${uid})`} style={{ fill: 'rgb(var(--ui-text-rgb))', opacity: 0 }} />
-              <circle data-head={k} r={2.2} style={{ fill: 'rgb(var(--ui-text-rgb))', opacity: 0 }} />
+              <line className="replay-streak" {...ends} stroke={grad} strokeWidth={STREAK_CORE_WIDTH} strokeLinecap="round" />
+              <circle data-head={k} r={HEAD_GLOW_R} filter={`url(#rc-blur-${uid})`} style={{ fill: 'rgb(var(--ui-text-rgb))', opacity: 0 }} />
+              <circle data-head={k} r={HEAD_CORE_R} style={{ fill: 'rgb(var(--ui-text-rgb))', opacity: 0 }} />
             </g>
           );
         })}

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { createDrawable, createMotionPath, createTimeline, spring, utils, type Timeline } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
+import { departureTailMs } from '../../utils/comet';
 
 type Pt = { x: number; y: number };
 
@@ -31,16 +32,6 @@ const MIN_DIST = 6;
 // Arrival spring for the bloom: near-critically damped, the same firm settle
 // as the pin landing (usePinLanding) — the sketch's 170/11 bounced.
 const settle = spring({ stiffness: 170, damping: 24 });
-
-// The old canvas streak erased `trail` of itself every frame (~60fps); its
-// visible length was the time until that decay left ~5%. The tail's catch-up
-// reuses that lifetime, so the admin slider keeps its meaning: higher
-// `trail` → shorter streak.
-function tailMs(trail: number) {
-  const d = Math.min(Math.max(trail, 0.01), 0.9);
-  const frames = Math.log(0.05) / Math.log(1 - d);
-  return Math.min(Math.max((frames / 60) * 1000, 150), 2500);
-}
 
 // Says "you moved from here" once, on commit, as a comet arcing from the
 // anchor to the newly departed pin — replacing an earlier arrow after a live
@@ -115,7 +106,7 @@ export function DepartureTrace({ play, from, to, size, toPx, travel, trail, hold
       const holdEnd = arrive + t.hold * 1000;
       const fade = Math.max(t.fadeOut * 1000, 1);
       const haloMs = Math.max(600, fade * 0.9);
-      const tail = tailMs(t.trail);
+      const tail = departureTailMs(t.trail);
       const end = Math.max(T + tail, holdEnd + fade, arrive + 50 + haloMs);
 
       const draws = createDrawable([path, glowPath]);

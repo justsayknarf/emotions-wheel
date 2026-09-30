@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AxisSlider } from './AxisSlider';
+import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import type { PinEntry } from '../../types';
 
 // Matches CoordinateCard.tsx's own FIELD_SERIF — this surface is for
@@ -94,6 +95,10 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
   ref,
 ) {
   const reduced = useReducedMotion();
+  // Night-sky mode weights the sliders (drag chases, tap flies); flat keeps
+  // them jumping to the pointer.
+  const tuning = useRevealTuning();
+  const weight = useMemo(() => (tuning.skyField ? sliderWeightFromTuning(tuning) : undefined), [tuning]);
 
   // Live drag draft — mirrors CoordinateCard's own draft/draftRef pattern so
   // the untouched axis is taken from the latest in-flight value even when
@@ -115,8 +120,35 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
   const originX = pin ? (pin.origin?.x ?? pin.x) : anchor.x;
   const originY = pin ? (pin.origin?.y ?? pin.y) : anchor.y;
 
+  // The coordinate this card last committed, stamped with the base it was
+  // committed against. A commit reaches App through onDepart/onAdjust, but
+  // `pin` only catches up on App's next render — and in sky mode the sibling
+  // slider's flight can tick in that same frame. Until the base moves, this
+  // is the truth; once it does (the minted pin arrived, or App caught up) the
+  // prop is. Mirrors CoordinateCard's committedRef.
+  const committedRef = useRef<{ fromId: string | null; fromX: number; fromY: number; x: number; y: number } | null>(null);
+  // True between an onDepart and the render that hands the minted pin back:
+  // the frames in between still see `pin` as null, and must neither mint a
+  // second pin nor reopen the pre-mint departure preview. A commit that lands
+  // in that window waits here and is applied to the pin once it arrives.
+  const departPendingRef = useRef(false);
+  const pendingAdjustRef = useRef<{ x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    // Any render after a commit has App's answer: the pin, or a refusal. The
+    // committed stamp only bridges the frames before it — cleared here so it
+    // can't outlive them (after Discard, `base` is the anchor again and would
+    // match a stale pre-mint stamp).
+    departPendingRef.current = false;
+    committedRef.current = null;
+    const pending = pendingAdjustRef.current;
+    pendingAdjustRef.current = null;
+    if (pending && pin) onAdjust(pin.id, pending.x, pending.y);
+  });
+
   const nextFrom = (axis: 'x' | 'y', v: number) => {
-    const from = draftRef.current ?? { x: base.x, y: base.y };
+    const c = committedRef.current;
+    const committed = c && c.fromId === (pin?.id ?? null) && c.fromX === base.x && c.fromY === base.y ? c : null;
+    const from = draftRef.current ?? committed ?? { x: base.x, y: base.y };
     return { x: axis === 'x' ? v : from.x, y: axis === 'y' ? v : from.y };
   };
 
@@ -126,18 +158,25 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
     setDraft(next);
     setDraggingAxis(axis);
     if (pin) onAdjustDraft?.({ pinId: pin.id, ...next });
-    else onDepartureDrag?.(next);
+    else if (!departPendingRef.current) onDepartureDrag?.(next);
   };
   const commitDeparture = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
+    committedRef.current = { fromId: pin?.id ?? null, fromX: base.x, fromY: base.y, ...next };
     draftRef.current = null;
     setDraft(null);
     setDraggingAxis(null);
+    if (!pin && departPendingRef.current) {
+      // The first axis already minted; this one lands on that pin next render.
+      pendingAdjustRef.current = next;
+      return;
+    }
     if (pin) {
       onAdjustDraft?.(null);
       onAdjust(pin.id, next.x, next.y);
     } else {
       onDepartureDrag?.(null);
+      departPendingRef.current = true;
       onDepart(next.x, next.y);
     }
   };
@@ -227,6 +266,7 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
           onCancel={cancelDeparture}
           opacity={draggingAxis !== null && draggingAxis !== 'x' ? 0.3 : 1}
           reducedMotion={!!reduced}
+          weight={weight}
         />
         <AxisSlider
           labelLow="Negative"
@@ -239,6 +279,7 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
           onCancel={cancelDeparture}
           opacity={draggingAxis !== null && draggingAxis !== 'y' ? 0.3 : 1}
           reducedMotion={!!reduced}
+          weight={weight}
         />
         {/* No "reopen this entry instead" link here — this landing is
             centered, alone, with nothing to distinguish it from an ordinary

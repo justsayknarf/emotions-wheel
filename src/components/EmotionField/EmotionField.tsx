@@ -1,9 +1,11 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { animate } from 'animejs';
+import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { emotions } from '../../data/emotions';
 import { getRegionDescription } from '../../data/regions';
-import { findNearbyPin } from '../../data/checkIn';
+import { findNearbyPinPx } from '../../data/checkIn';
 import { useProximity, VISIBILITY_RADIUS, DEEP_REVEAL_CAP } from '../../hooks/useProximity';
 import { useFieldGesture } from '../../hooks/useFieldGesture';
 import { EmotionWord, LABEL_STANDOFF, type TagPulse } from './EmotionWord';
@@ -15,9 +17,16 @@ import { FieldSignal } from './FieldSignal';
 import { FieldAura } from './FieldAura';
 import { AxisRadiance } from './AxisRadiance';
 import { DepartureTrace } from './DepartureTrace';
+import { SkyBackdrop, type ConstellationStar, type SkyDeparture } from './SkyBackdrop';
+import { SkyAurora, type SkyAuroraInputs } from './SkyAurora';
+import { canUseWebGL } from './skyShader';
 import { usePinLanding, PIN_RING_SIZE } from './usePinLanding';
-import { useRevealTuning } from '../../config/revealTuning';
+import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { toPercent } from '../../utils/fieldGeometry';
+import { flatProjection, skyProjection } from '../../utils/skyProjection';
+import { cameraTarget, degToField } from '../../utils/skyCamera';
+import { useSkyCamera } from './useSkyCamera';
+import { clampIntroDuration, introStart, type IntroSpec } from '../../utils/skyIntro';
 
 // A revealed label draws a tether back to its dot once it sits this far from the
 // coordinate. Above the resting standoff (so a merely-lifted label has none),
@@ -58,7 +67,8 @@ interface Props {
   tagPulse?: TagPulse | null;
   onPinRelease: (entry: PinEntry) => void;
   // R15: a release that lands on an existing (draft) pin selects it instead
-  // of minting a new one — see handleRelease's hit-test via findNearbyPin.
+  // of minting a new one — see handleRelease's hit-test via findNearbyPinPx,
+  // measured where the pins actually draw.
   onPinSelect: (pinId: string) => void;
   onFirstInteraction?: () => void;
   hasInteracted: boolean;
@@ -122,6 +132,16 @@ interface Props {
   // drives below, so the cursor/hover ring don't imply a click here would
   // do something.
   dropDisabled?: boolean;
+  // Night sky, phone layout: the stage-px y at which the bottom tray's resting
+  // top edge covers the stage (the field runs on behind it). The camera
+  // centres on the sky above it rather than on the whole stage. Null or
+  // omitted: nothing covers the stage.
+  skyOccluderTop?: number | null;
+  // Bumped once per saved check-in: the night sky's aurora swells once (living-sky R11).
+  skySwellPlay?: number;
+  // Open with the rise from the Negative horizon to the still point (sky
+  // mode only). Read once at mount; App passes it while the welcome shows.
+  skyIntro?: boolean;
 }
 
 export function EmotionField({
@@ -144,18 +164,68 @@ export function EmotionField({
   recedeProgress = 0,
   departureDraft = null,
   dropDisabled = false,
+  skyOccluderTop = null,
+  skySwellPlay = 0,
+  skyIntro = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const tuning = useRevealTuning();
   const reducedMotion = useReducedMotion();
-  // Field-space [-1,1] -> container px. Recreated each render (cheap, no
-  // memo) — used by the always-mounted DepartureTrace below the same way
-  // the adjust overlay and recorded-pin blocks already convert inline.
-  const toFieldPx = (c: { x: number; y: number }) => ({
-    x: (toPercent(c.x) / 100) * size.width,
-    y: (toPercent(-c.y) / 100) * size.height,
+  // Every coordinate → px placement in this field goes through `proj`, so
+  // the flat field and the night-sky field share one code path. In sky mode
+  // `proj` changes every camera frame (useSkyCamera); in flat mode it only
+  // changes with the stage size.
+  const sky = tuning.skyField;
+  const cameraParams = useMemo(() => cameraParamsFrom(tuning), [tuning]);
+  const newestDraftPin = pins.length ? pins[pins.length - 1] : null;
+  // The emphasized pin, whichever group it belongs to (draft or recorded).
+  const emphasizedAny = emphasizedPinId
+    ? pins.find((p) => p.id === emphasizedPinId) ?? recordedPins.find((p) => p.id === emphasizedPinId) ?? null
+    : null;
+  const skyTarget = cameraTarget({
+    liveDraft: departureDraft ?? adjustDraft,
+    emphasizedPin: emphasizedAny,
+    newestDraftPin,
+    recordedAnchor: recordedPins.length ? recordedPins[recordedPins.length - 1] : null,
   });
+  // The visible band of sky: everything above the tray's top edge. A tray
+  // that sits below the stage (or no tray) leaves the whole stage.
+  const skyViewport = useMemo(
+    () => (skyOccluderTop !== null && size.height > 0 && skyOccluderTop < size.height - 0.5
+      ? { top: 0, height: Math.max(size.height * 0.25, skyOccluderTop) }
+      : null),
+    [skyOccluderTop, size.height],
+  );
+  const [introSpec] = useState<IntroSpec | null>(() =>
+    sky && skyIntro && tuning.skyIntro
+      // Clamped so no admin duration outruns the opening pan's own ceiling
+      // (R13), skyIntroMaxDeg — not the camera's pan cap, which governs
+      // every other glide.
+      ? clampIntroDuration(
+          { from: introStart(cameraParams.lookMax), to: { x: 0, y: 0 }, delayS: tuning.skyIntroDelay, durationS: tuning.skyIntroDuration },
+          degToField(tuning.skyIntroMaxDeg),
+        )
+      : null,
+  );
+  // useFieldGesture (isPressed) runs after the camera, so a press reaches
+  // the intro through this ref, written in the aurora layout effect below.
+  // It latches: a tap whose down and up both land between two camera ticks
+  // (a load-time stall) would otherwise read false; a pin planted since
+  // mount counts as interaction too.
+  const introInterrupt = useRef(false);
+  const [mountPinCount] = useState(pins.length);
+  const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
+    enabled: sky,
+    target: skyTarget,
+    lean: pins.length > 0 || departureDraft !== null,
+    params: cameraParams,
+    size,
+    viewport: skyViewport,
+    intro: introSpec,
+    interruptRef: introInterrupt,
+  });
+  const toFieldPx = (c: { x: number; y: number }) => proj.toPx(c);
 
   // U1: this stays the source of truth for layout math (word/pin positions,
   // fan geometry, etc. below) — it is NOT used for gesture-time coordinate
@@ -174,6 +244,14 @@ export function EmotionField({
     return () => obs.disconnect();
   }, []);
 
+  // Things outside the field that measure drawn positions from the DOM (the
+  // rail Tether reads [data-field-pin]) can't see a camera frame: App doesn't
+  // re-render for one. Tell them, once the frame's positions are committed.
+  useLayoutEffect(() => {
+    if (!sky) return;
+    containerRef.current?.dispatchEvent(new CustomEvent('fieldprojectionchange', { bubbles: true }));
+  }, [sky, proj]);
+
   const handleRelease = useCallback((center: { x: number; y: number }) => {
     // R15: before minting a new pin, check whether the release lands close
     // enough to an existing pin — draft or recorded — to select it instead.
@@ -183,7 +261,7 @@ export function EmotionField({
     // throughout (U4): searching both arrays here does not fold recordedPins
     // into `pins` itself, so selectedIds/pairIds/deepOpacityMap/fociPx above
     // still derive from draft pins only.
-    const nearby = findNearbyPin(center, [...pins, ...recordedPins], size);
+    const nearby = findNearbyPinPx(proj.toPx(center), [...pins, ...recordedPins], proj);
     if (nearby) {
       onPinSelect(nearby.id);
       return;
@@ -200,11 +278,11 @@ export function EmotionField({
       regionDescription: getRegionDescription(center.x, center.y, emotions),
     };
     onPinRelease(entry);
-  }, [onPinRelease, onPinSelect, pins, recordedPins, size]);
+  }, [onPinRelease, onPinSelect, pins, recordedPins, proj]);
 
   // Pin lands, field notices (usePinLanding). Its anime scope is rooted at the
   // field container, so the container takes both refs.
-  const landingRootRef = usePinLanding(pins, size, surfaceEmotions);
+  const landingRootRef = usePinLanding(pins, size, surfaceEmotions, proj);
   const setContainerRef = useCallback((el: HTMLDivElement | null) => {
     containerRef.current = el;
     landingRootRef.current = el;
@@ -216,6 +294,17 @@ export function EmotionField({
     onFirstInteraction,
     hasInteracted,
     onGestureActiveChange,
+    // Presses arrive in the (possibly transformed) rect's px; rescale them to
+    // layout px, the space `proj` works in. Before ResizeObserver's first
+    // callback `size` is still 0, so fall back to a projection over the rect
+    // itself — the flat mapping, exactly what getCoord computed before, or
+    // the sky from the camera's current gaze.
+    toCoord: (lx, ly, rect) =>
+      size.width === 0 || size.height === 0
+        ? sky
+          ? skyProjection({ look: skyLook, fovDeg: skyFovDeg, width: rect.width, height: rect.height }).fromPx(lx, ly)
+          : flatProjection(rect).fromPx(lx, ly)
+        : proj.fromPx(lx * (size.width / rect.width), ly * (size.height / rect.height)),
   });
   // U1: hover-only (no active press) — the receded field's pointer/hover
   // affordance should read as "backgrounded but reachable," not fight with
@@ -243,6 +332,44 @@ export function EmotionField({
   // already yours, the cool recorded hue for a coordinate that isn't yet.
   const liveDraft = departureDraft ?? adjustDraft;
   const liveDraftAccent: 'gold' | 'recorded' = departureDraft ? 'recorded' : 'gold';
+
+  // The WebGL sky beneath the stars (SkyAurora). WebGL decided once per
+  // mount; without it the 2D backdrop paints the sky (R7). Per-frame values
+  // reach the shader through this ref, never props, so a camera frame
+  // re-renders nothing but this field.
+  const [webgl, setWebgl] = useState(() => sky && canUseWebGL());
+  const onAuroraUnavailable = useCallback(() => setWebgl(false), []);
+  const auroraInputs = useRef<SkyAuroraInputs>({ proj, moving: false, swell: 0 });
+  // R3F's invalidate, for reduced motion's frameloop="demand".
+  const auroraInvalidate = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const moving = isPressed || liveDraft !== null;
+    const moved = auroraInputs.current.proj !== proj || auroraInputs.current.moving !== moving;
+    auroraInputs.current.proj = proj;
+    auroraInputs.current.moving = moving;
+    if (moving || pins.length !== mountPinCount) introInterrupt.current = true;
+    if (moved && reducedMotion) auroraInvalidate.current?.();
+  });
+
+  // One saved check-in → one swell: the aurora brightens and settles.
+  const swellTarget = useRef({ v: 0 });
+  const swellAnim = useRef<{ cancel: () => unknown } | null>(null);
+  const { root: swellRoot, scope: swellScope } = useAnimeScope<HTMLDivElement>((scope, reduced) => {
+    scope.add('swell', () => {
+      if (reduced) return; // no swell under reduced motion (R11)
+      // A second save mid-swell stops the first; the new one starts from the
+      // current value, so the envelope never jumps and always ends at 0.
+      swellAnim.current?.cancel();
+      swellAnim.current = animate(swellTarget.current, {
+        v: [{ to: 1, duration: 800, ease: 'out(2)' }, { to: 0, duration: 2400, ease: 'inOut(2)' }],
+        onUpdate: () => { auroraInputs.current.swell = swellTarget.current.v; },
+      });
+    });
+  }, []);
+  useEffect(() => {
+    if (skySwellPlay > 0) swellScope.current?.methods.swell();
+  }, [skySwellPlay, swellScope]);
+
   // A departure/adjust drag takes over as the reveal center whenever it's
   // active — press-equivalent (not hover-equivalent), same as the field's
   // own onPointerDown already treats a real press. liveDraft and a field
@@ -351,16 +478,58 @@ export function EmotionField({
   // re-derives it at the new spot. Kept, it doubled the revealed words (the
   // live neighbourhood plus the old one) and the fan flung them all far out.
   // Tagged words (selectedIds) stay: they are the user's choice, not a guess.
+  // Words behind the sky camera don't render.
   const revealedDeep = useMemo(
     () =>
       deepEmotions.filter(
         (e) =>
-          dwellOpacityMap.has(e.id) ||
-          deepOpacityMap.has(e.id) ||
-          selectedIds.has(e.id) ||
-          (!adjustDraft && highlightedIds.has(e.id)),
+          (dwellOpacityMap.has(e.id) ||
+            deepOpacityMap.has(e.id) ||
+            selectedIds.has(e.id) ||
+            (!adjustDraft && highlightedIds.has(e.id))) &&
+          proj.toPx(e).visible,
       ),
-    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds, adjustDraft],
+    [dwellOpacityMap, deepOpacityMap, selectedIds, highlightedIds, adjustDraft, proj],
+  );
+
+  // The sky's stars (R6) and constellation chain (R8). Sky mode only reads them.
+  const revealedIds = useMemo(() => new Set(revealedDeep.map((e) => e.id)), [revealedDeep]);
+  const skyStars = useMemo(
+    () => emotions.map((e) => ({ id: e.id, x: e.x, y: e.y, surface: e.depth === 'surface', tagged: selectedIds.has(e.id), revealed: revealedIds.has(e.id) })),
+    [selectedIds, revealedIds],
+  );
+  // The chain for the pin the user is looking at: the emphasized pin, else the
+  // only draft pin. Tag order is recognizedWords order.
+  const constellationPin = emphasizedAny ?? (pins.length === 1 ? pins[0] : null);
+  // Each star keyed so SkyBackdrop knows a segment across renders (a new one
+  // animates in, one already there draws at rest).
+  const constellation = useMemo<ConstellationStar[]>(() => {
+    if (!constellationPin) return [];
+    const byId = new Map(emotions.map((e) => [e.id, e]));
+    return [
+      { key: `pin:${constellationPin.id}`, x: constellationPin.x, y: constellationPin.y },
+      ...constellationPin.recognizedWords
+        .map((id) => byId.get(id))
+        .filter((e): e is NonNullable<typeof e> => !!e)
+        .map((e) => ({ key: e.id, x: e.x, y: e.y })),
+    ];
+  }, [constellationPin]);
+
+  // The departure comet in the sky (R10) draws on SkyBackdrop's canvas, its
+  // ends re-projected every frame as the camera glides to the new pin; the
+  // flat field's DepartureTrace measures px once at play-start instead.
+  const skyDeparture = useMemo<SkyDeparture>(
+    () => ({
+      play: departureTracePlay,
+      from: departureTraceFrom,
+      to: departureTraceTo,
+      travel: tuning.departureTravel,
+      trail: tuning.departureTrail,
+      hold: tuning.departureHold,
+      fadeOut: tuning.departureFadeOut,
+      strength: tuning.departureStrength,
+    }),
+    [departureTracePlay, departureTraceFrom, departureTraceTo, tuning.departureTravel, tuning.departureTrail, tuning.departureHold, tuning.departureFadeOut, tuning.departureStrength],
   );
 
   // Live cursor proximity for the revealed deep words, so they react to the
@@ -391,31 +560,32 @@ export function EmotionField({
   const recordedAnchor = recordedPins.length > 0 ? recordedPins[recordedPins.length - 1] : null;
   const fociPx = useMemo(() => {
     if (size.width === 0) return [] as Array<{ x: number; y: number }>;
-    const toPx = (c: { x: number; y: number }) => ({
-      x: (toPercent(c.x) / 100) * size.width,
-      y: (toPercent(-c.y) / 100) * size.height,
-    });
     const arr: Array<{ x: number; y: number }> = [];
-    if (dwellCenter) arr.push(toPx(dwellCenter));
+    // A focus behind the sky camera has no screen position to fan out of.
+    const push = (c: { x: number; y: number }) => {
+      const p = proj.toPx(c);
+      if (p.visible) arr.push({ x: p.x, y: p.y });
+    };
+    if (dwellCenter) push(dwellCenter);
     // Without this, a deep word revealed by a departure drag (no pin, no
     // dwell) would fan out of computeRadialFan's no-focus fallback (the
     // revealed dots' centroid) rather than out of the live coordinate.
-    if (departureDraft) arr.push(toPx(departureDraft));
+    if (departureDraft) push(departureDraft);
     // Same live-position substitution as deepOpacityMap above — an adjust
     // drag fans out from where the pin actually is right now, not its
     // stale pre-drag position.
     if (emphasizedPinId) {
       if (adjustDraft) {
-        arr.push(toPx(adjustDraft));
+        push(adjustDraft);
       } else {
         const emphasizedPin = pins.find((p) => p.id === emphasizedPinId) ?? emphasizedRecordedPin;
-        if (emphasizedPin) arr.push(toPx(emphasizedPin));
+        if (emphasizedPin) push(emphasizedPin);
       }
     } else {
-      for (const p of pins) arr.push(toPx(p));
+      for (const p of pins) push(p);
     }
     return arr;
-  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, emphasizedRecordedPin, size.width, size.height]);
+  }, [dwellCenter, departureDraft, adjustDraft, pins, emphasizedPinId, emphasizedRecordedPin, size.width, proj]);
 
   // Lay the revealed labels out as a fan around their nearest focus: each rides
   // a ray out of the cursor/pin, with a no-crossing pass so their tethers never
@@ -429,22 +599,27 @@ export function EmotionField({
   const anchorMark = useMemo(() => {
     if (!recordedAnchor || size.width === 0) return null;
     const ringSize = recordedAnchor.id === emphasizedPinId ? ANCHOR_RING_SIZE.emphasized : ANCHOR_RING_SIZE.rest;
-    const x = (toPercent(recordedAnchor.x) / 100) * size.width;
-    const y = (toPercent(-recordedAnchor.y) / 100) * size.height;
+    const { x, y, visible } = proj.toPx(recordedAnchor);
+    // Behind the sky camera the mark doesn't draw, so it is no obstacle.
+    if (!visible) return null;
     const label = previousCheckInLabel
       ? placeAnchorLabel(
           { x, y, size: ringSize },
           (previousCheckInLabel.length * ANCHOR_LABEL_CHAR_W) / 2,
-          surfaceEmotions.map((e) => ({
-            x: (toPercent(e.x) / 100) * size.width,
-            y: (toPercent(-e.y) / 100) * size.height - LABEL_STANDOFF,
-            halfW: labelHalfWidth(e.label, e.depth),
-            halfH: LABEL_LINE_H / 2,
-          })),
+          surfaceEmotions.flatMap((e) => {
+            const p = proj.toPx(e);
+            if (!p.visible) return [];
+            return {
+              x: p.x,
+              y: p.y - LABEL_STANDOFF,
+              halfW: labelHalfWidth(e.label, e.depth),
+              halfH: LABEL_LINE_H / 2,
+            };
+          }),
         )
       : null;
     return { id: recordedAnchor.id, x, y, ringSize, label };
-  }, [recordedAnchor, emphasizedPinId, previousCheckInLabel, size.width, size.height]);
+  }, [recordedAnchor, emphasizedPinId, previousCheckInLabel, size.width, proj]);
 
   const deepLabelOffsets = useMemo(() => {
     if (size.width === 0 || revealedDeep.length === 0) {
@@ -454,8 +629,7 @@ export function EmotionField({
       e: (typeof emotions)[number],
       movable: boolean,
     ): FanBox => {
-      const dotX = (toPercent(e.x) / 100) * size.width;
-      const dotY = (toPercent(-e.y) / 100) * size.height;
+      const { x: dotX, y: dotY } = proj.toPx(e);
       return {
         id: e.id,
         dotX,
@@ -467,8 +641,9 @@ export function EmotionField({
         movable,
       };
     };
+    // Surface words behind the sky camera don't draw, so they're no obstacle.
     const boxes: FanBox[] = [
-      ...surfaceEmotions.map((e) => fanBox(e, false)),
+      ...surfaceEmotions.filter((e) => proj.toPx(e).visible).map((e) => fanBox(e, false)),
       ...revealedDeep.map((e) => fanBox(e, true)),
     ];
     // The anchor mark's ring and day label are fixed obstacles too, so no
@@ -487,7 +662,7 @@ export function EmotionField({
     // is not square. Only words inside it set that focus's ring.
     const reach = VISIBILITY_RADIUS * 0.45 * Math.max(size.width, size.height);
     return computeRadialFan(boxes, fociPx, tuning, reach);
-  }, [revealedDeep, fociPx, anchorMark, size.width, size.height, tuning]);
+  }, [revealedDeep, fociPx, anchorMark, size.width, size.height, proj, tuning]);
 
   // A tether is drawn (and then faded) from each fanned label back to its dot,
   // staggered so the nearest word to a focus draws first.
@@ -499,8 +674,7 @@ export function EmotionField({
       const dispX = o.dx;
       const dispY = o.dy - LABEL_STANDOFF;
       if (Math.hypot(dispX, dispY) <= TETHER_THRESHOLD) continue;
-      const cx = (toPercent(e.x) / 100) * size.width;
-      const cyCoord = (toPercent(-e.y) / 100) * size.height;
+      const { x: cx, y: cyCoord } = proj.toPx(e);
       const d = fociPx.length
         ? Math.min(...fociPx.map((f) => Math.hypot(cx - f.x, cyCoord - f.y)))
         : 0;
@@ -531,7 +705,7 @@ export function EmotionField({
     }
     raw.sort((a, b) => a.d - b.d);
     return raw.map(({ seg }, i) => ({ ...seg, delay: i * tuning.staggerStep }));
-  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, size.height, tuning]);
+  }, [revealedDeep, deepLabelOffsets, fociPx, size.width, proj, tuning]);
 
   // Axes read legibly at rest and brighten (emphasis) while the intro runs.
   const crosshairColor = `rgb(var(--ui-gold-rgb) / ${axisEmphasis ? 0.22 : 0.1})`;
@@ -581,32 +755,55 @@ export function EmotionField({
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}
     >
-      {/* Ambient watercolor aura — the deepest layer, pure background mood */}
-      <FieldAura />
+      <div ref={swellRoot} style={{ display: 'none' }} />
+      {/* The night sky itself — beneath words, pins and labels (Task 7). */}
+      {sky && webgl && <SkyAurora inputs={auroraInputs} invalidateRef={auroraInvalidate} reducedMotion={!!reducedMotion} onUnavailable={onAuroraUnavailable} />}
+      {sky && (
+        <SkyBackdrop
+          proj={proj}
+          size={size}
+          stars={skyStars}
+          constellation={constellation}
+          departure={skyDeparture}
+          reducedMotion={!!reducedMotion}
+          paintSky={!webgl}
+        />
+      )}
 
-      {/* Light-signaling — still-center pool + outward intensity gradient,
-          beneath every other layer (U4) */}
-      <FieldSignal />
+      {/* The flat field's own layers. The night sky (skyField) draws none of
+          them: the aura, the signal, the crosshairs and the radiance all
+          assume a flat plane with a fixed centre. */}
+      {!sky && (
+        <>
+          {/* Ambient watercolor aura — the deepest layer, pure background mood */}
+          <FieldAura />
 
-      {/* Crosshairs — the resting axis lines (emphasis brightens their colour). */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+          {/* Light-signaling — still-center pool + outward intensity gradient,
+              beneath every other layer (U4) */}
+          <FieldSignal />
 
-      {/* Radiating light — a soft glow pulses from the centre out to the labels
-          (vertical pair first, then horizontal), drawn as an additive canvas
-          trail so it reads as continuous light rather than dots. */}
-      <AxisRadiance
-        play={play}
-        delay={tuning.axisPulseDelay}
-        stagger={tuning.axisPulseStagger}
-        duration={tuning.axisPulseDuration}
-        strength={tuning.axisPulseStrength}
-      />
+          {/* Crosshairs — the resting axis lines (emphasis brightens their colour). */}
+          <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+          <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: crosshairColor, pointerEvents: 'none', zIndex: 1, transition: `background ${tuning.axisFade}s ease` }} />
+
+          {/* Radiating light — a soft glow pulses from the centre out to the labels
+              (vertical pair first, then horizontal), drawn as an additive canvas
+              trail so it reads as continuous light rather than dots. */}
+          <AxisRadiance
+            play={play}
+            delay={tuning.axisPulseDelay}
+            stagger={tuning.axisPulseStagger}
+            duration={tuning.axisPulseDuration}
+            strength={tuning.axisPulseStrength}
+          />
+        </>
+      )}
 
       {/* Departure connector (U6/R6) — always mounted, self-gating on
-          `play`, same shape as AxisRadiance above. */}
+          `play`, same shape as AxisRadiance above. Flat only: the sky draws
+          its own on SkyBackdrop (see skyDeparture). */}
       <DepartureTrace
-        play={departureTracePlay}
+        play={sky ? 0 : departureTracePlay}
         from={departureTraceFrom}
         to={departureTraceTo}
         size={size}
@@ -632,8 +829,9 @@ export function EmotionField({
         Activated
       </motion.div>
 
-      {/* Axis position indicators — visible only while dragging */}
-      {isRevealed && revealCenter && (
+      {/* Axis position indicators — visible only while dragging. Flat only:
+          in the sky the edges no longer map linearly to a coordinate. */}
+      {!sky && isRevealed && revealCenter && (
         <>
           {/* Arousal: slides left–right along the bottom edge */}
           <div style={{
@@ -681,20 +879,25 @@ export function EmotionField({
           {/* Surface emotions — always ambient at low opacity, brighten near cursor.
               Each sits in a zero-size wrapper that usePinLanding leans toward a
               landing pin, clear of the transforms framer drives inside. */}
-          {surfaceEmotions.map((emotion) => (
-            <div key={emotion.id} data-lean-word={emotion.id} style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }}>
-              <EmotionWord
-                emotion={emotion}
-                proximity={proximity.get(emotion.id)!}
-                isSelected={selectedIds.has(emotion.id)}
-                isHighlighted={highlightedIds.has(emotion.id)}
-                containerWidth={size.width}
-                containerHeight={size.height}
-                emphasis={pairIds.has(emotion.id) ? 'pair' : null}
-                tagPulse={tagPulse?.id === emotion.id ? tagPulse : null}
-              />
-            </div>
-          ))}
+          {surfaceEmotions.map((emotion) => {
+            const at = proj.toPx(emotion);
+            if (!at.visible) return null;
+            return (
+              <div key={emotion.id} data-lean-word={emotion.id} style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }}>
+                <EmotionWord
+                  emotion={emotion}
+                  proximity={proximity.get(emotion.id)!}
+                  isSelected={selectedIds.has(emotion.id)}
+                  isHighlighted={highlightedIds.has(emotion.id)}
+                  x={at.x}
+                  y={at.y}
+                  hideDot={sky}
+                  emphasis={pairIds.has(emotion.id) ? 'pair' : null}
+                  tagPulse={tagPulse?.id === emotion.id ? tagPulse : null}
+                />
+              </div>
+            );
+          })}
 
           {/* Deep emotions — revealed near dwell/pins; fade in on mount, out on unmount */}
           <AnimatePresence>
@@ -707,6 +910,7 @@ export function EmotionField({
                 const enterDelay = !isFixed && dwell ? dwell.rank * 0.08 : 0;
                 // Reveal drives opacity; the live cursor drives size + colour.
                 const live = deepProximity.get(e.id);
+                const at = proj.toPx(e);
                 return (
                   <EmotionWord
                     key={e.id}
@@ -714,8 +918,9 @@ export function EmotionField({
                     proximity={{ opacity, scale: live?.scale ?? 1, isCandidate: false, nearness: live?.nearness ?? 0 }}
                     isSelected={selectedIds.has(e.id)}
                     isHighlighted={highlightedIds.has(e.id)}
-                    containerWidth={size.width}
-                    containerHeight={size.height}
+                    x={at.x}
+                    y={at.y}
+                    hideDot={sky}
                     enterDelay={enterDelay}
                     animateIn
                     offset={deepLabelOffsets.get(e.id)}
@@ -728,8 +933,8 @@ export function EmotionField({
           </AnimatePresence>
 
           {pins.map((pin) => {
-            const px = (toPercent(pin.x) / 100) * size.width;
-            const py = (toPercent(-pin.y) / 100) * size.height;
+            const { x: px, y: py, visible } = proj.toPx(pin);
+            if (!visible) return null;
             const isEmphasized = pin.id === emphasizedPinId;
             const dotSize = isEmphasized ? 7 : 4;
             return (
@@ -850,8 +1055,8 @@ export function EmotionField({
               the filled-dot treatment (LC3) and their own breathing halo
               unchanged, below. */}
           {recordedPins.map((pin, i) => {
-            const px = (toPercent(pin.x) / 100) * size.width;
-            const py = (toPercent(-pin.y) / 100) * size.height;
+            const { x: px, y: py, visible } = proj.toPx(pin);
+            if (!visible) return null;
             const isEmphasized = pin.id === emphasizedPinId;
             const isAnchor = i === recordedPins.length - 1;
 

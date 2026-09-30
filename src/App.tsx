@@ -14,6 +14,7 @@ import type { TagPulse } from './components/EmotionField/EmotionWord';
 import { ShaderBackground } from './components/ShaderBackground/ShaderBackground';
 import { EmotionDrawer, RAIL_WIDTH, PEEK_BAR_HEIGHT, PEEK_SAFE_PAD } from './components/EmotionPreview/EmotionDrawer';
 import { DefinitionCardSequence } from './components/DefinitionCard/DefinitionCardSequence';
+import { Settings } from './components/Settings/Settings';
 import { DiaryHistory } from './components/DiaryHistory/DiaryHistory';
 import { FirstRunDemo } from './components/EmotionMirror/FirstRunDemo';
 import { WelcomeOverlay } from './components/Welcome/WelcomeOverlay';
@@ -88,6 +89,8 @@ export default function App() {
   // a reopen's temporary exclusion — so staleness resolves through that
   // existing derivation rather than needing its own reset logic here.
   const [justSavedEntryId, setJustSavedEntryId] = useState<string | null>(null);
+  // One saved check-in → one swell of the night sky's aurora (living-sky R11).
+  const [skySwellPlay, setSkySwellPlay] = useState(0);
   const sessionStartRef = useRef<number>(0);
   const fieldPlaneRef = useRef<HTMLDivElement>(null);
   const railScrollRef = useRef<HTMLDivElement>(null);
@@ -135,6 +138,9 @@ export default function App() {
   // until measured (first paint) or whenever no focus card is mounted —
   // WelcomeOverlay falls back to a fixed offset in either case.
   const [focusCardTop, setFocusCardTop] = useState<number | null>(null);
+  // The mobile sheet's resting top edge (EmotionDrawer's onSheetTopChange),
+  // so the night-sky camera centres on the sky left visible above it.
+  const [sheetTop, setSheetTop] = useState<number | null>(null);
   const [welcomeNonce] = useState(0);
 
   // The axis pulse is a separate lifecycle from the welcome message: it begins
@@ -445,14 +451,11 @@ export default function App() {
   // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
   // pair it draws between.
   //
-  // review-fix (2026-09-03, single-pin-checkin follow-up): under the
-  // single-pin model there's only ever one pin to depart from — moving it
-  // (via a relocate or a slider release) *is* a fresh departure from the
-  // anchor each time, not a one-off event. `play` now bumps from every
-  // commit site (mint, relocate, and handleAdjustPin's slider release)
-  // rather than only the original mint, via the shared `fireDepartureTrace`
-  // below. Live drags never call it — only their commit does — so the trail
-  // still never re-fires mid-drag.
+  // 2026-09-29 (Frank): the trail marks two moments only — the pin first
+  // being set (a fresh mint, from a field press or a departure-slider
+  // release) and the check-in being saved. Moving the pin afterwards (a
+  // relocate or a slider release) no longer fires it, so adjusting stays
+  // quiet. Both sites go through the shared `fireDepartureTrace` below.
   const [departureTracePlay, setDepartureTracePlay] = useState(0);
   const [departureTraceFrom, setDepartureTraceFrom] = useState<{ x: number; y: number } | null>(null);
   const [departureTraceTo, setDepartureTraceTo] = useState<{ x: number; y: number } | null>(null);
@@ -465,7 +468,7 @@ export default function App() {
   // reopen edits a past entry's own history, not a departure from the
   // *current* session's anchor. handlePinRelease's own call sites already
   // sit behind its own `draftId !== null` early return, so this only ever
-  // actually gates handleAdjustPin's call below — kept here anyway as the
+  // actually gates the save sites' calls below — kept here anyway as the
   // one place this invariant lives, rather than re-checked ad hoc per site.
   const fireDepartureTrace = useCallback((x: number, y: number) => {
     if (draftId !== null || previousCheckIn === null || !anchorPin) return;
@@ -488,11 +491,10 @@ export default function App() {
     // (field press or departure-slider release) relocates it in place
     // instead of appending a second — mirroring handleAdjustPin's own
     // quiet update below (no fanfare, no second pin ever visible in the
-    // card list). The light trail still fires on every relocate, same as a
-    // fresh mint — see fireDepartureTrace above.
+    // card list). A relocate doesn't fire the light trail; only the first
+    // mint and the save do — see fireDepartureTrace above.
     if (pins.length > 0) {
       setPins((prev) => (prev.length > 0 ? [adjustPin(prev[0], entry.x, entry.y)] : prev));
-      fireDepartureTrace(entry.x, entry.y);
       return;
     }
     // Every fresh mint starts a new check-in's own session clock — restores
@@ -667,12 +669,16 @@ export default function App() {
     // "Today's check-in" + suggestions) should render for, once the rail
     // reveals below.
     const entry = record(pins, sessionStartRef.current, entrySource);
+    setSkySwellPlay((n) => n + 1);
+    // The save's light trail, from the previous check-in to the pin just
+    // saved (this render's anchorPin is still the previous check-in).
+    fireDepartureTrace(pins[0].x, pins[0].y);
     setJustSavedEntryId(entry.id);
     setPins([]);
     setSelectedPinId(null);
     setDesktopCardProgress(1);
     scheduleLandingSettle();
-  }, [pins, record, entrySource, scheduleLandingSettle]);
+  }, [pins, record, entrySource, scheduleLandingSettle, fireDepartureTrace]);
 
   // EmotionDrawer's onMoveToRail (see its own prop comment): a returning
   // user's post-mint escape hatch out of the centered card, without saving
@@ -865,19 +871,12 @@ export default function App() {
   // Commit an adjusted coordinate (slider released): move the pin and recompute
   // its description in place. regionDescription is a stored snapshot, so it must
   // be refreshed here — highlightedIds re-derives on its own from the new x/y.
-  // origin and recognizedWords are deliberately preserved.
-  //
-  // review-fix (2026-09-03, single-pin-checkin follow-up): also fires the
-  // departure light trail, same as a fresh mint or a field-press relocate —
-  // see fireDepartureTrace's own comment (it no-ops while reopened). Fires
-  // only here, on commit — the live drag preview (onAdjustDraft/
-  // handleAdjustDraft below) never calls this, so the trail still never
-  // re-fires mid-drag.
+  // origin and recognizedWords are deliberately preserved. No light trail:
+  // it fires on the first mint and on save, not on adjustments.
   const handleAdjustPin = useCallback((pinId: string, x: number, y: number) => {
     setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
     setAdjustDraft(null);
-    fireDepartureTrace(x, y);
-  }, [fireDepartureTrace]);
+  }, []);
 
   // U5: the card list's scroll position across a drag's shrink/restore. Capture
   // happens synchronously here, before the shrink renders (the list is still
@@ -932,6 +931,8 @@ export default function App() {
       // that produced this entry (or it isn't, and this update shouldn't
       // manufacture a confirmation moment for an entry from a past
       // session). Either way this branch leaves it untouched.
+      // Nor does it play the save swell (setSkySwellPlay): same reasoning —
+      // saving a reopened past check-in shouldn't make a moment of it.
     } else {
       // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md:
       // same mirror-expand as handleLandingSave — without it, an ordinary
@@ -942,6 +943,10 @@ export default function App() {
       // mirrorWasShown reset — no separate arming call needed here.
       setMirrorExpanded(true);
       const entry = record(pins, sessionStartRef.current, entrySource);
+      setSkySwellPlay((n) => n + 1);
+      // The save's light trail, from the previous check-in to the pin just
+      // saved (this render's anchorPin is still the previous check-in).
+      fireDepartureTrace(pins[0].x, pins[0].y);
       // Clear the draft so the just-recorded entry becomes the previous
       // check-in through derivePreviousCheckIn (above) rather than through a
       // second stored copy — this is what keeps a second handleRecord call
@@ -958,7 +963,7 @@ export default function App() {
       // picks it up via justSavedEntryId, same as handleLandingSave.
       setJustSavedEntryId(entry.id);
     }
-  }, [pins, record, updateEntry, draftId, entrySource]);
+  }, [pins, record, updateEntry, draftId, entrySource, fireDepartureTrace]);
 
   const handleDone = useCallback(() => {
     if (pins.length > 0) handleRecord();
@@ -1035,8 +1040,10 @@ export default function App() {
     >
       {/* Experimental (feat/shader-gradient-background): animated shader
           gradient behind everything else — sits beneath the rail backdrop
-          (zIndex 1) and field (zIndex 2) at the implicit zIndex 0. */}
-      <ShaderBackground />
+          (zIndex 1) and field (zIndex 2) at the implicit zIndex 0. The night
+          sky (skyField) draws its own backdrop, so the shader never mounts
+          behind it. */}
+      {!tuning.skyField && <ShaderBackground />}
 
       {/* Quiet rail backdrop — present on desktop so the right region reads as
           an intentional plane even before a pin is placed. review-fix:
@@ -1137,6 +1144,8 @@ export default function App() {
         }}
       >
         <EmotionField
+          skySwellPlay={skySwellPlay}
+          skyIntro={showWelcome}
           pins={pins}
           highlightedIds={highlightedIds}
           tagPulse={tagPulse}
@@ -1160,6 +1169,9 @@ export default function App() {
           // reading "not clickable" through the post-save settle window
           // even after the fix above made a press there work again.
           dropDisabled={desktopLandingActive && desktopCardProgress === 0 && pins.length === 0}
+          // The field plane starts at the top of the same ancestor the
+          // sheet reports against, so its top edge is already in stage px.
+          skyOccluderTop={sideBySide ? null : sheetTop}
         />
       </div>
 
@@ -1291,6 +1303,7 @@ export default function App() {
                 onToggle={() => setMirrorExpanded((v) => !v)}
                 draggingPinId={draggingPinId}
                 onFocusCardTopChange={setFocusCardTop}
+                onSheetTopChange={setSheetTop}
               />
             )}
           </AnimatePresence>
@@ -1324,17 +1337,21 @@ export default function App() {
               fieldPlaneRef={fieldPlaneRef}
               railRef={railScrollRef}
               selectedPinId={effectiveSelectedPinId}
+              hidden={tuning.skyField && (adjustDraft !== null || departureDraftCoord !== null)}
             />
           )}
 
-          {entries.length > 0 && (
-            <button
-              onClick={() => navigateTo('history')}
-              style={{ ...HEADER_PILL, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20 }}
-            >
-              history
+          {/* Right-hand pills: settings always, history once there is one. */}
+          <div style={{ position: 'absolute', top: 20, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20, display: 'flex', gap: 8, zIndex: 20 }}>
+            <button onClick={() => navigateTo('settings')} style={{ ...HEADER_PILL, position: 'static' }}>
+              settings
             </button>
-          )}
+            {entries.length > 0 && (
+              <button onClick={() => navigateTo('history')} style={{ ...HEADER_PILL, position: 'static' }}>
+                history
+              </button>
+            )}
+          </div>
 
           {showMirror && (
             <button
@@ -1376,6 +1393,18 @@ export default function App() {
               entries={entries}
               onBack={goBack}
             />
+          </motion.div>
+        )}
+
+        {view === 'settings' && (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          >
+            <Settings onBack={goBack} />
           </motion.div>
         )}
 

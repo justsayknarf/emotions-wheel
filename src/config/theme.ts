@@ -107,10 +107,31 @@ export interface ShaderTheme {
   rotationY: number;
   rotationZ: number;
   fov: number;
+  // Night-sky field (docs/plans/2026-09-28-002-feat-living-sky-plan.md): the
+  // shader sky drawn behind the stars when the skyField flag is on. Colors are
+  // hex like the ShaderGradient stops above; the admin theme page edits them
+  // through the same override mechanism.
+  skyZenith: string;       // the sky straight overhead, darkest
+  skyHorizon: string;      // the sky near the horizon
+  skyWarm: string;         // a glow that only lives close to the horizon
+  skyAuroraLow: string;    // aurora color at its base
+  skyAuroraHigh: string;   // aurora color toward its top
+  skyBand: string;         // milky way tint
+  skyAuroraStrength: number; // 0..1.5
+  skyAuroraSpeed: number;    // shader seconds per real second
+  skyAuroraReach: number;    // degrees above the horizon the aurora fades out by
+  skyAuroraCap: number;      // max brightness the aurora adds, so labels stay legible
+  skyBandStrength: number;   // 0..2
+  skyWarmth: number;         // 0..1
+  skyMovingDim: number;      // aurora multiplier while the user is dragging (1 = no dim)
+  skySwell: number;          // extra aurora brightness at the peak of the save swell
+  skyRenderScale: number;    // WebGL resolution relative to the screen (soft content)
 }
 
 type ShaderColors = Pick<ShaderTheme, 'color1' | 'color2' | 'color3' | 'brightness'>;
-type ShaderExtras = Omit<ShaderTheme, keyof ShaderColors>;
+type SkyColorKey = 'skyZenith' | 'skyHorizon' | 'skyWarm' | 'skyAuroraLow' | 'skyAuroraHigh' | 'skyBand';
+export type SkyColors = Pick<ShaderTheme, SkyColorKey>;
+type ShaderExtras = Omit<ShaderTheme, keyof ShaderColors | SkyColorKey>;
 
 // Every field below Shape/Motion/View wasn't part of the original color-audit
 // exploration — it's ShaderBackground's existing hardcoded prop values,
@@ -141,10 +162,44 @@ const SHADER_EXTRAS_DEFAULTS: ShaderExtras = {
   rotationY: 0,
   rotationZ: -60,
   fov: 30,
+  // Night-sky motion and strength, feel-tested in the aurora study mock
+  // (https://claude.ai/artifact/LgiPFHtqTVKcboqobmfKkB, 2026-09-28).
+  skyAuroraStrength: 0.5,
+  skyAuroraSpeed: 0.97,
+  skyAuroraReach: 34,
+  skyAuroraCap: 0.26,
+  skyBandStrength: 0.96,
+  skyWarmth: 0.26,
+  skyMovingDim: 0.45,
+  skySwell: 0.9,
+  skyRenderScale: 0.5,
 };
 
-function mkShader(colors: ShaderColors): ShaderTheme {
-  return { ...SHADER_EXTRAS_DEFAULTS, ...colors };
+// Mix two #rrggbb colors; t = 0 gives a, 1 gives b.
+export function mixHex(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (p: number, s: number) => (p >> s) & 255;
+  const out = [16, 8, 0].map((s) => Math.round(ch(pa, s) + (ch(pb, s) - ch(pa, s)) * t));
+  return '#' + out.map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// A theme that doesn't spell out its sky gets one from its shader stops:
+// deepened color1 overhead, color2 at the horizon, color3 as the low warmth,
+// and an aurora lifted out of color2 into color3. Starry Night and Northern
+// Lights spell theirs out (the mock-tested values).
+function deriveSky(c: ShaderColors): SkyColors {
+  return {
+    skyZenith: mixHex(c.color1, '#000000', 0.4),
+    skyHorizon: c.color2,
+    skyWarm: c.color3,
+    skyAuroraLow: mixHex(c.color2, '#FFFFFF', 0.45),
+    skyAuroraHigh: mixHex(c.color3, '#FFFFFF', 0.5),
+    skyBand: mixHex(c.color2, '#FFFFFF', 0.7),
+  };
+}
+
+function mkShader(colors: ShaderColors, sky?: SkyColors): ShaderTheme {
+  return { ...SHADER_EXTRAS_DEFAULTS, ...colors, ...(sky ?? deriveSky(colors)) };
 }
 
 export interface Theme {
@@ -306,7 +361,11 @@ export const THEMES = {
     // waterPlane, brighter, almost still (uSpeed 0.04) and viewed close (camera
     // distance 2.5, fov 58) so it reads as slow water under starlight.
     shader: {
-      ...mkShader({ color1: '#0B1220', color2: '#1B3A5C', color3: '#5c4e1f', brightness: 0.5 }),
+      ...mkShader(
+        { color1: '#0B1220', color2: '#1B3A5C', color3: '#5c4e1f', brightness: 0.5 },
+        // The night sky's own colors, from the aurora study mock.
+        { skyZenith: '#060B16', skyHorizon: '#16304D', skyWarm: '#5C4E1F', skyAuroraLow: '#8FC1C4', skyAuroraHigh: '#EAD9A8', skyBand: '#AFC0DC' },
+      ),
       type: 'waterPlane',
       uSpeed: 0.04,
       cDistance: 2.5,
@@ -328,7 +387,11 @@ export const THEMES = {
       '--ui-text-2': 'rgba(233,237,236,0.5)',
       '--ui-text-3': 'rgba(233,237,236,0.22)',
     },
-    shader: mkShader({ color1: '#0A0C10', color2: '#1C4A3D', color3: '#3A2350', brightness: 0.4 }),
+    shader: mkShader(
+      { color1: '#0A0C10', color2: '#1C4A3D', color3: '#3A2350', brightness: 0.4 },
+      // Green-to-violet aurora, from the aurora study mock.
+      { skyZenith: '#07090D', skyHorizon: '#133329', skyWarm: '#3A2350', skyAuroraLow: '#9FE0C2', skyAuroraHigh: '#B79FE0', skyBand: '#C8D6DA' },
+    ),
   },
   k: {
     label: 'K · Deep Space',

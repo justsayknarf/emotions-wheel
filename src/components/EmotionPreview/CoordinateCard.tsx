@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
 import { describeDelta, hasNotableDelta } from '../../data/departure';
 import { AxisSlider } from './AxisSlider';
+import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import { WordTag } from './WordTag';
 import type { PinEntry } from '../../types';
 
@@ -120,6 +121,10 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // The slot dissolve on a coordinate commit — tunable, and collapsed to an
   // instant swap when the viewer prefers reduced motion.
   const reduced = useReducedMotion();
+  // Night-sky mode weights the sliders (drag chases, tap flies); flat keeps
+  // them jumping to the pointer.
+  const tuning = useRevealTuning();
+  const weight = useMemo(() => (tuning.skyField ? sliderWeightFromTuning(tuning) : undefined), [tuning]);
   const fadeOut = reduced ? 0 : dissolve?.fadeOut ?? 0.26;
   const fadeIn = reduced ? 0 : dissolve?.fadeIn ?? 0.3;
   const hold = reduced ? 0 : dissolve?.hold ?? 0.05;
@@ -222,8 +227,24 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   // can.
   const [draggingAxis, setDraggingAxis] = useState<'x' | 'y' | null>(null);
 
+  // The coordinate this card last committed, stamped with the pin prop it was
+  // committed against. A commit reaches App through onAdjust, but `pin` only
+  // catches up on App's next render — and in sky mode the sibling slider's
+  // flight can tick in that same frame. Until the prop moves, this is the
+  // truth; once it does (App caught up, or a field press moved the pin) the
+  // prop is.
+  const committedRef = useRef<{ fromX: number; fromY: number; x: number; y: number } | null>(null);
+  // The stale window only lasts until the next render, which carries App's
+  // answer — so the stamp never outlives it (a later prop that happens to
+  // match the stamp must not resurrect an old commit).
+  useLayoutEffect(() => {
+    committedRef.current = null;
+  });
+
   const nextFrom = (axis: 'x' | 'y', v: number) => {
-    const base = draftRef.current ?? { x: pin.x, y: pin.y };
+    const c = committedRef.current;
+    const committed = c && c.fromX === pin.x && c.fromY === pin.y ? c : null;
+    const base = draftRef.current ?? committed ?? { x: pin.x, y: pin.y };
     return { x: axis === 'x' ? v : base.x, y: axis === 'y' ? v : base.y };
   };
   // The local drag-state bookkeeping shared by the axis interactions below —
@@ -259,6 +280,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
   };
   const commitAxis = (axis: 'x' | 'y', v: number) => {
     const next = nextFrom(axis, v);
+    committedRef.current = { fromX: pin.x, fromY: pin.y, ...next };
     clearLiveDraft();
     onAdjustDraft?.(null);
     onAdjust(pin.id, next.x, next.y);
@@ -429,6 +451,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onCancel={cancelAxis}
             opacity={draggingAxis !== null && draggingAxis !== 'x' ? CARD_DRAG_CONTENT_OPACITY : 1}
             reducedMotion={!!reduced}
+            weight={weight}
           />
           <AxisSlider
             labelLow="Negative"
@@ -442,6 +465,7 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
             onCancel={cancelAxis}
             opacity={draggingAxis !== null && draggingAxis !== 'y' ? CARD_DRAG_CONTENT_OPACITY : 1}
             reducedMotion={!!reduced}
+            weight={weight}
           />
         </div>
 

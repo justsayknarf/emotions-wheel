@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { animate, spring, stagger, utils } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { themeRgba } from '../../config/themeColor';
-import { toPercent } from '../../utils/fieldGeometry';
+import type { FieldProjection } from '../../utils/skyProjection';
 import type { Emotion } from '../../data/emotions';
 import type { PinEntry } from '../../types';
 import { LABEL_STANDOFF } from './EmotionWord';
@@ -62,6 +62,7 @@ export function usePinLanding(
   pins: PinEntry[],
   size: { width: number; height: number },
   words: Emotion[],
+  proj: FieldProjection,
 ) {
   const { root, scope } = useAnimeScope((s, reduced) => {
     const rootEl = s.root as HTMLElement;
@@ -112,14 +113,17 @@ export function usePinLanding(
 
     // Nearby surface words lean toward (px, py) and warm, then settle back —
     // the delay grows with distance so the ripple leaves from the pin.
-    s.add('lean', (px: number, py: number, w: number, h: number) => {
+    // The projection comes in as an argument, not a closure: this scope is
+    // built once per `words`, while the projection changes with the field size.
+    s.add('lean', (px: number, py: number, w: number, h: number, at: FieldProjection) => {
       if (reduced) return;
       const radius = Math.min(w, h) * LEAN.radiusFrac;
       for (const e of words) {
         const el = q(`[data-lean-word="${CSS.escape(e.id)}"]`);
         if (!el) continue;
-        const dx = px - (toPercent(e.x) / 100) * w;
-        const dy = py - ((toPercent(-e.y) / 100) * h - LABEL_STANDOFF);
+        const wp = at.toPx(e);
+        const dx = px - wp.x;
+        const dy = py - (wp.y - LABEL_STANDOFF);
         const d = Math.hypot(dx, dy) || 1;
         const k = Math.max(0, 1 - d / radius);
         if (k === 0) continue;
@@ -155,8 +159,8 @@ export function usePinLanding(
 
     for (const pin of pins) {
       const wrapper = el?.querySelector<HTMLElement>(`[data-field-pin="${CSS.escape(pin.id)}"]`);
-      const left = wrapper ? parseFloat(wrapper.style.left) : (toPercent(pin.x) / 100) * size.width;
-      const top = wrapper ? parseFloat(wrapper.style.top) : (toPercent(-pin.y) / 100) * size.height;
+      const left = wrapper ? parseFloat(wrapper.style.left) : proj.toPx(pin).x;
+      const top = wrapper ? parseFloat(wrapper.style.top) : proj.toPx(pin).y;
       next.set(pin.id, { x: pin.x, y: pin.y, left, top });
       // First sight (mount, or a remount with pins already set) only records.
       if (!prev || !wrapper || size.width === 0) continue;
@@ -177,7 +181,7 @@ export function usePinLanding(
       }
     }
     seen.current = next;
-    if (leanAt) scope.current?.methods.lean(leanAt.x, leanAt.y, size.width, size.height);
+    if (leanAt) scope.current?.methods.lean(leanAt.x, leanAt.y, size.width, size.height, proj);
   });
 
   return root;
