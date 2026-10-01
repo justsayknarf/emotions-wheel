@@ -27,6 +27,10 @@
     "check:slider": "npx tsx scripts/test-slider-weight.ts",
     "check:skytheme": "npx tsx scripts/test-sky-theme.ts",
     "check:comet": "npx tsx scripts/test-comet.ts",
+    "check:definitions": "npx tsx scripts/test-definitions.ts",
+    "check:tooltip": "npx tsx scripts/test-definition-tooltip.ts",
+    "check:patchdefs": "npx tsx scripts/test-patch-descriptions.ts",
+    "check:vocabulary": "npx tsx scripts/test-vocabulary.ts",
     "check:theme": "npx tsx scripts/test-theme.ts",
     "sync:theme": "npx tsx scripts/sync-theme-tokens.ts",
     "preview": "vite preview"

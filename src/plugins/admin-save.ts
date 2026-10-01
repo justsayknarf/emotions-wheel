@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AdminEmotion } from '../admin/types';
-import { serializeEmotions, serializeDescriptions } from '../admin/lib/serialize';
+import { serializeEmotions } from '../admin/lib/serialize';
+import { patchDescriptions, type DescriptionPatch } from '../admin/lib/patchDescriptions';
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -44,11 +45,59 @@ export function adminSavePlugin(): Plugin {
           const descriptionsPath = path.join(root, 'src/data/descriptions.ts');
 
           fs.writeFileSync(emotionsPath, serializeEmotions(payload.emotions), 'utf-8');
-          fs.writeFileSync(descriptionsPath, serializeDescriptions(payload.emotions), 'utf-8');
+          // descriptions.ts also holds definitions for words outside this
+          // framework (the active radial-intensity set) and helper functions,
+          // so it is patched entry by entry, never regenerated.
+          const patches: Record<string, DescriptionPatch> = {};
+          for (const e of payload.emotions) patches[e.id] = { description: e.description, relatedIds: e.relatedIds };
+          const current = fs.readFileSync(descriptionsPath, 'utf-8');
+          fs.writeFileSync(descriptionsPath, patchDescriptions(current, patches), 'utf-8');
 
           // Notify Vite's HMR graph explicitly — needed because the write comes from
           // within the server process itself, which some watchers miss.
           server.watcher.emit('change', emotionsPath);
+          server.watcher.emit('change', descriptionsPath);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: message }));
+        }
+      });
+
+      // The admin Definitions page: rewrite the definition text of the words it
+      // names, in place, leaving every other entry and helper alone.
+      server.middlewares.use('/admin-api/save-definitions', async (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+
+        try {
+          const raw = await readBody(req);
+          const payload = JSON.parse(raw) as { updates?: unknown };
+          const updates = payload?.updates;
+          if (typeof updates !== 'object' || updates === null || Array.isArray(updates)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Invalid payload: updates must be an object of id → text' }));
+            return;
+          }
+          const patches: Record<string, DescriptionPatch> = {};
+          for (const [id, text] of Object.entries(updates)) {
+            if (typeof text !== 'string' || text.trim() === '') {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: `Definition for "${id}" is empty` }));
+              return;
+            }
+            patches[id] = { description: text.trim() };
+          }
+
+          const descriptionsPath = path.join(server.config.root, 'src/data/descriptions.ts');
+          const current = fs.readFileSync(descriptionsPath, 'utf-8');
+          fs.writeFileSync(descriptionsPath, patchDescriptions(current, patches), 'utf-8');
           server.watcher.emit('change', descriptionsPath);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });

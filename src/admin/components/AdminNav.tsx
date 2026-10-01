@@ -7,6 +7,7 @@ interface Props {
 
 const ITEMS: { route: AdminRoute; label: string }[] = [
   { route: 'emotions', label: 'Emotions' },
+  { route: 'definitions', label: 'Definitions' },
   { route: 'reveal', label: 'Reveal tuning' },
   { route: 'themes', label: 'Color themes' },
 ];

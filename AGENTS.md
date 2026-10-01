@@ -23,6 +23,10 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:slider` | weighted slider: edge resistance, no overshoot, grab zone, flight timing (`src/utils/sliderWeight.ts`) |
 | `npm run check:skytheme` | night-sky theme block: every theme's sky complete and in range, Starry Night values, uniform mapping (`src/config/theme.ts`, `skyShader.ts`) |
 | `npm run check:comet` | night-sky light trails: the tag-line draw timeline (the replay's look) and the departure comet's timeline, spring and sizes (`src/utils/comet.ts`) |
+| `npm run check:definitions` | every word in every registered vocabulary has a definition (`src/data/descriptions.ts`) |
+| `npm run check:tooltip` | definition tooltip: timing (delay, hand-off, grace, press, pin rest, tap) and placement/hit-test geometry (`src/components/EmotionField/definitionTiming.ts`, `definitionPlacement.ts`) |
+| `npm run check:patchdefs` | the admin's in-place `descriptions.ts` editor changes only the entries it is given (`src/admin/lib/patchDescriptions.ts`) |
+| `npm run check:vocabulary` | the admin vocabulary switcher's saved choice resolves to a registered framework, else the default (`src/data/frameworks/index.ts`) |
 
 New logic gets a new `check:<short-name>` script following the same shape.
 

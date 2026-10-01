@@ -1,3 +1,5 @@
+import { AdminVocabularySwitcher } from './AdminVocabularySwitcher';
+
 interface Props {
   dirty: boolean;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
@@ -47,6 +49,7 @@ export function AdminHeader({ dirty, saveStatus, saveError, onSave }: Props) {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <AdminVocabularySwitcher />
         {saveError && (
           <div style={{ fontSize: 11, color: '#e57373', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {saveError}
