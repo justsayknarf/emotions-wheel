@@ -4,6 +4,7 @@
 // Tone follows the surface the chip sits on: gold for a draft, recorded blue
 // for a saved check-in (R6). Every color is mixed from the tone's own token
 // so a theme swap (src/config/theme.ts) recolors the chip with it.
+import { useEffect, useRef } from 'react';
 import { animate } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 
@@ -61,6 +62,18 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
   const t = TONES[tone];
   const text = label.toLowerCase();
   const bodyPadding = onDismiss ? '4px 3px 4px 11px' : '4px 11px';
+  // An unmounting chip fires no pointerleave/blur, so a chip that is removed
+  // under the pointer (or while focused) would leave its hover stuck on. Track
+  // hovered/focused in event handlers only and release on unmount.
+  const holding = useRef({ hovered: false, focused: false });
+  const latestHoverChange = useRef(onHoverChange);
+  useEffect(() => { latestHoverChange.current = onHoverChange; });
+  useEffect(() => {
+    const state = holding.current;
+    return () => {
+      if (state.hovered || state.focused) latestHoverChange.current?.(false);
+    };
+  }, []);
   const { root, scope } = useAnimeScope<HTMLSpanElement>((self, reduced) => {
     self.add('nudge', (naming: boolean) => {
       if (reduced || !self.root) return;
@@ -71,8 +84,8 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
   return (
     <span
       ref={root}
-      onPointerEnter={onHoverChange ? (e) => { if (e.pointerType !== 'touch') onHoverChange(true); } : undefined}
-      onPointerLeave={onHoverChange ? (e) => { if (e.pointerType !== 'touch') onHoverChange(false); } : undefined}
+      onPointerEnter={onHoverChange ? (e) => { if (e.pointerType !== 'touch') { holding.current.hovered = true; onHoverChange(true); } } : undefined}
+      onPointerLeave={onHoverChange ? (e) => { if (e.pointerType !== 'touch') { holding.current.hovered = false; onHoverChange(false); } } : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -90,8 +103,8 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
           type="button"
           aria-pressed={named}
           aria-describedby={describedBy}
-          onFocus={onHoverChange ? () => onHoverChange(true) : undefined}
-          onBlur={onHoverChange ? () => onHoverChange(false) : undefined}
+          onFocus={onHoverChange ? () => { holding.current.focused = true; onHoverChange(true); } : undefined}
+          onBlur={onHoverChange ? () => { holding.current.focused = false; onHoverChange(false); } : undefined}
           onClick={(e) => {
             e.stopPropagation();
             // Keyed to the click itself, so only a real toggle nudges — never
