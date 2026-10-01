@@ -95,8 +95,29 @@ export function placeBand(star: Point, height: number, bounds: Box): Box {
   const x = bounds.x + BAND_GUTTER;
   const topY = bounds.y + BAND_GUTTER;
   const starUnderTop = star.y < topY + height + BAND_CLEARANCE;
-  const y = starUnderTop ? bounds.y + bounds.h - BAND_GUTTER - height : topY;
+  // A band too short for the card to sit below the star still never pushes
+  // it above the band's top (where the header pills are).
+  const y = starUnderTop ? Math.max(topY, bounds.y + bounds.h - BAND_GUTTER - height) : topY;
   return { x, y, w, h: height };
+}
+
+// The band's minimum height as a share of the field, so a tall tray never
+// squeezes it to nothing (the same floor as the sky camera's viewport).
+export const BAND_MIN_SHARE = 0.25;
+
+// The area the tooltip may use. `topInset` keeps it clear of the header pills;
+// in the band layout `occluderTop` (the tray's top edge) is its bottom.
+export function definitionBounds(
+  field: { width: number; height: number },
+  layout: TipLayout,
+  topInset: number,
+  occluderTop: number | null,
+): Box {
+  const bottom = layout === 'band' && occluderTop !== null
+    ? Math.min(field.height, Math.max(field.height * BAND_MIN_SHARE, occluderTop))
+    : field.height;
+  const y = Math.min(topInset, bottom);
+  return { x: 0, y, w: field.width, h: bottom - y };
 }
 
 export function tetherEnd(star: Point, box: Box, layout: TipLayout): Point {

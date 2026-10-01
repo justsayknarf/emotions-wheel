@@ -12,6 +12,7 @@ import {
 } from '../src/components/EmotionField/definitionTiming';
 import {
   BAND_GUTTER,
+  definitionBounds,
   describeWordRegion,
   hitTestWord,
   nearestWordId,
@@ -178,6 +179,28 @@ const inside = (a: Box, b: Box) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x 
   check('band: anchors to the top (R14)', low.y === BAND_GUTTER && low.x === BAND_GUTTER && low.w === 390 - 2 * BAND_GUTTER, JSON.stringify(low));
   const high = placeBand({ x: 200, y: 60 }, 90, band);
   check('band: star under the top spot moves it to the bottom', high.y + high.h === 480 - BAND_GUTTER, JSON.stringify(high));
+}
+{
+  // The band starts below the header pills.
+  const inset = 58;
+  const bounds = definitionBounds({ width: 390, height: 844 }, 'band', inset, 480);
+  check('band bounds: start at the top inset', bounds.y === inset && bounds.h === 480 - inset, JSON.stringify(bounds));
+  const low = placeBand({ x: 200, y: 400 }, 90, bounds);
+  check('band: card sits below the pills', low.y === inset + BAND_GUTTER, JSON.stringify(low));
+  const high = placeBand({ x: 200, y: 100 }, 90, bounds);
+  check('band with inset: star under the top spot moves it to the bottom', high.y + high.h === 480 - BAND_GUTTER, JSON.stringify(high));
+  const floor = definitionBounds({ width: 390, height: 844 }, 'band', inset, 120);
+  check('band bounds: a tall tray leaves at least a quarter of the field', floor.y + floor.h === 844 * 0.25, JSON.stringify(floor));
+  const tethered = definitionBounds({ width: 1000, height: 700 }, 'tethered', inset, 480);
+  check('tethered bounds: inset applies, the tray does not', tethered.y === inset && tethered.y + tethered.h === 700, JSON.stringify(tethered));
+  const nearTop = placeTethered({ x: 900, y: 70 }, tip, [], tethered);
+  check('tethered: a star near the pills keeps the card below the inset', nearTop.y >= inset, JSON.stringify(nearTop));
+}
+{
+  // A band shorter than card + clearance: never above the band's top.
+  const short: Box = { x: 0, y: 58, w: 390, h: 120 };
+  const box = placeBand({ x: 200, y: 90 }, 96, short);
+  check('short band: clamped to the band top', box.y === 58 + BAND_GUTTER, JSON.stringify(box));
 }
 {
   const star = { x: 200, y: 400 };

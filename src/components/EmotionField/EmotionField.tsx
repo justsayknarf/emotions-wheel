@@ -36,11 +36,11 @@ import type { PinEntry } from '../../types';
 import { placeAnchorLabel, ANCHOR_LABEL_H } from './anchorLabel';
 import { DefinitionTip } from './DefinitionTip';
 import {
+  definitionBounds as computeDefinitionBounds,
   hitTestWord,
   nearestWordId,
   LABEL_OBSTACLE_WEIGHT,
   MARK_OBSTACLE_WEIGHT,
-  type Box,
   type Obstacle,
   type TipLayout,
   type WordTarget,
@@ -158,6 +158,8 @@ interface Props {
   // (word-definition-tooltips). App's useDefinitionTooltip owns this state.
   definitionOpenId?: string | null;
   definitionLayout?: TipLayout;
+  // Stage px at the top the tooltip keeps clear of (the header pills).
+  definitionTopInset?: number;
   // The pointer is over this word (or none): field-side hover (R4).
   onDefinitionHover?: (id: string | null) => void;
   // A field press began (R9).
@@ -192,6 +194,7 @@ export function EmotionField({
   skyIntro = false,
   definitionOpenId = null,
   definitionLayout = 'tethered',
+  definitionTopInset = 0,
   onDefinitionHover,
   onDefinitionPress,
   onDefinitionRelease,
@@ -796,12 +799,7 @@ export function EmotionField({
     }
     return out;
   }, [wordTargets, definitionOpenId, pins, proj, anchorMark]);
-  const definitionBounds: Box = {
-    x: 0,
-    y: 0,
-    w: size.width,
-    h: definitionLayout === 'band' && skyOccluderTop !== null ? Math.min(size.height, skyOccluderTop) : size.height,
-  };
+  const definitionBounds = computeDefinitionBounds(size, definitionLayout, definitionTopInset, skyOccluderTop);
 
   // Axes read legibly at rest and brighten (emphasis) while the intro runs.
   const crosshairColor = `rgb(var(--ui-gold-rgb) / ${axisEmphasis ? 0.22 : 0.1})`;

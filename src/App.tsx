@@ -40,10 +40,16 @@ const WELCOME_EXIT_CALM = 2.2;
 const WELCOME_EXIT_SNAP = 0.35;
 
 // Shared style for the field-level header pills (history, replay). Each button
-// adds its own edge anchor (left / right).
+// adds its own edge anchor (left / right). The pills' top and fixed height
+// also set how far down the field's definition tooltip starts.
+const HEADER_PILL_TOP = 20;
+const HEADER_PILL_HEIGHT = 30;
+const DEFINITION_TOP_INSET = HEADER_PILL_TOP + HEADER_PILL_HEIGHT + 8;
 const HEADER_PILL: CSSProperties = {
   position: 'absolute',
-  top: 20,
+  top: HEADER_PILL_TOP,
+  height: HEADER_PILL_HEIGHT,
+  boxSizing: 'border-box',
   background: 'rgb(var(--ui-surface-rgb) / 0.8)',
   border: '1px solid var(--ui-border)',
   borderRadius: 8,
@@ -1206,6 +1212,7 @@ export default function App() {
           dropDisabled={fieldPressDisabled}
           definitionOpenId={view === 'field' ? definition.openId : null}
           definitionLayout={definition.layout}
+          definitionTopInset={DEFINITION_TOP_INSET}
           onDefinitionHover={fieldPressDisabled ? undefined : handleDefinitionHover}
           onDefinitionPress={pressDefinition}
           onDefinitionRelease={releaseDefinition}
@@ -1383,7 +1390,7 @@ export default function App() {
           )}
 
           {/* Right-hand pills: settings always, history once there is one. */}
-          <div style={{ position: 'absolute', top: 20, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20, display: 'flex', gap: 8, zIndex: 20 }}>
+          <div style={{ position: 'absolute', top: HEADER_PILL_TOP, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20, display: 'flex', gap: 8, zIndex: 20 }}>
             <button onClick={() => navigateTo('settings')} style={{ ...HEADER_PILL, position: 'static' }}>
               settings
             </button>
