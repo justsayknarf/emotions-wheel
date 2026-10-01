@@ -27,13 +27,13 @@ Two constraints shape the design. The field is dense, and a definition must not 
 - **500ms delay, then instant hand-off.** A pass across stars or tags shows nothing. Once a tooltip is open, moving to another word switches immediately; leaving all words closes it after a short grace and the delay re-arms. This is native-tooltip behaviour and makes scanning neighbours cheap.
 - **Card tags light their star immediately.** Hovering a word in the card highlights its star on the field with no delay, so the card-to-field correlation is instant; the definition follows after the delay.
 - **Mobile uses the same component in a fixed band.** No hover on touch, and tapping the field plants the pin, so a field word can't double as a "define" target. The tooltip sits at the top of the visible sky with the tether reaching down to the star, and opens on pin rest or on tapping a tray word.
-- **Every word gets a definition before this ships.** 104 of the 189 radial-intensity words have none. The tooltip is the feature's whole surface, so a "no definition" state is not acceptable in production.
+- **Every word gets a definition before this ships.** 103 of the 188 radial-intensity words have none. The tooltip is the feature's whole surface, so a "no definition" state is not acceptable in production.
 
 ## Requirements
 
 **Content**
 
-- R1. Every word in the active framework (`radial-intensity`) has a definition in `src/data/descriptions.ts`. The 104 missing definitions are written in the existing voice: plain, second person, one or two sentences, describing how the feeling sits rather than a dictionary gloss. Claude drafts them; Frank reviews before merge.
+- R1. Every word in the active framework (`radial-intensity`) has a definition in `src/data/descriptions.ts`. The 103 missing definitions are written in the existing voice: plain, second person, one or two sentences, describing how the feeling sits rather than a dictionary gloss. Claude drafts them; Frank reviews before merge.
 - R2. A check script fails when any word in the active framework lacks a definition, following the repo's `check:*` convention.
 - R3. The tooltip shows the word's label, a short meta line naming its region and intensity (e.g. "calm · pleasant · mild", derived from the coordinate and radius), and the definition.
 
