@@ -40,6 +40,7 @@ Note that the specs predate much of what shipped; where they disagree with the c
 **What ships today:** the field and pin-planting loop, the card tray with adjustable pins, a returning-user mirror, the diary with history views (day/week charts, entry detail), CSV export, constellation replay, a grounding-cue welcome, and an admin emotion editor at `src/admin/`.
 
 - A night-sky field behind the `skyField` tuning flag (`?field=sky`): the field drawn as the inside of a dome, with the still point overhead, every word a star and tags drawn as a constellation, with a living aurora and milky way (a dome-aware WebGL shader, per-theme and admin-editable) and an opening pan from the horizon to the still point. The card's sliders are weighted and tap-to-fly in that mode. Off by default; people switch it from the in-app Settings page (`src/components/Settings/`), which on the dev server also carries a quiet "Advanced settings" link to the admin tool. The datum is still the flat (x, y). See `docs/plans/2026-09-28-001-feat-night-sky-field-plan.md`.
+- Word definitions on the field: rest on a star or a card word for 500ms and its definition draws out on a tether (`DefinitionTip`, `useDefinitionTooltip`); on phones it sits above the tray and opens when the pin rests or a tray word is tapped. Every active word has a definition (`check:definitions`).
 
 ## Tech Stack
 
