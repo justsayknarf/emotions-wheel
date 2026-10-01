@@ -11,7 +11,7 @@ import {
   skyReplayLook,
   skyReplayGlow,
   chainDraw,
-  tagDraw,
+  skyReplayPresence,
   hopMs,
   HOP_BASE_MS,
   HOP_MAX_MS,
@@ -35,7 +35,7 @@ const LOOK_MAX = 1.2;
   check('empty tour looks straight up', look0.x === 0 && look0.y === 0, `look ${JSON.stringify(look0)}`);
   const p1 = skyReplayPlan([{ pin: { x: 0.3, y: -0.4 }, tags: 2 }], LOOK_MAX);
   check('one check-in lands at 0', p1.land[0] === 0 && p1.glideMs[0] === 0, `land ${p1.land[0]}`);
-  check('one check-in still draws and pulses', p1.total >= p1.tagsEnd[0] + p1.pulseMs, `total ${p1.total}`);
+  check('one check-in still draws and pulses', p1.total >= p1.revealEnd[0] + p1.pulseMs, `total ${p1.total}`);
   check('the gaze starts on the first check-in', near(skyReplayLook(p1, 0).x, 0.3), `look ${JSON.stringify(skyReplayLook(p1, 0))}`);
 }
 
@@ -59,11 +59,11 @@ const week = [
   check('a short history is not compressed', p.scale === 1, `scale ${p.scale}`);
   const ordered = week.every((w, i) =>
     p.glideStart[i] <= p.land[i]
-    && (w.tags > 0 ? p.land[i] < p.tagStart[i] && p.tagStart[i] < p.tagsEnd[i] : p.tagsEnd[i] === p.land[i])
-    && p.tagsEnd[i] < p.holdEnd[i]
+    && p.land[i] < p.revealAt[i] && p.revealAt[i] < p.revealEnd[i]
+    && p.revealEnd[i] < p.holdEnd[i]
     && (i === 0 || p.glideStart[i] === p.holdEnd[i - 1]));
   check('each check-in glides, lands, draws, then holds, in order', ordered, JSON.stringify({ land: p.land.map(Math.round), holdEnd: p.holdEnd.map(Math.round) }));
-  check('a bare check-in has no tag time', p.tagsEnd[1] === p.land[1], `tagsEnd ${p.tagsEnd[1]}, land ${p.land[1]}`);
+  check('a bare check-in holds more briefly', p.holdEnd[1] - p.revealEnd[1] < p.holdEnd[0] - p.revealEnd[0], `bare ${(p.holdEnd[1] - p.revealEnd[1]).toFixed(0)}ms`);
 
   // The gaze rests on each pin, clamped to the camera's reach.
   const rest = skyReplayLook(p, p.land[3] + 10);
@@ -89,19 +89,28 @@ const week = [
   check('the comet head arrives as the star lands', arrive !== null && near(arrive.head, 1), `head ${arrive?.head}`);
   check('the first check-in has no comet', chainDraw(p, 0, 1e6) === null, 'chainDraw(0) null');
 
-  // Tag lines draw one after another and all are home by tagsEnd.
-  const last = tagDraw(p, 2, 2, p.tagsEnd[2]);
-  const second = tagDraw(p, 2, 1, p.tagStart[2] + p.tagSegMs * 0.5);
-  check('the last tag line is home at tagsEnd', last !== null && near(last.head, 1), `head ${last?.head}`);
-  check('a later tag line waits for the one before', second === null, `${JSON.stringify(second)}`);
+  // The whole constellation fades in at once, rising monotonically from 0.
+  let rising = true;
+  let prevOn = 0;
+  for (let k = 0; k <= 30; k++) {
+    const on = skyReplayPresence(p, 2, p.revealAt[2] + (p.revealMs * k) / 30);
+    if (on < prevOn - 1e-9) rising = false;
+    prevOn = on;
+  }
+  check('the constellation fades in from dark to full', near(skyReplayPresence(p, 2, p.revealAt[2]), 0) && rising && near(prevOn, 1), `end ${prevOn}`);
+  check('nothing shows between landing and the reveal', skyReplayPresence(p, 2, p.land[2] + 1) === 0, 'presence 0');
+  const steady = skyReplayPresence(p, 2, p.revealEnd[2] + p.pulseMs / 2);
+  check('presence holds steady through the pulse', near(steady, 1), `presence ${steady}`);
 
   // Focus follows the glides.
   check('focus moves on as the glide begins', skyReplayFocus(p, p.glideStart[2] - 1) === 1 && skyReplayFocus(p, p.glideStart[2]) === 2, 'focus 1 → 2');
 
   // Glow: dark before landing, full while drawing, breathes, fades, last stays lit.
   check('glow is dark before landing', skyReplayGlow(p, 2, p.land[2] - 1) === 0, 'glow 0');
-  check('glow is full while lines draw', skyReplayGlow(p, 2, p.tagStart[2] + 1) === 1, 'glow 1');
-  const trough = skyReplayGlow(p, 2, p.tagsEnd[2] + p.pulseMs / 2);
+  const mid = skyReplayGlow(p, 2, p.revealAt[2] + p.revealMs / 2);
+  check('glow rises with the fade-in', mid > 0 && mid < 1, `glow ${mid.toFixed(2)}`);
+  check('glow is full once faded in', near(skyReplayGlow(p, 2, p.revealEnd[2]), 1), 'glow 1');
+  const trough = skyReplayGlow(p, 2, p.revealEnd[2] + p.pulseMs / 2);
   check('the pulse dips to its floor mid-pulse', near(trough, PULSE_FLOOR), `glow ${trough}`);
   const crest = skyReplayGlow(p, 2, p.holdEnd[2]);
   check('the hold ends on a crest', near(crest, 1), `glow ${crest}`);
@@ -110,7 +119,7 @@ const week = [
   check('then it is gone', skyReplayGlow(p, 2, p.holdEnd[2] + p.fadeMs) === 0, 'glow 0');
   const end = skyReplayGlow(p, 3, p.total);
   check('the tour ends with the last constellation lit', near(end, 1), `glow ${end}`);
-  check('only one constellation is fully lit at a time', week.every((_, i) => i === 2 || skyReplayGlow(p, i, p.tagStart[2] + 1) < 1), 'others below 1');
+  check('only one constellation is fully lit at a time', week.every((_, i) => i === 2 || skyReplayGlow(p, i, p.revealEnd[2]) < 1), 'others below 1');
 }
 
 // Long histories compress to fit, keeping order.

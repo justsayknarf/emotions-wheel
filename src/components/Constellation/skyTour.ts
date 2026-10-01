@@ -1,6 +1,6 @@
 import type { FieldCoord } from '../../utils/skyProjection';
 import { clampLook } from '../../utils/skyCamera';
-import { easeInOut2, segmentDraw, type SegmentDraw } from '../../utils/comet';
+import { easeInOut2, easeOut2, segmentDraw, type SegmentDraw } from '../../utils/comet';
 import { TAIL_MS } from './replaySchedule';
 
 // Pure timing for the constellation replay in the night sky (SkyReplay). No
@@ -9,10 +9,11 @@ import { TAIL_MS } from './replaySchedule';
 // The flat replay lands every check-in on one fixed plane in a quick
 // ~half-second rhythm. In the sky only part of the dome is in view, so the
 // replay becomes a tour: the gaze glides from one check-in to the next while
-// the comet rides the great circle between them, the star lands, its tagged
-// words draw in as a constellation (pin → tag → tag, the field's own chain),
-// and the constellation pulses while it is the one in view. When the gaze
-// moves on, that constellation fades and the next one lights.
+// the comet rides the great circle between them, the star lands, and its
+// tagged words fade in together as a whole constellation (pin → tag → tag,
+// the field's own chain, every line at once), so each check-in reads as a
+// different constellation found in the sky. It pulses while it is the one in
+// view; when the gaze moves on it fades and the next one appears.
 //
 // Everything is a function of the playhead `t` (ms), so a scrub lands on
 // exactly the frame playback would have drawn — camera included.
@@ -23,13 +24,13 @@ export const HOP_BASE_MS = 900;
 export const HOP_PER_UNIT_MS = 650;
 /** Longest glide, however far apart two check-ins are. */
 export const HOP_MAX_MS = 2600;
-/** After a star lands, its tag lines start drawing this much later. */
-export const TAG_DELAY_MS = 300;
-/** One tag line drawing in (head ride); lines draw one after another. */
-export const TAG_SEG_MS = 380;
+/** After a star lands, its constellation starts fading in this much later. */
+export const REVEAL_DELAY_MS = 250;
+/** The whole constellation, every line and word at once, fading in. */
+export const REVEAL_MS = 900;
 /** One pulse of a lit constellation: bright → dim → bright. */
 export const PULSE_MS = 1600;
-/** A check-in with tags holds for one full pulse after its lines finish. */
+/** A check-in with tags holds for one full pulse once it has faded in. */
 export const HOLD_MS = PULSE_MS;
 /** A check-in without tags holds only briefly before the gaze moves on. */
 export const HOLD_BARE_MS = 700;
@@ -59,14 +60,14 @@ export interface SkyReplayPlan {
   glideMs: number[];
   /** When check-in i's star lands; the glide ends here. */
   land: number[];
-  /** When check-in i's first tag line starts drawing. */
-  tagStart: number[];
-  /** When check-in i's last tag line has its head home. */
-  tagsEnd: number[];
+  /** When check-in i's constellation starts fading in. */
+  revealAt: number[];
+  /** When it has fully faded in and starts to pulse. */
+  revealEnd: number[];
   /** When check-in i stops being the one in view (the next glide begins). */
   holdEnd: number[];
   /** Each duration after scaling to fit MAX_SKY_SPAN_MS. */
-  tagSegMs: number;
+  revealMs: number;
   pulseMs: number;
   fadeMs: number;
   tailMs: number;
@@ -86,8 +87,8 @@ export function skyReplayPlan(stops: SkyReplayStop[], lookMax: number): SkyRepla
     const glideStart: number[] = [];
     const glideMs: number[] = [];
     const land: number[] = [];
-    const tagStart: number[] = [];
-    const tagsEnd: number[] = [];
+    const revealAt: number[] = [];
+    const revealEnd: number[] = [];
     const holdEnd: number[] = [];
     let at = 0;
     stops.forEach((s, i) => {
@@ -96,14 +97,14 @@ export function skyReplayPlan(stops: SkyReplayStop[], lookMax: number): SkyRepla
       glideMs.push(g);
       const l = at + g;
       land.push(l);
-      const ts = l + TAG_DELAY_MS * k;
-      tagStart.push(ts);
-      const te = s.tags > 0 ? ts + s.tags * TAG_SEG_MS * k : l;
-      tagsEnd.push(te);
-      at = te + (s.tags > 0 ? HOLD_MS : HOLD_BARE_MS) * k;
+      const ra = l + REVEAL_DELAY_MS * k;
+      revealAt.push(ra);
+      const re = ra + REVEAL_MS * k;
+      revealEnd.push(re);
+      at = re + (s.tags > 0 ? HOLD_MS : HOLD_BARE_MS) * k;
       holdEnd.push(at);
     });
-    return { glideStart, glideMs, land, tagStart, tagsEnd, holdEnd, total: n === 0 ? 0 : at };
+    return { glideStart, glideMs, land, revealAt, revealEnd, holdEnd, total: n === 0 ? 0 : at };
   };
   const raw = build(1);
   const scale = raw.total > MAX_SKY_SPAN_MS ? MAX_SKY_SPAN_MS / raw.total : 1;
@@ -111,7 +112,7 @@ export function skyReplayPlan(stops: SkyReplayStop[], lookMax: number): SkyRepla
   return {
     looks,
     ...plan,
-    tagSegMs: TAG_SEG_MS * scale,
+    revealMs: REVEAL_MS * scale,
     pulseMs: PULSE_MS * scale,
     fadeMs: FADE_MS * scale,
     tailMs: TAIL_MS * scale,
@@ -147,27 +148,31 @@ export function chainDraw(plan: SkyReplayPlan, i: number, t: number): SegmentDra
   return segmentDraw(t - plan.glideStart[i], plan.glideMs[i], plan.tailMs);
 }
 
-/** Tag line k of check-in i (k = 0 is pin → first word), or null before it starts. */
-export function tagDraw(plan: SkyReplayPlan, i: number, k: number, t: number): SegmentDraw | null {
-  const start = plan.tagStart[i] + k * plan.tagSegMs;
-  if (t < start) return null;
-  return segmentDraw(t - start, plan.tagSegMs, plan.tailMs);
+/**
+ * How present check-in i's constellation is at `t`, 0..1, without the
+ * pulse: dark until revealAt, then the whole constellation fades in at once
+ * over revealMs (out(2)); once the gaze moves on it fades out over fadeMs.
+ * The last check-in never fades: the tour ends on it, lit. Word labels and
+ * star cores follow this, so they read steadily while the light pulses.
+ */
+export function skyReplayPresence(plan: SkyReplayPlan, i: number, t: number): number {
+  if (i < 0 || i >= plan.land.length || t < plan.revealAt[i]) return 0;
+  const leave = i === plan.land.length - 1 ? Infinity : plan.holdEnd[i];
+  if (t >= leave + plan.fadeMs) return 0;
+  const appear = t >= plan.revealEnd[i] ? 1 : easeOut2((t - plan.revealAt[i]) / plan.revealMs);
+  const fade = t <= leave ? 1 : 1 - (t - leave) / plan.fadeMs;
+  return appear * fade;
 }
 
 /**
- * How lit check-in i's constellation is at `t`, 0..1. Full while its lines
- * draw; from the moment they finish it breathes on a cosine, full → floor →
- * full once per pulse, so a held constellation ends its hold bright. Once
- * the gaze moves on it fades out over fadeMs. The last check-in never fades:
- * the tour ends on it, lit.
+ * How lit check-in i's constellation is at `t`, 0..1: its presence times the
+ * pulse. From revealEnd it breathes on a cosine, full → floor → full once per
+ * pulse, so a held constellation ends its hold bright. Lines, the halos on
+ * its tagged stars and the pin's halo follow this.
  */
 export function skyReplayGlow(plan: SkyReplayPlan, i: number, t: number): number {
-  if (i < 0 || i >= plan.land.length || t < plan.land[i]) return 0;
-  const isLast = i === plan.land.length - 1;
-  const leave = isLast ? Infinity : plan.holdEnd[i];
-  if (t >= leave + plan.fadeMs) return 0;
-  const wave = t <= plan.tagsEnd[i] ? 1 : 0.5 + 0.5 * Math.cos((2 * Math.PI * (t - plan.tagsEnd[i])) / plan.pulseMs);
-  const breath = PULSE_FLOOR + (1 - PULSE_FLOOR) * wave;
-  const fade = t <= leave ? 1 : 1 - (t - leave) / plan.fadeMs;
-  return breath * fade;
+  const presence = skyReplayPresence(plan, i, t);
+  if (presence <= 0) return 0;
+  const wave = t <= plan.revealEnd[i] ? 1 : 0.5 + 0.5 * Math.cos((2 * Math.PI * (t - plan.revealEnd[i])) / plan.pulseMs);
+  return presence * (PULSE_FLOOR + (1 - PULSE_FLOOR) * wave);
 }

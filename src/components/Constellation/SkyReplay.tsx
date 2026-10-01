@@ -13,7 +13,7 @@ import { canUseWebGL } from '../EmotionField/skyShader';
 import { arcPath, blurrer, drawHead, pathEnds, pointAt, streakGradient, strokeRange, type Px, type Rgba } from '../EmotionField/skyCanvas';
 import { VISUALLY_HIDDEN } from '../visuallyHidden';
 import { replayDayLabels, STAR_MS, LABEL_DELAY_MS, LABEL_MS, RING_DELAY_MS, RING_MS } from './replaySchedule';
-import { skyReplayPlan, skyReplayFocus, skyReplayLook, skyReplayGlow, chainDraw, tagDraw, type SkyReplayPlan } from './skyTour';
+import { skyReplayPlan, skyReplayFocus, skyReplayLook, skyReplayGlow, skyReplayPresence, chainDraw, type SkyReplayPlan } from './skyTour';
 import { QUIET_LINE_OPACITY, QUIET_LINE_WIDTH, STREAK_CORE_WIDTH, STREAK_GLOW_OPACITY, STREAK_GLOW_WIDTH } from './cometStyle';
 import { ReplayControls } from './ReplayControls';
 import { useReplayScrub } from './useReplayScrub';
@@ -54,10 +54,10 @@ interface Point {
 // The constellation replay in the night sky: the same sky the field draws
 // (SkyAurora + SkyBackdrop), toured one check-in at a time. The gaze glides
 // from each check-in to the next with the replay's comet riding the great
-// circle between them; the star lands, its tagged words draw in as a
-// constellation (pin → tag → tag, the field's own chain) and that
-// constellation pulses while it is the one in view, then fades as the gaze
-// moves on. The tour ends on the newest check-in, lit.
+// circle between them; the star lands and its tagged words fade in together,
+// every line at once, as a constellation (pin → tag → tag, the field's own
+// chain), so each check-in reads as a different constellation in the sky.
+// It pulses while it is the one in view, then fades as the gaze moves on. The tour ends on the newest check-in, lit.
 //
 // One anime.js timeline drives a playhead; everything on screen, the camera
 // included, is a pure function of it (skyReplay.ts), so the scrubber seeks
@@ -297,11 +297,14 @@ function drawTour(
     drawStreak(ctx, path, d, rgba, blur);
   }
 
-  // Lit constellations: pin → tag → tag, drawing in one line after another,
-  // then pulsing with skyReplayGlow while their check-in is in view.
+  // Lit constellations: pin → tag → tag, every line at once, fading in
+  // together as the check-in lands so each one reads as its own
+  // constellation in the sky. The light (lines, halos) pulses with
+  // skyReplayGlow; the words and star cores hold steady on presence.
   points.forEach((p, i) => {
     const g = skyReplayGlow(plan, i, t);
-    if (g <= 0) return;
+    const on = skyReplayPresence(plan, i, t);
+    if (on <= 0) return;
     const chain: FieldCoord[] = [p.pin, ...p.words];
     const pinPx = proj.toPx(p.pin);
     if (pinPx.visible) {
@@ -314,15 +317,14 @@ function drawTour(
       ctx.fillRect(pinPx.x - PIN_HALO_R, pinPx.y - PIN_HALO_R, PIN_HALO_R * 2, PIN_HALO_R * 2);
     }
     for (let k = 0; k + 1 < chain.length; k++) {
-      const d = tagDraw(plan, i, k, t);
-      if (!d) break;
       const path = arcPath(proj, chain[k], chain[k + 1]);
-      blur(() => strokeRange(ctx, path, 0, d.quiet, rgba('recorded', 1), LIT_GLOW_WIDTH, LIT_GLOW_ALPHA * g));
-      strokeRange(ctx, path, 0, d.quiet, rgba('recorded', LIT_LINE_ALPHA * g), LIT_LINE_WIDTH);
-      drawStreak(ctx, path, d, rgba, blur);
-      // The word lights as the head reaches it.
-      if (d.head < 1) continue;
-      const w = p.words[k];
+      blur(() => strokeRange(ctx, path, 0, 1, rgba('recorded', 1), LIT_GLOW_WIDTH, LIT_GLOW_ALPHA * g));
+      strokeRange(ctx, path, 0, 1, rgba('recorded', LIT_LINE_ALPHA * g), LIT_LINE_WIDTH);
+    }
+    ctx.font = `400 12px ${font}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (const w of p.words) {
       const q = proj.toPx(w);
       if (!q.visible) continue;
       const halo = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, LIT_HALO_R);
@@ -330,12 +332,9 @@ function drawTour(
       halo.addColorStop(1, rgba('recorded', 0));
       ctx.fillStyle = halo;
       ctx.fillRect(q.x - LIT_HALO_R, q.y - LIT_HALO_R, LIT_HALO_R * 2, LIT_HALO_R * 2);
-      ctx.fillStyle = rgba('text', Math.min(1, 0.6 + 0.4 * g));
+      ctx.fillStyle = rgba('text', on);
       ctx.beginPath(); ctx.arc(q.x, q.y, 1.6 + 0.6 * g, 0, Math.PI * 2); ctx.fill();
-      ctx.font = `400 12px ${font}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = rgba('recorded', Math.min(1, 0.35 + 0.65 * g));
+      ctx.fillStyle = rgba('recorded', on);
       ctx.shadowColor = rgba('recorded', 0.55 * g);
       ctx.shadowBlur = 10;
       ctx.fillText(w.label, q.x, q.y + 7);
