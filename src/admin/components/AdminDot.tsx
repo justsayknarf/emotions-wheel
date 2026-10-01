@@ -14,12 +14,15 @@ interface Props {
   emotion: AdminEmotion;
   selected: boolean;
   dimmed: boolean;
+  readOnly?: boolean;
+  showLabel?: boolean;
+  color?: string;
   mapRef: { current: HTMLDivElement | null };
   onUpdate: (id: string, patch: Partial<AdminEmotion>) => void;
   onSelect: (id: string) => void;
 }
 
-export function AdminDot({ emotion, selected, dimmed, mapRef, onUpdate, onSelect }: Props) {
+export function AdminDot({ emotion, selected, dimmed, readOnly, showLabel, color, mapRef, onUpdate, onSelect }: Props) {
   const startRef = useRef<{ x: number; y: number }>({ x: emotion.x, y: emotion.y });
 
   const bind = useDrag(
@@ -28,6 +31,7 @@ export function AdminDot({ emotion, selected, dimmed, mapRef, onUpdate, onSelect
         onSelect(emotion.id);
         return;
       }
+      if (readOnly) return;
       if (first) {
         startRef.current = { x: emotion.x, y: emotion.y };
       }
@@ -54,7 +58,7 @@ export function AdminDot({ emotion, selected, dimmed, mapRef, onUpdate, onSelect
         left: `${left}%`,
         top: `${top}%`,
         transform: 'translate(-50%, -50%)',
-        cursor: 'grab',
+        cursor: readOnly ? 'pointer' : 'grab',
         zIndex: selected ? 10 : 1,
         userSelect: 'none',
         touchAction: 'none',
@@ -66,20 +70,25 @@ export function AdminDot({ emotion, selected, dimmed, mapRef, onUpdate, onSelect
         width: selected ? 10 : 7,
         height: selected ? 10 : 7,
         borderRadius: '50%',
-        background: selected ? 'var(--ui-gold)' : 'rgb(var(--ui-gold-rgb) / 0.45)',
-        border: selected ? '2px solid var(--ui-gold)' : '1px solid rgb(var(--ui-gold-rgb) / 0.3)',
+        background: selected ? 'var(--ui-gold)' : (color ?? 'rgb(var(--ui-gold-rgb) / 0.45)'),
+        border: selected
+          ? '2px solid var(--ui-gold)'
+          : emotion.depth === 'surface'
+            ? '1.5px solid var(--ui-text-1)'
+            : `1px solid ${color ? 'transparent' : 'rgb(var(--ui-gold-rgb) / 0.3)'}`,
         transition: 'width 0.1s, height 0.1s, background 0.1s',
       }} />
-      {selected && (
+      {(selected || showLabel) && (
         <div style={{
           position: 'absolute',
-          top: 14,
+          top: selected ? 14 : 9,
           left: '50%',
           transform: 'translateX(-50%)',
           fontSize: 9,
           whiteSpace: 'nowrap',
-          color: 'var(--ui-gold)',
-          fontWeight: 500,
+          color: selected ? 'var(--ui-gold)' : (color ?? 'var(--ui-text-2)'),
+          fontWeight: selected || emotion.depth === 'surface' ? 600 : 400,
+          opacity: selected ? 1 : 0.85,
           pointerEvents: 'none',
         }}>
           {emotion.label}

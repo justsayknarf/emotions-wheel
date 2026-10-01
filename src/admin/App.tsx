@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 // The admin editor edits and saves the hand-authored base framework, not
 // whichever framework is currently active in the app.
 import { circumplexCustom } from '../data/frameworks/circumplex-custom';
+import { frameworks } from '../data/frameworks';
 import { descriptions } from '../data/descriptions';
 import type { AdminEmotion } from './types';
 import { AdminHeader } from './components/AdminHeader';
@@ -13,13 +14,23 @@ import { DefinitionsPage } from './pages/DefinitionsPage';
 import { generateId } from './lib/idgen';
 import { useAdminRoute } from './lib/useAdminRoute';
 
-function initEmotions(): AdminEmotion[] {
-  return circumplexCustom.emotions.map(e => ({
+function withDescriptions(list: typeof circumplexCustom.emotions): AdminEmotion[] {
+  return list.map(e => ({
     ...e,
     description: descriptions[e.id]?.description ?? '',
     relatedIds: descriptions[e.id]?.relatedIds ?? [],
   }));
 }
+
+function initEmotions(): AdminEmotion[] {
+  return withDescriptions(circumplexCustom.emotions);
+}
+
+// What the map can show: the editable base set, or any registered framework
+// read-only — so a generated layout (e.g. the radial-spread proposal) can be
+// compared against what the field renders today.
+const BASE_SET = 'base';
+const noop = () => {};
 
 export function AdminApp() {
   const [route, navigate] = useAdminRoute();
@@ -30,20 +41,26 @@ export function AdminApp() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [depthFilter, setDepthFilter] = useState<Set<string>>(new Set());
   const [clusterFilter, setClusterFilter] = useState<Set<string>>(new Set());
+  const [mapSet, setMapSet] = useState<string>(BASE_SET);
+  const readOnly = mapSet !== BASE_SET;
+  const shown = useMemo<AdminEmotion[]>(
+    () => (readOnly && frameworks[mapSet] ? withDescriptions(frameworks[mapSet].emotions) : emotions),
+    [readOnly, mapSet, emotions],
+  );
 
   const visibleIds = useMemo<Set<string> | null>(() => {
     const noDepth = depthFilter.size === 0;
     const noCluster = clusterFilter.size === 0;
     if (noDepth && noCluster) return null;
     return new Set(
-      emotions
+      shown
         .filter(e =>
           (noDepth || depthFilter.has(e.depth)) &&
           (noCluster || clusterFilter.has(e.cluster)),
         )
         .map(e => e.id),
     );
-  }, [emotions, depthFilter, clusterFilter]);
+  }, [shown, depthFilter, clusterFilter]);
 
   const toggleDepth = useCallback((depth: string) => {
     setDepthFilter(prev => {
@@ -132,15 +149,18 @@ export function AdminApp() {
         <AdminNav route={route} onNavigate={navigate} />
         {route === 'emotions' && (
           <EmotionsPage
-            emotions={emotions}
+            emotions={shown}
+            mapSet={mapSet}
+            onMapSetChange={setMapSet}
+            readOnly={readOnly}
             selectedId={selectedId}
             visibleIds={visibleIds}
             depthFilter={depthFilter}
             clusterFilter={clusterFilter}
             onSelect={setSelectedId}
-            onUpdate={updateEmotion}
-            onAdd={addEmotion}
-            onRemove={removeEmotion}
+            onUpdate={readOnly ? noop : updateEmotion}
+            onAdd={readOnly ? noop : addEmotion}
+            onRemove={readOnly ? noop : removeEmotion}
             onToggleDepth={toggleDepth}
             onToggleCluster={toggleCluster}
           />
