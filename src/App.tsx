@@ -865,6 +865,9 @@ export default function App() {
   // false` only fires on a cancelled gesture (useFieldGesture never fires it
   // on an ordinary release — see the hook's own comment); restore to
   // expanded, since nothing committed.
+  // A drag on the night sky is panning it (EmotionField's drag-to-pan).
+  const [skyPanning, setSkyPanning] = useState(false);
+
   const handleFieldGestureActiveChange = useCallback((active: boolean) => {
     if (active) {
       // Also skip while a reopen is active (draftId set): the gesture's own
@@ -1210,6 +1213,7 @@ export default function App() {
           emphasizedPinId={effectiveSelectedPinId}
           adjustDraft={adjustDraft ? { x: adjustDraft.x, y: adjustDraft.y } : null}
           onGestureActiveChange={handleFieldGestureActiveChange}
+          onSkyPanChange={setSkyPanning}
           departureTracePlay={departureTracePlay}
           departureTraceFrom={departureTraceFrom}
           departureTraceTo={departureTraceTo}
@@ -1361,6 +1365,9 @@ export default function App() {
                 expanded={mirrorExpanded}
                 onToggle={() => setMirrorExpanded((v) => !v)}
                 draggingPinId={draggingPinId}
+                // Hidden for a sky pan, unless a card slider already holds a
+                // finger: sliding it away would pull the slider from under it.
+                hidden={skyPanning && draggingPinId === null}
                 onFocusCardTopChange={setFocusCardTop}
                 onSheetTopChange={setSheetTop}
               />

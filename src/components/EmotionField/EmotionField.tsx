@@ -114,6 +114,9 @@ interface Props {
   // the tap/drag movement threshold, and again with `false` on release or
   // cancel — drives the tray's peek during pin placement (U3). Optional.
   onGestureActiveChange?: (active: boolean) => void;
+  // Night sky only: true while a drag holds the sky (drag-to-pan), false
+  // when it lets go or is cancelled. The phone tray hides for its length.
+  onSkyPanChange?: (active: boolean) => void;
   // U6/R6: the departure connector's one-shot trigger — increments once per
   // departure commit (App's handleDepart), paired with the anchor/new-pin
   // field-space coordinates that commit departed between. Optional: the
@@ -186,6 +189,7 @@ export function EmotionField({
   emphasizedPinId = null,
   adjustDraft = null,
   onGestureActiveChange,
+  onSkyPanChange,
   departureTracePlay = 0,
   departureTraceFrom = null,
   departureTraceTo = null,
@@ -359,18 +363,22 @@ export function EmotionField({
   const fieldPan = useMemo(
     () => (sky
       ? {
-        start: skyPan.start,
+        start: () => {
+          skyPan.start();
+          onSkyPanChange?.(true);
+        },
         move: (dx: number, dy: number, rect: DOMRect) => {
           const sx = rect.width > 0 && sizeRef.current.width > 0 ? sizeRef.current.width / rect.width : 1;
           skyPan.move(dx * sx, dy * sx);
         },
         end: () => {
           skyPan.end();
+          onSkyPanChange?.(false);
           onDefinitionRelease?.(null);
         },
       }
       : undefined),
-    [sky, skyPan, onDefinitionRelease],
+    [sky, skyPan, onDefinitionRelease, onSkyPanChange],
   );
   const { isPressed, isPanning, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
