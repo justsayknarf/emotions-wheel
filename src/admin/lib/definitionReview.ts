@@ -2,8 +2,9 @@
 // word-definition-tooltips branch (2026-09-30); delete them once the copy has
 // been reviewed, and the page's matching filters with them.
 
-// The 103 definitions written on that branch (from `git diff` of
-// src/data/descriptions.ts against its base, 5a3b3ce).
+// The definitions written on that branch: 103 for radial-intensity (from
+// `git diff` of src/data/descriptions.ts against its base, 5a3b3ce), plus six
+// for words the radial-spread / radial-clustered proposals add.
 export const NEWLY_WRITTEN_IDS: ReadonlySet<string> = new Set([
   'worthy', 'valiant', 'intrigued', 'involved', 'fascinated', 'exploring', 'stimulated', 'centered',
   'trusting', 'patient', 'reflective', 'accepting', 'caring', 'empathetic', 'self-loving', 'compassionate',
@@ -18,6 +19,7 @@ export const NEWLY_WRITTEN_IDS: ReadonlySet<string> = new Set([
   'aloof', 'distant', 'listless', 'removed', 'withdrawn', 'lethargic', 'isolated', 'shut-down',
   'inhibited', 'self-conscious', 'weak', 'useless', 'mortified', 'worthless', 'sorry', 'regret',
   'remorseful', 'sensitive', 'victim', 'incapable', 'impotent', 'trapped',
+  'glad', 'elated', 'alert', 'astonished', 'miserable', 'sleepy',
 ]);
 
 // The ones the content review asked a human to read first, and why.

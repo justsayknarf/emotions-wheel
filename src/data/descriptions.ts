@@ -975,6 +975,31 @@ export const descriptions: Record<string, EmotionDescription> = {
     description: "No way out that you can see. Walls on every side, and every door seems shut.",
     relatedIds: ['helpless', 'resigned', 'impotent', 'incapable'],
   },
+  // Added by the radial-spread / radial-clustered proposals
+  glad: {
+    description: "A small, simple yes. Something went the way you hoped, and you're pleased it did.",
+    relatedIds: ['happy', 'delighted', 'enchanted'],
+  },
+  elated: {
+    description: "Lifted clean off the ground. Joy so strong it feels like rising.",
+    relatedIds: ['delighted', 'radiant', 'vibrant', 'happy'],
+  },
+  alert: {
+    description: "Awake and tuned in. Your attention is sharp and ready, with no alarm in it.",
+    relatedIds: ['refreshed', 'renewed', 'rejuvenated'],
+  },
+  astonished: {
+    description: "Stopped in your tracks. Something so unexpected that, for a moment, you can't take it in.",
+    relatedIds: ['shocked', 'surprised', 'questioning'],
+  },
+  miserable: {
+    description: "Unhappy all the way through, with no part of you feeling okay right now.",
+    relatedIds: ['unhappy', 'hurt', 'forlorn', 'sorrow'],
+  },
+  sleepy: {
+    description: "Heavy-eyed and slow. Your body is asking to rest, and everything else can wait.",
+    relatedIds: ['lethargic', 'numb', 'distant'],
+  },
 };
 
 // Fallback for emotions without descriptions
