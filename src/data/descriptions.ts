@@ -556,3 +556,16 @@ export function getDescription(id: string): EmotionDescription {
     relatedIds: [],
   };
 }
+
+// The definition the field's tooltip shows, or null when a word has none —
+// no generic fallback, because the tooltip must never show filler text.
+// scripts/test-definitions.ts keeps every active word covered.
+export function definitionFor(id: string): string | null {
+  const text = descriptions[id]?.description?.trim();
+  return text ? text : null;
+}
+
+// The ids in `ids` that have no definition, in input order.
+export function missingDefinitions(ids: string[]): string[] {
+  return ids.filter((id) => definitionFor(id) === null);
+}
