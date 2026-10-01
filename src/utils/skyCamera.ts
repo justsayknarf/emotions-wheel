@@ -19,6 +19,8 @@ export interface CameraParams {
   fovRest: number;      // degrees across the larger stage dimension
   fovLean: number;      // narrower field of view while a draft pin exists
   fovRate: number;      // 1/s, exponential ease of the field of view
+  coastTau: number;     // s, how quickly a released drag-pan's glide dies away
+  coastMaxDegPerSec: number; // speed ceiling for that glide, degrees of sky/s
 }
 
 export const DEFAULT_CAMERA_PARAMS: CameraParams = {
@@ -29,6 +31,8 @@ export const DEFAULT_CAMERA_PARAMS: CameraParams = {
   fovRest: 84,
   fovLean: 64,
   fovRate: 0.9,
+  coastTau: 0.35,
+  coastMaxDegPerSec: 40,
 };
 
 export function clampLook(c: FieldCoord, max: number): FieldCoord {
@@ -97,4 +101,35 @@ export function cameraTarget(opts: {
   recordedAnchor: FieldCoord | null;
 }): FieldCoord {
   return opts.liveDraft ?? opts.emphasizedPin ?? opts.newestDraftPin ?? opts.recordedAnchor ?? { x: 0, y: 0 };
+}
+
+// Drag-to-pan: the sky follows the finger. A pointer move of (dx, dy) stage
+// px turns the gaze the opposite way by the same angle, so the star under
+// the finger stays there (exactly at the stage centre, closely elsewhere).
+// The orientation never yaws, so screen px map straight onto field x and y.
+export function panLook(look: FieldCoord, dxPx: number, dyPx: number, focal: number, p: CameraParams): FieldCoord {
+  const k = RMAX / ZEN_SPAN / focal; // field units per px at the gaze
+  return clampLook({ x: look.x - dxPx * k, y: look.y + dyPx * k }, p.lookMax);
+}
+
+// After a drag-pan lets go, the gaze keeps the finger's speed (under a
+// ceiling) and slows on an exponential decay: a glide, never a spring back.
+export function coastStart(vel: FieldCoord, p: CameraParams): FieldCoord {
+  const vmax = degToField(p.coastMaxDegPerSec);
+  const sp = Math.hypot(vel.x, vel.y);
+  return sp > vmax ? { x: (vel.x * vmax) / sp, y: (vel.y * vmax) / sp } : { x: vel.x, y: vel.y };
+}
+
+export function stepCoast(
+  look: FieldCoord,
+  vel: FieldCoord,
+  dt: number,
+  p: CameraParams,
+): { look: FieldCoord; vel: FieldCoord; done: boolean } {
+  const next = clampLook({ x: look.x + vel.x * dt, y: look.y + vel.y * dt }, p.lookMax);
+  const decay = Math.exp(-dt / p.coastTau);
+  // Pressed against the tilt limit, the glide stops rather than sliding round it.
+  const stopped = Math.hypot(next.x - look.x, next.y - look.y) < Math.hypot(vel.x, vel.y) * dt * 0.5;
+  const v = stopped ? { x: 0, y: 0 } : { x: vel.x * decay, y: vel.y * decay };
+  return { look: next, vel: v, done: Math.hypot(v.x, v.y) < degToField(0.5) };
 }

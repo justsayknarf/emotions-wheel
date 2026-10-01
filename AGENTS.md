@@ -19,7 +19,7 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:replay` | constellation replay timing and day labels (`src/components/Constellation/replaySchedule.ts`) |
 | `npm run check:sky` | night-sky projection: orientation, press round-trip, horizon, flat parity, camera frame (`src/utils/skyProjection.ts`) |
 | `npm run check:intro` | night-sky opening pan: starts with the horizon in view, lands on the zenith, stays under its own speed ceiling (`src/utils/skyIntro.ts`) |
-| `npm run check:camera` | night-sky camera: pan cap, no overshoot, carry during flights, tilt limit, target order (`src/utils/skyCamera.ts`) |
+| `npm run check:camera` | night-sky camera: pan cap, no overshoot, carry during flights, tilt limit, target order, drag-to-pan grab and release glide (`src/utils/skyCamera.ts`) |
 | `npm run check:slider` | weighted slider: edge resistance, no overshoot, grab zone, flight timing (`src/utils/sliderWeight.ts`) |
 | `npm run check:skytheme` | night-sky theme block: every theme's sky complete and in range, Starry Night values, uniform mapping (`src/config/theme.ts`, `skyShader.ts`) |
 | `npm run check:comet` | night-sky light trails: the tag-line draw timeline (the replay's look) and the departure comet's timeline, spring and sizes (`src/utils/comet.ts`) |

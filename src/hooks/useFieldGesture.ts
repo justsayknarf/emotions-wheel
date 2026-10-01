@@ -20,7 +20,18 @@ interface Options {
   // to the flat mapping (pixelToCoord). The night-sky field passes its
   // projection's fromPx, where null means "not pressable here" (below the horizon).
   toCoord?: (localX: number, localY: number, rect: DOMRect) => { x: number; y: number } | null;
+  // Drag-to-pan (the night-sky field). When given, a press that travels
+  // past PAN_SLOP_PX becomes a pan: the deltas go to `move` (in client px,
+  // with the rect for rescaling), and its release plants nothing.
+  pan?: {
+    start: () => void;
+    move: (dxPx: number, dyPx: number, rect: DOMRect) => void;
+    end: () => void;
+  };
 }
+
+// How far a press may wander, in screen px, and still be a tap that plants.
+const PAN_SLOP_PX = 8;
 
 // Exported for scripts/test-field-gesture.ts (U1): this repo has no
 // component-test harness, so the coordinate-normalization math is exercised
@@ -55,6 +66,7 @@ export function useFieldGesture({
   hasInteracted,
   onGestureActiveChange,
   toCoord,
+  pan,
 }: Options) {
   const [isPressed, setIsPressed] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -73,6 +85,19 @@ export function useFieldGesture({
   // onGestureActiveChange(true) — guards against firing it more than once per
   // press, and tells release/cancel whether a matching `false` is owed.
   const gestureActiveRef = useRef(false);
+  // Drag-to-pan: where the press started and the last move, in client px,
+  // and whether this press has become a pan.
+  const pressStartPxRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPxRef = useRef<{ x: number; y: number } | null>(null);
+  const panningRef = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
+
+  function endPan() {
+    if (!panningRef.current) return;
+    panningRef.current = false;
+    setIsPanning(false);
+    pan?.end();
+  }
 
   function endGestureActive() {
     if (gestureActiveRef.current) {
@@ -174,6 +199,9 @@ export function useFieldGesture({
       isPressedRef.current = true;
       revealCenterRef.current = coord;
       pressStartCoordRef.current = coord;
+      pressStartPxRef.current = { x: e.clientX, y: e.clientY };
+      lastPxRef.current = { x: e.clientX, y: e.clientY };
+      panningRef.current = false;
       gestureActiveRef.current = false;
       setIsPressed(true);
       setRevealCenter(coord);
@@ -185,6 +213,24 @@ export function useFieldGesture({
     onPointerMove: (e: React.PointerEvent) => {
       // Mouse: always track (hover + press); touch: only while pressed
       if (e.pointerType === 'touch' && !isPressedRef.current) return;
+
+      if (pan && isPressedRef.current && pressStartPxRef.current && lastPxRef.current) {
+        const start = pressStartPxRef.current;
+        if (!panningRef.current && Math.hypot(e.clientX - start.x, e.clientY - start.y) >= PAN_SLOP_PX) {
+          panningRef.current = true;
+          setIsPanning(true);
+          pan.start();
+          // The slop itself counts, so the sky catches up with the finger.
+          lastPxRef.current = start;
+        }
+        if (panningRef.current) {
+          const last = lastPxRef.current;
+          lastPxRef.current = { x: e.clientX, y: e.clientY };
+          pan.move(e.clientX - last.x, e.clientY - last.y, containerRef.current!.getBoundingClientRect());
+          // The star under the finger is the one it grabbed: the reveal stays put.
+          return;
+        }
+      }
 
       const coord = getCoord(e);
       if (!coord) return;
@@ -231,9 +277,18 @@ export function useFieldGesture({
 
     onPointerUp: (_e: React.PointerEvent) => {
       if (!isPressedRef.current) return;
-      onRelease(revealCenterRef.current!);
+      const panned = panningRef.current;
+      if (panned) {
+        endPan();
+        // No onRelease, so nothing else restores a tray peeked for this drag.
+        endGestureActive();
+      } else {
+        onRelease(revealCenterRef.current!);
+      }
       isPressedRef.current = false;
       pressStartCoordRef.current = null;
+      pressStartPxRef.current = null;
+      lastPxRef.current = null;
       // Deliberately does NOT call onGestureActiveChange(false) here — the
       // caller's onRelease (above) already decides the post-release tray
       // state itself (R5: re-expand on a new pin; R6: stay peeked on
@@ -264,6 +319,9 @@ export function useFieldGesture({
       // had been peeked for this gesture.
       isPressedRef.current = false;
       pressStartCoordRef.current = null;
+      pressStartPxRef.current = null;
+      lastPxRef.current = null;
+      endPan();
       endGestureActive();
       setIsPressed(false);
       if (!isHoveringRef.current) {
@@ -274,5 +332,5 @@ export function useFieldGesture({
   };
 
   const isRevealed = isPressed || isHovering;
-  return { isPressed, isRevealed, revealCenter, dwellCenter, handlers };
+  return { isPressed, isPanning, isRevealed, revealCenter, dwellCenter, handlers };
 }

@@ -189,6 +189,10 @@ interface Props {
   // it) and never applies while isReopened (matching R1-R3's exclusion) —
   // see dragShrinkActive below.
   draggingPinId?: string | null;
+  // Sheet variant only: slides the whole tray below the screen edge while
+  // the night sky is being dragged, so the pan has the full screen. A
+  // transform, so the reported sheet top (and the camera's band) holds.
+  hidden?: boolean;
   // U2 follow-up (welcome-cue/focus-card overlap fix): reports the 'focus'
   // card's live top edge in pixels, relative to the shared positioned
   // ancestor both it and WelcomeOverlay are placed in (App.tsx's root
@@ -241,6 +245,7 @@ export function EmotionDrawer({
   expanded = false,
   onToggle,
   draggingPinId = null,
+  hidden = false,
 }: Props) {
   const previousPins = previousCheckIn?.pins ?? [];
   const reversedPins = [...pins].reverse();
@@ -1441,7 +1446,7 @@ export function EmotionDrawer({
       ref={sheetRootRef}
       initial={{ y: '100%' }}
       animate={{
-        y: 0,
+        y: hidden ? '100%' : 0,
         // Always set explicitly, never omitted: framer-motion leaves a
         // previously-animated inline style in place when a later `animate`
         // call drops that key, rather than clearing it — so switching to

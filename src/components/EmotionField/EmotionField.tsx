@@ -114,6 +114,9 @@ interface Props {
   // the tap/drag movement threshold, and again with `false` on release or
   // cancel — drives the tray's peek during pin placement (U3). Optional.
   onGestureActiveChange?: (active: boolean) => void;
+  // Night sky only: true while a drag holds the sky (drag-to-pan), false
+  // when it lets go or is cancelled. The phone tray hides for its length.
+  onSkyPanChange?: (active: boolean) => void;
   // U6/R6: the departure connector's one-shot trigger — increments once per
   // departure commit (App's handleDepart), paired with the anchor/new-pin
   // field-space coordinates that commit departed between. Optional: the
@@ -186,6 +189,7 @@ export function EmotionField({
   emphasizedPinId = null,
   adjustDraft = null,
   onGestureActiveChange,
+  onSkyPanChange,
   departureTracePlay = 0,
   departureTraceFrom = null,
   departureTraceTo = null,
@@ -250,7 +254,7 @@ export function EmotionField({
   // mount counts as interaction too.
   const introInterrupt = useRef(false);
   const [mountPinCount] = useState(pins.length);
-  const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
+  const { proj, look: skyLook, fovDeg: skyFovDeg, pan: skyPan } = useSkyCamera({
     enabled: sky,
     target: skyTarget,
     lean: pins.length > 0 || departureDraft !== null,
@@ -269,6 +273,10 @@ export function EmotionField({
   // this element or an ancestor of it (U1's recede wrapper in App.tsx), so
   // it would go stale relative to the transform-aware getBoundingClientRect
   // gesture math reads instead.
+  const sizeRef = useRef(size);
+  useLayoutEffect(() => {
+    sizeRef.current = size;
+  });
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -350,7 +358,29 @@ export function EmotionField({
     landingRootRef.current = el;
   }, [landingRootRef]);
 
-  const { isPressed, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
+  // Drag-to-pan on the night sky: a press that travels drags the dome, and
+  // its release plants nothing. A tap still plants a pin.
+  const fieldPan = useMemo(
+    () => (sky
+      ? {
+        start: () => {
+          skyPan.start();
+          onSkyPanChange?.(true);
+        },
+        move: (dx: number, dy: number, rect: DOMRect) => {
+          const sx = rect.width > 0 && sizeRef.current.width > 0 ? sizeRef.current.width / rect.width : 1;
+          skyPan.move(dx * sx, dy * sx);
+        },
+        end: () => {
+          skyPan.end();
+          onSkyPanChange?.(false);
+          onDefinitionRelease?.(null);
+        },
+      }
+      : undefined),
+    [sky, skyPan, onDefinitionRelease, onSkyPanChange],
+  );
+  const { isPressed, isPanning, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
     onRelease: handleRelease,
     onFirstInteraction,
@@ -367,6 +397,7 @@ export function EmotionField({
           ? skyProjection({ look: skyLook, fovDeg: skyFovDeg, width: rect.width, height: rect.height }).fromPx(lx, ly)
           : flatProjection(rect).fromPx(lx, ly)
         : proj.fromPx(lx * (size.width / rect.width), ly * (size.height / rect.height)),
+    pan: fieldPan,
   });
   // U1: hover-only (no active press) — the receded field's pointer/hover
   // affordance should read as "backgrounded but reachable," not fight with
@@ -887,7 +918,7 @@ export function EmotionField({
         // direct press is a deliberate no-op during the pre-mint
         // departure-float landing, so neither the crosshair cursor nor the
         // gold "clickable" hover ring should imply otherwise.
-        cursor: recedeProgress > 0 || dropDisabled ? 'pointer' : 'crosshair',
+        cursor: recedeProgress > 0 || dropDisabled ? 'pointer' : isPanning ? 'grabbing' : 'crosshair',
         boxShadow: (recedeProgress > 0 || dropDisabled) && isHoveringOnly ? 'inset 0 0 0 1px var(--ui-gold-dim)' : 'none',
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}
