@@ -4,6 +4,9 @@ import { AdminTable } from '../components/AdminTable';
 
 interface Props {
   emotions: AdminEmotion[];
+  mapSet: string;
+  onMapSetChange: (id: string) => void;
+  readOnly: boolean;
   selectedId: string | null;
   visibleIds: Set<string> | null;
   depthFilter: Set<string>;
@@ -21,6 +24,9 @@ interface Props {
 // sharing the screen with reveal tuning and the theme picker.
 export function EmotionsPage({
   emotions,
+  mapSet,
+  onMapSetChange,
+  readOnly,
   selectedId,
   visibleIds,
   depthFilter,
@@ -36,6 +42,9 @@ export function EmotionsPage({
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <AdminMap
         emotions={emotions}
+        mapSet={mapSet}
+        onMapSetChange={onMapSetChange}
+        readOnly={readOnly}
         selectedId={selectedId}
         visibleIds={visibleIds}
         onSelect={onSelect}
