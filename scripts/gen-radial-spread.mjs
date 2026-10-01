@@ -61,6 +61,22 @@ const MIN_DIST_SURFACE = 0.15; // any pair involving a surface word
 // real check; this is the relaxation's stand-in for it.
 const MIN_DIST_SURFACE_PAIR = 0.22;
 const AXIS_MARGIN = (3 * Math.PI) / 180;
+// An axis claims neutrality on one dimension: a word on the Activated axis
+// is neither pleasant nor unpleasant, one on the Positive axis neither calm
+// nor activated. Sectors are drawn per cluster, not per word, so they press
+// words against an axis whether they belong there or not. Unpinned words
+// keep AXIS_GUARD clear of every axis unless AXIS_NEUTRAL vouches for them;
+// pinned words are placed deliberately and may sit anywhere.
+const AXIS_GUARD = (10 * Math.PI) / 180;
+const AXIS_NEUTRAL = new Set([
+  // Positive axis: warm, neither calm nor activated.
+  'caring', 'inspired', 'radiant', 'encouraged', 'centered',
+  'awe', // kept against the arousal norms on purpose
+  // Negative axis: heavy, neither calm nor activated.
+  'humiliated', 'useless', 'worthless', 'weak',
+  // Calm axis: restful, neither pleasant nor unpleasant.
+  'patient',
+]);
 const SPRING = 0.04;
 const ITER = 600;
 
@@ -126,7 +142,6 @@ const INNER_R = {
   teary: 0.3,
   sorry: 0.3,
   worthy: 0.3,
-  renewed: 0.33,
   yearning: 0.34,
   free: 0.36,
 };
@@ -217,6 +232,15 @@ const PINS = {
   // Fear and uncertainty, not readiness: kept off the Activated axis.
   apprehensive: [322, 0.36], // dread of what's ahead, a milder Worried
   unsure: [290, 0.27],       // mild uncertainty, little charge
+  // Axis audit: words whose sector held them against an axis they don't
+  // belong on.
+  renewed: [62, 0.3],        // restored and positive, not raw energy
+  rejuvenated: [40, 0.42],   // as above, a little more charge
+  shaken: [318, 0.7],        // clearly negative, not neutral activation
+  mortified: [279, 0.84],    // acute shame is aroused: Activated side
+  amazed: [56, 0.4],         // joy with real charge, off the Positive axis
+  lively: [70, 0.42],
+  vibrant: [72, 0.82],
   // Rated restful, not energetic: calm-positive.
   refreshed: [157, 0.42],
   vulnerable: [250, 0.36],   // exposed, not mildly positive
@@ -289,7 +313,7 @@ if (rows.length === 0 || rows.length < rawCount) {
 const byCluster = {};
 for (const r of rows) (byCluster[r.cluster] ??= []).push(r);
 const newIds = new Set(NEW_WORDS.map((w) => w.id));
-for (const id of [...Object.keys(PINS), ...SURFACE, ...Object.keys(INNER_R)]) {
+for (const id of [...Object.keys(PINS), ...SURFACE, ...Object.keys(INNER_R), ...AXIS_NEUTRAL]) {
   if (!newIds.has(id) && !rows.some((r) => r.id === id)) { console.error(`gen-radial-spread: word "${id}" not found`); process.exit(1); }
 }
 for (const w of NEW_WORDS) {
@@ -442,7 +466,8 @@ function constrain(r) {
     return;
   }
   let ang = Math.atan2(Math.abs(r.y), Math.abs(r.x));
-  ang = Math.max(AXIS_MARGIN, Math.min(Math.PI / 2 - AXIS_MARGIN, ang));
+  const margin = AXIS_NEUTRAL.has(r.id) ? AXIS_MARGIN : AXIS_GUARD;
+  ang = Math.max(margin, Math.min(Math.PI / 2 - margin, ang));
   rad = Math.max(r.rmin, Math.min(r.rmax, rad));
   r.x = r.sx * rad * Math.cos(ang);
   r.y = r.sy * rad * Math.sin(ang);
@@ -492,6 +517,19 @@ for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) 
   if (d < minD) { minD = d; minPair = `${a.label}~${b.label}`; }
 }
 console.log(`gen-radial-spread (${VARIANT.id}): ${rows.length} words, min pair ${minD.toFixed(3)} (${minPair}), ${violations} under target.`);
+// Every word that ended near an axis, and why it may sit there — read it
+// whenever pins or sectors change.
+const AXES = ['Activated', 'Positive', 'Calm', 'Negative'];
+const nearAxis = [];
+for (const r of rows) {
+  const deg = ((Math.atan2(r.y, r.x) * 180) / Math.PI + 360) % 360;
+  const k = Math.round(deg / 90) % 4;
+  const off = Math.abs(deg - Math.round(deg / 90) * 90);
+  if (off >= (AXIS_GUARD * 180) / Math.PI - 0.5) continue;
+  const why = r.band !== undefined ? 'pinned' : AXIS_NEUTRAL.has(r.id) ? 'neutral' : 'UNVOUCHED';
+  nearAxis.push(`${AXES[k]}: ${r.label} ${off.toFixed(0)}° (${why})`);
+}
+console.log(`  near an axis: ${nearAxis.join(', ')}`);
 
 const f = (v) => (v < 0 ? '-' : ' ') + Math.abs(v).toFixed(2);
 const pad = (s, n) => s + ' '.repeat(Math.max(1, n - s.length));
