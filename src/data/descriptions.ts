@@ -547,6 +547,434 @@ export const descriptions: Record<string, EmotionDescription> = {
     description: "Recognition that something you did or are matters. You let yourself feel it.",
     relatedIds: ['accomplished', 'confident', 'satisfied', 'worthy', 'strong'],
   },
+
+  // radial-intensity: courageous cluster
+  worthy: {
+    description: "Deserving of care and good things without having to earn them first. You can let that be true today.",
+    relatedIds: ['grounded', 'capable', 'proud', 'valiant'],
+  },
+  valiant: {
+    description: "Standing up for something or someone even though it costs you. Brave, with a cause behind it.",
+    relatedIds: ['proud', 'capable', 'strong', 'confident'],
+  },
+  // radial-intensity: curious cluster
+  intrigued: {
+    description: "Something snagged your attention and you want to know more. A small hook, gently pulling.",
+    relatedIds: ['involved', 'interested', 'fascinated', 'curious'],
+  },
+  involved: {
+    description: "Part of what's happening rather than watching it. You've got a hand in it and a stake in how it goes.",
+    relatedIds: ['intrigued', 'fascinated', 'curious', 'interested'],
+  },
+  fascinated: {
+    description: "So absorbed that time slips. You keep looking because there's always more to see.",
+    relatedIds: ['curious', 'involved', 'engaged', 'intrigued'],
+  },
+  exploring: {
+    description: "Out in the open, following whatever turns up next. Heading into the unknown on purpose.",
+    relatedIds: ['stimulated', 'engaged', 'curious', 'fascinated'],
+  },
+  stimulated: {
+    description: "Your mind is buzzing. Ideas and input are firing faster than you can catch them.",
+    relatedIds: ['exploring', 'engaged', 'curious', 'fascinated'],
+  },
+  // radial-intensity: peaceful cluster
+  centered: {
+    description: "Balanced around your own middle. Things can tilt around you without tipping you over.",
+    relatedIds: ['present', 'trusting', 'relaxed', 'patient'],
+  },
+  trusting: {
+    description: "Willing to lean on someone or something without checking twice. Your guard can stay down.",
+    relatedIds: ['centered', 'relaxed', 'present', 'patient'],
+  },
+  patient: {
+    description: "Able to wait without strain. What's slow can be slow; you don't need to push it along.",
+    relatedIds: ['relaxed', 'calm', 'trusting', 'centered'],
+  },
+  // radial-intensity: loving cluster
+  reflective: {
+    description: "Turned gently inward, looking back over something. Unhurried, letting it settle and show you what it means.",
+    relatedIds: ['vulnerable', 'accepting', 'caring', 'empathy'],
+  },
+  accepting: {
+    description: "Letting something be as it is, without needing it to change first. Sometimes that something is you.",
+    relatedIds: ['vulnerable', 'caring', 'empathy', 'reflective'],
+  },
+  caring: {
+    description: "Wanting good things for someone and keeping an eye on how they're doing.",
+    relatedIds: ['accepting', 'empathy', 'self-loving', 'vulnerable'],
+  },
+  empathy: {
+    description: "Feeling a little of what someone else feels, from the inside. Their weather reaches you too.",
+    relatedIds: ['caring', 'self-loving', 'compassion', 'accepting'],
+  },
+  'self-loving': {
+    description: "Treating yourself with the kindness you'd give a good friend. On your own side, gently and on purpose.",
+    relatedIds: ['compassion', 'empathy', 'caring', 'affectionate'],
+  },
+  compassion: {
+    description: "Seeing someone's pain and wanting to ease it. Your heart moves toward them instead of away.",
+    relatedIds: ['self-loving', 'affectionate', 'empathy', 'warm'],
+  },
+  affectionate: {
+    description: "Fondness that wants to show itself: a hug, a nickname, a hand on the shoulder.",
+    relatedIds: ['warm', 'compassion', 'self-loving', 'loving'],
+  },
+  // radial-intensity: grateful cluster
+  humbled: {
+    description: "Made smaller in a good way, by kindness you didn't expect or by something far bigger than you.",
+    relatedIds: ['moved', 'touched', 'grateful', 'appreciative'],
+  },
+  grace: {
+    description: "What it's like to be given more than you earned. Goodness arrives freely, and something in you softens.",
+    relatedIds: ['fortunate', 'appreciative', 'grateful', 'thankful'],
+  },
+  fortunate: {
+    description: "Things broke your way, and you know they might not have. Luck you can actually feel.",
+    relatedIds: ['thankful', 'grace', 'blessed', 'appreciative'],
+  },
+  thankful: {
+    description: "Gratitude with somewhere to go. You want to say thank you, out loud, to someone in particular.",
+    relatedIds: ['fortunate', 'blessed', 'grace', 'appreciative'],
+  },
+  blessed: {
+    description: "So much good around you that it feels like a gift you could never have arranged yourself. Full to the brim.",
+    relatedIds: ['thankful', 'fortunate', 'grace', 'appreciative'],
+  },
+  // radial-intensity: hopeful cluster
+  expectant: {
+    description: "Waiting for something you believe is on its way. Quiet, watchful, a little lit up.",
+    relatedIds: ['hopeful', 'encouraged', 'optimistic'],
+  },
+  encouraged: {
+    description: "Something gave you heart — a kind word, a sign, a small win — and now you want to keep going.",
+    relatedIds: ['hopeful', 'optimistic', 'expectant'],
+  },
+  // radial-intensity: angry cluster
+  moody: {
+    description: "Your mood keeps shifting under you, tipping dark without much warning. Hard to predict, even from inside.",
+    relatedIds: ['grouchy', 'cynical', 'irritated', 'disgruntled'],
+  },
+  grouchy: {
+    description: "Short-tempered in a low, grumbling way. You'd rather be left alone until it passes.",
+    relatedIds: ['moody', 'cynical', 'irritated', 'disgruntled'],
+  },
+  cynical: {
+    description: "Expecting the worst of people's motives. Hard to be let down when you never bought in.",
+    relatedIds: ['irritated', 'grouchy', 'moody', 'disdain'],
+  },
+  disdain: {
+    description: "Looking down on something as not worth your time. Cool and dismissive, keeping it at a distance.",
+    relatedIds: ['cynical', 'irritated', 'grouchy', 'disgruntled'],
+  },
+  disgruntled: {
+    description: "Quietly unhappy with how things are being handled. A complaint you keep muttering, mostly to yourself.",
+    relatedIds: ['impatient', 'irritated', 'bitter', 'cynical'],
+  },
+  impatient: {
+    description: "Everything's moving slower than you can stand. You want to skip ahead to the part where it's done.",
+    relatedIds: ['disgruntled', 'edgy', 'bitter', 'irritated'],
+  },
+  bitter: {
+    description: "A hurt that soured over time. Now it flavors everything near it, like an aftertaste that won't wash out.",
+    relatedIds: ['contempt', 'disgruntled', 'impatient', 'upset'],
+  },
+  edgy: {
+    description: "Prickly and easily set off. One more small thing and you might snap.",
+    relatedIds: ['impatient', 'upset', 'disgruntled', 'bitter'],
+  },
+  contempt: {
+    description: "Seeing someone as beneath you. Anger gone cold and personal, with a curl of the lip.",
+    relatedIds: ['bitter', 'resentful', 'upset', 'frustrated'],
+  },
+  upset: {
+    description: "Knocked off balance by something that hurt or wronged you. Stirred up and not settled yet.",
+    relatedIds: ['resentful', 'contempt', 'edgy', 'disturbed'],
+  },
+  disturbed: {
+    description: "Something you saw or heard sits deeply wrong with you. It keeps bothering you and won't let go.",
+    relatedIds: ['exasperated', 'aggravated', 'upset', 'agitated'],
+  },
+  exasperated: {
+    description: "Your patience is used up. You've explained, waited and tried again, and now you're throwing up your hands.",
+    relatedIds: ['aggravated', 'frustrated', 'disturbed', 'agitated'],
+  },
+  aggravated: {
+    description: "Something kept pressing on the same sore spot until a small annoyance became a real grievance.",
+    relatedIds: ['agitated', 'exasperated', 'angry', 'disturbed'],
+  },
+  agitated: {
+    description: "Anger stirring in the body: pacing, fidgeting, unable to settle. It wants somewhere to go.",
+    relatedIds: ['aggravated', 'angry', 'exasperated', 'hostile'],
+  },
+  vindictive: {
+    description: "Wanting them to hurt the way you hurt. The pull to even the score.",
+    relatedIds: ['exasperated', 'hostile', 'pissed', 'frustrated'],
+  },
+  hostile: {
+    description: "Braced against someone and ready for a fight. Your guard is up and pointed outward.",
+    relatedIds: ['pissed', 'angry', 'irate', 'outraged'],
+  },
+  pissed: {
+    description: "Plain, blunt anger. Someone messed up and you're done being polite about it.",
+    relatedIds: ['hostile', 'irate', 'outraged', 'angry'],
+  },
+  irate: {
+    description: "Loud, open anger that raises your voice and heats your face. Close to boiling over.",
+    relatedIds: ['outraged', 'pissed', 'hostile', 'furious'],
+  },
+  // radial-intensity: stressed cluster
+  cranky: {
+    description: "Tired and touchy. Little things grate because there's nothing left to cushion them.",
+    relatedIds: ['worn-out', 'restless', 'weary', 'depleted'],
+  },
+  'worn-out': {
+    description: "Used hard and running thin. You need rest, and your body is making sure you know it.",
+    relatedIds: ['cranky', 'weary', 'depleted', 'restless'],
+  },
+  weary: {
+    description: "Tiredness that has settled into your bones from carrying something for a long while.",
+    relatedIds: ['depleted', 'worn-out', 'tight', 'cranky'],
+  },
+  tight: {
+    description: "Held tense somewhere — jaw, shoulders, chest. Your body is gripping before your mind has noticed why.",
+    relatedIds: ['depleted', 'on-edge', 'weary', 'shaken'],
+  },
+  'on-edge': {
+    description: "Alert for the next thing to go wrong. Every ping or footstep makes you flinch a little.",
+    relatedIds: ['tight', 'shaken', 'depleted', 'burned-out'],
+  },
+  shaken: {
+    description: "Something rocked you and you haven't steadied yet. The tremor is still running through you.",
+    relatedIds: ['burned-out', 'on-edge', 'rattled', 'tight'],
+  },
+  'burned-out': {
+    description: "You've given past the point of refilling. Even things you care about feel like they cost too much.",
+    relatedIds: ['shaken', 'rattled', 'on-edge', 'stressed'],
+  },
+  rattled: {
+    description: "Thrown off your stride and scrambling to recover. Your composure slipped and you're grabbing for it.",
+    relatedIds: ['stressed', 'burned-out', 'frazzled', 'shaken'],
+  },
+  frazzled: {
+    description: "Pulled in too many directions at once. Frayed at every edge and running on scattered nerves.",
+    relatedIds: ['stressed', 'overwhelmed', 'rattled', 'burned-out'],
+  },
+  // radial-intensity: fear cluster
+  hesitant: {
+    description: "Pausing at the edge before you step. Part of you wants to go; part of you isn't sure it's safe.",
+    relatedIds: ['apprehensive', 'worried', 'nervous', 'afraid'],
+  },
+  apprehensive: {
+    description: "A quiet unease about something that hasn't happened yet. Not fear exactly — more like bracing.",
+    relatedIds: ['hesitant', 'worried', 'nervous', 'afraid'],
+  },
+  nervous: {
+    description: "Jittery about what's coming. Butterflies, busy hands, a mind that keeps rehearsing.",
+    relatedIds: ['afraid', 'worried', 'apprehensive', 'anxious'],
+  },
+  afraid: {
+    description: "Something feels dangerous, and you want to pull back from it. Plain, honest fear.",
+    relatedIds: ['nervous', 'anxious', 'paralyzed', 'worried'],
+  },
+  paralyzed: {
+    description: "Fear strong enough to freeze you. You can't move toward the thing or away from it.",
+    relatedIds: ['scared', 'afraid', 'frightened', 'anxious'],
+  },
+  frightened: {
+    description: "A sudden jolt of fear that sets your heart racing. It arrived fast and took hold.",
+    relatedIds: ['scared', 'panic', 'terrified', 'paralyzed'],
+  },
+  panic: {
+    description: "Fear taking over the body. Breath short, heart pounding, every thought shouting to get out now.",
+    relatedIds: ['terrified', 'frightened', 'scared', 'paralyzed'],
+  },
+  terrified: {
+    description: "Fear at its very peak. Everything in you is braced for the worst.",
+    relatedIds: ['panic', 'frightened', 'scared', 'paralyzed'],
+  },
+  // radial-intensity: unsettled cluster
+  questioning: {
+    description: "Turning something over before you accept it. A gentle doubt that keeps asking whether this is right.",
+    relatedIds: ['unsure', 'reluctant', 'skeptical', 'dissatisfied'],
+  },
+  unsure: {
+    description: "You don't know which way to go, and no option feels clearly right yet.",
+    relatedIds: ['reluctant', 'questioning', 'skeptical', 'dissatisfied'],
+  },
+  skeptical: {
+    description: "Holding back your belief until you see more. The claim still has to prove itself.",
+    relatedIds: ['reluctant', 'dissatisfied', 'unsure', 'concerned'],
+  },
+  dissatisfied: {
+    description: "Something falls short of what you needed, and you can't settle into it the way it is.",
+    relatedIds: ['skeptical', 'concerned', 'reluctant', 'confused'],
+  },
+  concerned: {
+    description: "Something you care about might be at risk, so your attention keeps drifting back to check on it.",
+    relatedIds: ['confused', 'dissatisfied', 'skeptical', 'perplexed'],
+  },
+  perplexed: {
+    description: "Thoroughly puzzled. You've looked at it from every side and it still won't add up.",
+    relatedIds: ['confused', 'suspicious', 'ungrounded', 'concerned'],
+  },
+  suspicious: {
+    description: "Sensing a hidden motive or a catch. You're watching closely, waiting for the other shoe to drop.",
+    relatedIds: ['ungrounded', 'perplexed', 'rejecting', 'confused'],
+  },
+  ungrounded: {
+    description: "Nothing solid underfoot. Your thoughts drift and scatter, and you can't find your center.",
+    relatedIds: ['rejecting', 'suspicious', 'perplexed', 'shocked'],
+  },
+  rejecting: {
+    description: "Pushing something away hard — an idea, a person, a situation. Everything in you says no.",
+    relatedIds: ['ungrounded', 'suspicious', 'shocked', 'perplexed'],
+  },
+  // radial-intensity: sad cluster
+  yearning: {
+    description: "A soft, steady reaching toward something you want but don't have. Your heart leaning out the window.",
+    relatedIds: ['teary', 'unhappy', 'lonely', 'disappointed'],
+  },
+  teary: {
+    description: "Close to crying. The feeling is right at the surface, ready to spill over.",
+    relatedIds: ['unhappy', 'yearning', 'lonely', 'disappointed'],
+  },
+  unhappy: {
+    description: "Things aren't good right now and you feel it. A general low that doesn't need a single cause.",
+    relatedIds: ['lonely', 'teary', 'yearning', 'disappointed'],
+  },
+  discouraged: {
+    description: "You tried and it didn't work, and the will to keep at it has dipped.",
+    relatedIds: ['melancholy', 'sad', 'gloomy', 'longing'],
+  },
+  gloomy: {
+    description: "A grey cloud over everything. Hard to see a bright side, or to want to look for one.",
+    relatedIds: ['melancholy', 'sorrow', 'grief', 'discouraged'],
+  },
+  sorrow: {
+    description: "Deep sadness with weight and dignity. A loss you carry slowly and quietly.",
+    relatedIds: ['gloomy', 'grief', 'melancholy', 'forlorn'],
+  },
+  grief: {
+    description: "The ache of losing someone or something you loved. It comes in waves, and the love has nowhere to go.",
+    relatedIds: ['forlorn', 'sorrow', 'gloomy', 'hopeless'],
+  },
+  forlorn: {
+    description: "Sad and alone with it, like someone left behind at the station. Nobody seems to be coming.",
+    relatedIds: ['grief', 'hopeless', 'sorrow', 'heartbroken'],
+  },
+  despondent: {
+    description: "Sunk low with the hope drained out. Even trying feels pointless right now.",
+    relatedIds: ['depressed', 'hopeless', 'anguish', 'heartbroken'],
+  },
+  depressed: {
+    description: "Heavy and flat, as if the color has drained out of things. Getting through the day takes everything.",
+    relatedIds: ['despondent', 'anguish', 'hopeless', 'heartbroken'],
+  },
+  anguish: {
+    description: "Pain so sharp it's hard to bear. Sadness at full force, tearing through you.",
+    relatedIds: ['depressed', 'despondent', 'heartbroken', 'hopeless'],
+  },
+  // radial-intensity: numb cluster
+  resistant: {
+    description: "Something in you is digging in its heels. You don't want to go there, even if you can't say why.",
+    relatedIds: ['indifferent', 'bored', 'aloof', 'uneasy'],
+  },
+  indifferent: {
+    description: "It doesn't matter much either way. You can't find a reason to care right now.",
+    relatedIds: ['resistant', 'aloof', 'empty', 'bored'],
+  },
+  aloof: {
+    description: "Keeping yourself at arm's length. Cool, a little apart, not letting anyone too close.",
+    relatedIds: ['empty', 'indifferent', 'resistant', 'distant'],
+  },
+  distant: {
+    description: "Far away inside, even with people right here. Their voices reach you faintly, as if from another room.",
+    relatedIds: ['empty', 'listless', 'removed', 'aloof'],
+  },
+  listless: {
+    description: "No spark for anything. You drift from one thing to the next without any pull.",
+    relatedIds: ['removed', 'distant', 'empty', 'numb'],
+  },
+  removed: {
+    description: "Watching your own life from a step away. Your body is here; your feelings are somewhere else.",
+    relatedIds: ['numb', 'listless', 'distant', 'withdrawn'],
+  },
+  withdrawn: {
+    description: "Pulled back into yourself. Reaching out, or being reached, feels like too much right now.",
+    relatedIds: ['numb', 'disconnected', 'removed', 'lethargic'],
+  },
+  lethargic: {
+    description: "Heavy and slow, like moving through water. Your body won't get going.",
+    relatedIds: ['numb', 'withdrawn', 'disconnected', 'shut-down'],
+  },
+  isolated: {
+    description: "Cut off from everyone, whether you chose it or not. The quiet around you has grown thick.",
+    relatedIds: ['disconnected', 'shut-down', 'withdrawn', 'lethargic'],
+  },
+  'shut-down': {
+    description: "Everything inside went quiet to protect you. Feeling, talking, reaching out — all switched off for now.",
+    relatedIds: ['disconnected', 'isolated', 'lethargic', 'withdrawn'],
+  },
+  // radial-intensity: shame cluster
+  inhibited: {
+    description: "Holding yourself back — your words, your laugh, the way you move — in case of how it lands.",
+    relatedIds: ['self-conscious', 'embarrassed', 'weak', 'ashamed'],
+  },
+  'self-conscious': {
+    description: "Suddenly aware of being seen. You notice your hands, your voice, how you might look to them.",
+    relatedIds: ['embarrassed', 'inhibited', 'weak', 'ashamed'],
+  },
+  weak: {
+    description: "Feeling you should be stronger than this and aren't. Easily knocked over right now.",
+    relatedIds: ['embarrassed', 'ashamed', 'self-conscious', 'useless'],
+  },
+  useless: {
+    description: "The sense that nothing you do helps or counts. Hard to see where you fit or what you add.",
+    relatedIds: ['ashamed', 'mortified', 'weak', 'humiliated'],
+  },
+  mortified: {
+    description: "Embarrassment so intense you want to disappear. The moment keeps replaying, and your cheeks keep burning.",
+    relatedIds: ['humiliated', 'useless', 'worthless', 'ashamed'],
+  },
+  worthless: {
+    description: "A deep ache of not mattering, of not being enough. From the inside, it can feel like the whole truth.",
+    relatedIds: ['humiliated', 'mortified', 'useless', 'ashamed'],
+  },
+  // radial-intensity: guilt cluster
+  sorry: {
+    description: "Wishing you hadn't caused someone hurt or trouble, and wanting to make it right.",
+    relatedIds: ['regret', 'remorseful', 'embarrassed'],
+  },
+  regret: {
+    description: "Looking back at a choice and wishing you'd gone the other way. The road not taken keeps tugging.",
+    relatedIds: ['remorseful', 'sorry', 'ashamed'],
+  },
+  remorseful: {
+    description: "Deep, aching sorrow for harm you caused. You feel its full weight and wish you could undo it.",
+    relatedIds: ['regret', 'sorry', 'ashamed'],
+  },
+  // radial-intensity: powerless cluster
+  sensitive: {
+    description: "Raw and easily touched. Small things land harder than they usually would.",
+    relatedIds: ['victim', 'incapable', 'impotent', 'helpless'],
+  },
+  victim: {
+    description: "The sense that life, or someone in it, is acting on you, and you're the one taking the hit.",
+    relatedIds: ['sensitive', 'incapable', 'impotent', 'helpless'],
+  },
+  incapable: {
+    description: "Facing something and feeling you don't have what it takes. The task looms larger than you.",
+    relatedIds: ['victim', 'impotent', 'helpless', 'sensitive'],
+  },
+  impotent: {
+    description: "You want to act, but your efforts don't land. You push and push, and nothing moves.",
+    relatedIds: ['helpless', 'incapable', 'trapped', 'victim'],
+  },
+  trapped: {
+    description: "No way out that you can see. Walls on every side, and every door seems shut.",
+    relatedIds: ['helpless', 'resigned', 'impotent', 'incapable'],
+  },
 };
 
 // Fallback for emotions without descriptions
