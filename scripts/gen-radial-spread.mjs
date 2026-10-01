@@ -59,11 +59,11 @@ const SECTORS = {
   grateful:   [125, 150],
   peaceful:   [145, 177],
   // calm + negative
-  numb:       [183, 212],
-  sad:        [206, 238],
-  powerless:  [232, 252],
-  guilt:      [247, 259],
-  shame:      [253, 267],
+  numb:       [183, 214],
+  sad:        [210, 245],
+  powerless:  [238, 256],
+  guilt:      [251, 262],
+  shame:      [256, 268],
   // activated + negative
   unsettled:  [273, 297],
   angry:      [291, 322],
@@ -97,7 +97,7 @@ const PIN_R_BAND = 0.1;
 const CORNER_R = 1.27; // 0.16 from the corner: inside the 0.35 reveal radius
 const PINS = {
   // Axis tips — the purest, strongest form of each axis alone.
-  astonished: [0, 0.95],
+  astonished: [7, 0.95],     // rated mildly pleasant, so just above the axis
   elated: [90, 0.95],
   sleepy: [180, 0.95],
   miserable: [270, 0.95],
@@ -118,10 +118,10 @@ const PINS = {
   panic: [323, 1.18],
   // Activated axis, mild → strong: Alert, Surprised, Shocked, Astonished.
   alert: [1, 0.36],
-  surprised: [357, 0.6],
+  surprised: [6, 0.6],
   shocked: [354, 0.8],
   invigorated: [11, 0.8],
-  restless: [356, 0.5],
+  restless: [350, 0.5],
   overwhelmed: [336, 0.9],   // was crowding the Astonished tip
   // Positive axis: Glad, Happy, Delighted, Elated.
   glad: [92, 0.38],
@@ -144,6 +144,15 @@ const PINS = {
   'burned-out': [220, 0.92],
   // Moved off an axis they don't belong on.
   ungrounded: [286, 0.5],    // mild; was near the Negative tip
+  // Rated low-arousal in the Warriner et al. (2013) norms but filed under
+  // activated families (fear, unsettled, angry): moved to calm-negative.
+  hesitant: [196, 0.3],
+  reluctant: [205, 0.42],
+  concerned: [214, 0.5],
+  disdain: [203, 0.62],
+  disgruntled: [221, 0.58],
+  // Rated restful, not energetic: calm-positive.
+  refreshed: [157, 0.42],
   vulnerable: [250, 0.36],   // exposed, not mildly positive
   'shut-down': [203, 0.9],   // dissociative, clearly negative
   fulfilled: [140, 0.78],    // positive, not pure calm
