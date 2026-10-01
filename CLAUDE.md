@@ -35,7 +35,7 @@ Note that the specs predate much of what shipped; where they disagree with the c
 
 **Data model:** Coordinate (x, y) is the primary datum, not the label. Labels are optional annotation. A recorded entry holds a set of pins. The diary is `localStorage`-backed and append-only today, pruned at a ceiling.
 
-**Vocabulary is pluggable.** `src/data/emotions.ts` is a thin re-export; which words load is decided by the framework registry in `src/data/frameworks/`. Add or swap a vocabulary there, not in the re-export.
+**Vocabulary is pluggable.** `src/data/emotions.ts` is a thin re-export; which words load is decided by the framework registry in `src/data/frameworks/`. Add or swap a vocabulary there, not in the re-export. The admin header's Vocabulary switcher picks which registered framework the app uses, saved per browser (`constellation-vocabulary` in localStorage, default `radial-intensity`); open app tabs reload when it changes. The Emotions editor always edits `circumplex-custom`.
 
 **What ships today:** the field and pin-planting loop, the card tray with adjustable pins, a returning-user mirror, the diary with history views (day/week charts, entry detail), CSV export, constellation replay, a grounding-cue welcome, and an admin emotion editor at `src/admin/`.
 
