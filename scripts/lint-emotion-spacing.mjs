@@ -4,7 +4,8 @@
 // colliding coordinates — including edits saved through the admin editor.
 //
 // The active framework's word list lives in src/data/frameworks/<id>.ts, where
-// <id> is the activeFrameworkId declared in src/data/frameworks/index.ts. This
+// <id> is the DEFAULT_FRAMEWORK_ID declared in src/data/frameworks/index.ts (the
+// vocabulary the app ships; the admin switcher can override it per browser). This
 // script resolves that file dynamically so it always checks the words the app
 // actually renders.
 //
@@ -23,11 +24,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Resolve which framework is active, then check its data file.
 const REGISTRY_PATH = join(ROOT, 'src/data/frameworks/index.ts');
 const activeIdMatch = readFileSync(REGISTRY_PATH, 'utf8').match(
-  /activeFrameworkId\s*=\s*'([^']+)'/,
+  /DEFAULT_FRAMEWORK_ID\s*=\s*'([^']+)'/,
 );
 if (!activeIdMatch) {
   console.error(
-    `Could not read activeFrameworkId from ${REGISTRY_PATH} — the framework registry format changed.`,
+    `Could not read DEFAULT_FRAMEWORK_ID from ${REGISTRY_PATH} — the framework registry format changed.`,
   );
   process.exit(1);
 }

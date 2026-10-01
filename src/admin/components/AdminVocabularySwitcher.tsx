@@ -13,7 +13,11 @@ export function AdminVocabularySwitcher() {
         value={activeFrameworkId}
         onChange={(e) => {
           saveFrameworkId(e.target.value);
-          window.location.reload();
+          // A ?framework= preview outranks the saved choice, so drop it or
+          // the reload would show the preview again.
+          const url = new URL(window.location.href);
+          url.searchParams.delete('framework');
+          window.location.assign(url.toString());
         }}
         style={{
           padding: '4px 6px',

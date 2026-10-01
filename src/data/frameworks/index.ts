@@ -46,17 +46,23 @@ export function saveFrameworkId(id: string): void {
   }
 }
 
-// The framework currently driving the field.
-export const activeFrameworkId = resolveFrameworkId(readSavedFrameworkId());
-
 // Dev-only preview: ?framework=<id> swaps the vocabulary for one load, so a
-// proposed layout can be seen in the real field before it is adopted.
+// proposed layout can be seen in the real field before it is adopted. It
+// outranks the saved choice for that load only and is never saved.
 // Typed loosely because this module is also compiled for the node scripts.
 const isDev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
 const search = (globalThis as { location?: { search: string } }).location?.search;
 const previewId = isDev && search ? new URLSearchParams(search).get('framework') : null;
 
-const active = (previewId && frameworks[previewId]) || frameworks[activeFrameworkId];
+// The framework currently driving the field: a valid preview, else the saved
+// choice, else the default. Everything that reports "which vocabulary" (the
+// admin switcher, the Definitions page) reads this one value.
+export const activeFrameworkId =
+  previewId && Object.prototype.hasOwnProperty.call(frameworks, previewId)
+    ? previewId
+    : resolveFrameworkId(readSavedFrameworkId());
+
+const active = frameworks[activeFrameworkId];
 if (!active) {
   throw new Error(
     `activeFrameworkId "${activeFrameworkId}" is not registered in the framework registry.`,
