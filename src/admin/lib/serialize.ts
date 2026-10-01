@@ -39,33 +39,3 @@ export const circumplexCustom: Framework = {
 };
 `;
 }
-
-export function serializeDescriptions(emotions: AdminEmotion[]): string {
-  const entries = emotions
-    .filter((e) => e.description !== '' || e.relatedIds.length > 0)
-    .map((e) => {
-      const relatedStr = e.relatedIds
-        .map((id) => `'${escape(id)}'`)
-        .join(', ');
-      return `  '${escape(e.id)}': {\n    description: '${escape(e.description)}',\n    relatedIds: [${relatedStr}],\n  },`;
-    })
-    .join('\n');
-
-  return `export interface EmotionDescription {
-  description: string;
-  relatedIds: string[];
-}
-
-export const descriptions: Record<string, EmotionDescription> = {
-${entries}
-};
-
-// Fallback for emotions without descriptions
-export function getDescription(id: string): EmotionDescription {
-  return descriptions[id] ?? {
-    description: "A genuine feeling worth noticing.",
-    relatedIds: [],
-  };
-}
-`;
-}
