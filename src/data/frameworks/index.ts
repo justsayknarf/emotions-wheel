@@ -3,6 +3,7 @@ import { circumplexCustom } from './circumplex-custom';
 import { radialIntensity } from './radial-intensity';
 import { radialSpread } from './radial-spread';
 import { radialClustered } from './radial-clustered';
+import { radialOrganic } from './radial-organic';
 
 export type { Emotion, EmotionDepth, Framework } from './types';
 
@@ -12,10 +13,11 @@ export const frameworks: Record<string, Framework> = {
   [radialIntensity.id]: radialIntensity,
   [radialSpread.id]: radialSpread,
   [radialClustered.id]: radialClustered,
+  [radialOrganic.id]: radialOrganic,
 };
 
 // The vocabulary the app ships with.
-export const DEFAULT_FRAMEWORK_ID = 'radial-intensity';
+export const DEFAULT_FRAMEWORK_ID = 'radial-organic';
 
 // The admin page's vocabulary switcher saves its choice here (same pattern as
 // the theme in src/config/theme.ts). It is read once, at module load: the
