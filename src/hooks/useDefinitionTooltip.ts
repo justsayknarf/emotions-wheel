@@ -37,11 +37,16 @@ export function useDefinitionTooltipApi(): DefinitionTooltipApi {
   return useContext(DefinitionTooltipContext);
 }
 
+// The word whose tooltip shows: open, or holding through the grace.
+const shownId = (s: DefinitionState) => (s.phase === 'open' || s.phase === 'grace' ? s.openId : null);
+
 export function useDefinitionTooltip(layout: TipLayout): DefinitionTooltipApi {
-  // The machine's state lives in a ref so events can be stepped synchronously
-  // from event handlers and timers; the state copy only drives renders.
+  // The machine lives only in a ref, stepped synchronously from event
+  // handlers and timers. React state holds just the open word, set only when
+  // it changes: App owns this hook, and a render per star crossed (waiting,
+  // pending, press toggles) would re-render App during field interaction.
   const stateRef = useRef<DefinitionState>(INITIAL_DEFINITION_STATE);
-  const [state, setState] = useState<DefinitionState>(INITIAL_DEFINITION_STATE);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [litId, setLitId] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const dispatchRef = useRef<((event: DefinitionEvent) => void) | null>(null);
@@ -58,10 +63,10 @@ export function useDefinitionTooltip(layout: TipLayout): DefinitionTooltipApi {
         }, timer.set);
       }
     }
-    if (next !== stateRef.current) {
-      stateRef.current = next;
-      setState(next);
-    }
+    const prevOpen = shownId(stateRef.current);
+    stateRef.current = next;
+    const nextOpen = shownId(next);
+    if (nextOpen !== prevOpen) setOpenId(nextOpen);
   }, []);
 
   useEffect(() => {
@@ -83,7 +88,6 @@ export function useDefinitionTooltip(layout: TipLayout): DefinitionTooltipApi {
   const release = useCallback((restId: string | null) => dispatch({ type: 'release', restId }), [dispatch]);
   const tap = useCallback((id: string) => dispatch({ type: 'tap', id }), [dispatch]);
 
-  const openId = state.phase === 'open' || state.phase === 'grace' ? state.openId : null;
   return useMemo(
     () => ({ enabled: true, layout, openId, litId, hover, press, release, tap }),
     [layout, openId, litId, hover, press, release, tap],
