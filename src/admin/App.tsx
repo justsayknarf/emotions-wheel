@@ -9,6 +9,7 @@ import { AdminNav } from './components/AdminNav';
 import { AdminRevealTuning } from './components/AdminRevealTuning';
 import { EmotionsPage } from './pages/EmotionsPage';
 import { ThemesPage } from './pages/ThemesPage';
+import { DefinitionsPage } from './pages/DefinitionsPage';
 import { generateId } from './lib/idgen';
 import { useAdminRoute } from './lib/useAdminRoute';
 
@@ -144,6 +145,7 @@ export function AdminApp() {
             onToggleCluster={toggleCluster}
           />
         )}
+        {route === 'definitions' && <DefinitionsPage />}
         {route === 'reveal' && (
           <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
             <AdminRevealTuning />
