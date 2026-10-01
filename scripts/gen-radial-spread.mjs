@@ -61,6 +61,22 @@ const MIN_DIST_SURFACE = 0.15; // any pair involving a surface word
 // real check; this is the relaxation's stand-in for it.
 const MIN_DIST_SURFACE_PAIR = 0.22;
 const AXIS_MARGIN = (3 * Math.PI) / 180;
+// An axis claims neutrality on one dimension: a word on the Activated axis
+// is neither pleasant nor unpleasant, one on the Positive axis neither calm
+// nor activated. Sectors are drawn per cluster, not per word, so they press
+// words against an axis whether they belong there or not. Unpinned words
+// keep AXIS_GUARD clear of every axis unless AXIS_NEUTRAL vouches for them;
+// pinned words are placed deliberately and may sit anywhere.
+const AXIS_GUARD = (10 * Math.PI) / 180;
+const AXIS_NEUTRAL = new Set([
+  // Positive axis: warm, neither calm nor activated.
+  'caring', 'inspired', 'radiant', 'encouraged', 'centered',
+  'awe', // kept against the arousal norms on purpose
+  // Negative axis: heavy, neither calm nor activated.
+  'humiliated', 'useless', 'worthless', 'weak',
+  // Calm axis: restful, neither pleasant nor unpleasant.
+  'patient',
+]);
 const SPRING = 0.04;
 const ITER = 600;
 
@@ -103,6 +119,32 @@ const CLUSTER_MAX_R = {
   peaceful: 0.9,
   shame: 0.9,
 };
+
+// Inner radii. Every cluster's mildest word would otherwise target R_INNER,
+// and the clamp holds anything pushed inward at the same floor, so the words
+// nearest the core sat on a perfect circle. These give the innermost words a
+// radius by how far each one actually sits from neutral (activation and
+// valence), and each one's floor follows its own target, so the edge of the
+// still point is ragged rather than round.
+const INNER_R = {
+  // Settled and balanced, close to neutral: the one star allowed inside the
+  // core, so the still point's edge doesn't read as a ring of empty sky.
+  centered: 0.12,
+  present: 0.23,
+  interested: 0.24,
+  unsure: 0.24,
+  sensitive: 0.26,
+  questioning: 0.27,
+  inhibited: 0.27,
+  humbled: 0.28,
+  teary: 0.3,
+  sorry: 0.3,
+  worthy: 0.3,
+  yearning: 0.34,
+  free: 0.36,
+};
+// How far inside its own target radius a word may be pushed.
+const FLOOR_SLACK = 0.02;
 
 // Hand-placed words: degrees (0 activated, 90 positive, 180 calm, 270
 // negative) and radius (intensity). Held within PIN_BAND of the angle and
@@ -176,6 +218,29 @@ const PINS = {
   concerned: [214, 0.5],
   disdain: [203, 0.62],
   disgruntled: [221, 0.58],
+  cynical: [238, 0.42],      // cool distrust, no heat: beside Disdain, not Irritated
+  // Innermost words whose cluster put them on the wrong side of the
+  // Activated axis.
+  grounded: [142, 0.36],     // settled, not energized: calm-positive
+  expectant: [80, 0.3],      // anticipation carries some charge
+  uneasy: [306, 0.3],        // low-level anxiety, not numbness
+  moody: [248, 0.42],        // sulky and low, not activated
+  // Filed under "stressed", whose sector hugs the Activated axis, but it is
+  // irritable and clearly negative: with Grouchy and Irritated.
+  cranky: [305, 0.32],
+  grouchy: [295, 0.36],      // Cranky's near-synonym: simmering, not activated
+  // Fear and uncertainty, not readiness: kept off the Activated axis.
+  apprehensive: [322, 0.36], // dread of what's ahead, a milder Worried
+  unsure: [290, 0.27],       // mild uncertainty, little charge
+  // Axis audit: words whose sector held them against an axis they don't
+  // belong on.
+  renewed: [62, 0.3],        // restored and positive, not raw energy
+  rejuvenated: [40, 0.42],   // as above, a little more charge
+  shaken: [318, 0.7],        // clearly negative, not neutral activation
+  mortified: [279, 0.84],    // acute shame is aroused: Activated side
+  amazed: [56, 0.4],         // joy with real charge, off the Positive axis
+  lively: [70, 0.42],
+  vibrant: [72, 0.82],
   // Rated restful, not energetic: calm-positive.
   refreshed: [157, 0.42],
   vulnerable: [250, 0.36],   // exposed, not mildly positive
@@ -248,7 +313,7 @@ if (rows.length === 0 || rows.length < rawCount) {
 const byCluster = {};
 for (const r of rows) (byCluster[r.cluster] ??= []).push(r);
 const newIds = new Set(NEW_WORDS.map((w) => w.id));
-for (const id of [...Object.keys(PINS), ...SURFACE]) {
+for (const id of [...Object.keys(PINS), ...SURFACE, ...Object.keys(INNER_R), ...AXIS_NEUTRAL]) {
   if (!newIds.has(id) && !rows.some((r) => r.id === id)) { console.error(`gen-radial-spread: word "${id}" not found`); process.exit(1); }
 }
 for (const w of NEW_WORDS) {
@@ -269,7 +334,8 @@ for (const [cluster, list] of Object.entries(byCluster)) {
     const u = n === 1 ? 0.5 : i / (n - 1);
     r.rmax = CLUSTER_MAX_R[cluster] ?? R_OUTER;
     const t = (0.5 + i * PHI) % 1;
-    let rad = Math.sqrt(R_INNER ** 2 + u * (r.rmax ** 2 - R_INNER ** 2));
+    let rad = INNER_R[r.id] ?? Math.sqrt(R_INNER ** 2 + u * (r.rmax ** 2 - R_INNER ** 2));
+    r.rmin = r.id in INNER_R ? rad - FLOOR_SLACK : R_INNER;
     let ang = a0 + (0.12 + 0.76 * t) * (a1 - a0);
     const pin = PINS[r.id];
     if (pin) {
@@ -351,13 +417,17 @@ if (ORGANIC) {
   }
   // Dense patches pack tighter; sparse ones keep their few words far apart.
   for (const r of rows) r.space = SPACE_MAX - (SPACE_MAX - SPACE_MIN) * density(r.tx, r.ty);
-  // Knots: deep, unpinned words of one cluster, seeded in a fixed order.
+  // Knots: deep, unpinned words of one cluster. Each cluster draws from its
+  // own seeded sequence, so pinning or freeing a word reshapes only its own
+  // cluster's knots, not every cluster drawn after it.
   let knotId = 0;
   for (const cluster of Object.keys(byCluster)) {
     const free = rows.filter((r) => r.cluster === cluster && r.band === undefined && r.depth === 'deep');
+    const clusterSeed = [...cluster].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0, SEED);
+    const krand = mulberry32(clusterSeed);
     while (free.length) {
       const seed = free.shift();
-      const size = KNOT_SIZES[Math.floor(rand() * KNOT_SIZES.length)];
+      const size = KNOT_SIZES[Math.floor(krand() * KNOT_SIZES.length)];
       const near = free
         .map((r) => [Math.hypot(r.tx - seed.tx, r.ty - seed.ty), r])
         .filter(([d]) => d < KNOT_REACH)
@@ -370,7 +440,7 @@ if (ORGANIC) {
       const cx = knot.reduce((s, r) => s + r.tx, 0) / knot.length;
       const cy = knot.reduce((s, r) => s + r.ty, 0) / knot.length;
       // Nudge the whole knot a little, so knots don't sit on the sector's grid.
-      const jr = rand() * 0.05, ja = rand() * Math.PI * 2;
+      const jr = krand() * 0.05, ja = krand() * Math.PI * 2;
       for (const r of knot) {
         r.knot = knotId;
         r.tx += (cx - r.tx) * KNOT_PULL + jr * Math.cos(ja);
@@ -400,14 +470,26 @@ function constrain(r) {
     return;
   }
   let ang = Math.atan2(Math.abs(r.y), Math.abs(r.x));
-  ang = Math.max(AXIS_MARGIN, Math.min(Math.PI / 2 - AXIS_MARGIN, ang));
-  rad = Math.max(R_INNER, Math.min(r.rmax, rad));
+  const margin = AXIS_NEUTRAL.has(r.id) ? AXIS_MARGIN : AXIS_GUARD;
+  ang = Math.max(margin, Math.min(Math.PI / 2 - margin, ang));
+  rad = Math.max(r.rmin, Math.min(r.rmax, rad));
   r.x = r.sx * rad * Math.cos(ang);
   r.y = r.sy * rad * Math.sin(ang);
 }
 
+// The spacing rules ask for more room than the annulus holds, so without
+// slack the relaxation never settles: every pair sits on its limit and one
+// moved word shoves its neighbours, theirs, and so on across the field.
+// Scaling every gap except surface-surface (the lint's real check) leaves
+// room to settle, so a pin change stays local. 1 = the jammed original.
+const SLACK = 0.9;
+
 function gap(a, b) {
   if (a.depth === 'surface' && b.depth === 'surface') return MIN_DIST_SURFACE_PAIR;
+  return SLACK * looseGap(a, b);
+}
+
+function looseGap(a, b) {
   if (a.depth === 'surface' || b.depth === 'surface') return MIN_DIST_SURFACE;
   const base = a.cluster === b.cluster ? MIN_DIST : MIN_DIST_CROSS;
   if (!ORGANIC) return base;
@@ -450,6 +532,19 @@ for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) 
   if (d < minD) { minD = d; minPair = `${a.label}~${b.label}`; }
 }
 console.log(`gen-radial-spread (${VARIANT.id}): ${rows.length} words, min pair ${minD.toFixed(3)} (${minPair}), ${violations} under target.`);
+// Every word that ended near an axis, and why it may sit there — read it
+// whenever pins or sectors change.
+const AXES = ['Activated', 'Positive', 'Calm', 'Negative'];
+const nearAxis = [];
+for (const r of rows) {
+  const deg = ((Math.atan2(r.y, r.x) * 180) / Math.PI + 360) % 360;
+  const k = Math.round(deg / 90) % 4;
+  const off = Math.abs(deg - Math.round(deg / 90) * 90);
+  if (off >= (AXIS_GUARD * 180) / Math.PI - 0.5) continue;
+  const why = r.band !== undefined ? 'pinned' : AXIS_NEUTRAL.has(r.id) ? 'neutral' : 'UNVOUCHED';
+  nearAxis.push(`${AXES[k]}: ${r.label} ${off.toFixed(0)}° (${why})`);
+}
+console.log(`  near an axis: ${nearAxis.join(', ')}`);
 
 const f = (v) => (v < 0 ? '-' : ' ') + Math.abs(v).toFixed(2);
 const pad = (s, n) => s + ' '.repeat(Math.max(1, n - s.length));
