@@ -65,7 +65,7 @@ const SECTORS = {
   guilt:      [251, 262],
   shame:      [256, 268],
   // activated + negative
-  unsettled:  [273, 297],
+  unsettled:  [282, 306],
   angry:      [291, 322],
   fear:       [316, 340],
   stressed:   [334, 357],
@@ -133,9 +133,8 @@ const PINS = {
   calm: [177, 0.7],
   lethargic: [194, 0.78],  // keeps Sleepy the calm tip
   // Negative axis: Unhappy, Hurt, Upset, Miserable.
-  unhappy: [268, 0.32],
-  hurt: [270, 0.5],
-  upset: [278, 0.7],
+  unhappy: [262, 0.32],
+  upset: [276, 0.66],
   // Low-arousal exhaustion words, filed under "stressed" but not activated:
   // they belong with the calm-negative feelings.
   weary: [198, 0.55],
@@ -143,7 +142,14 @@ const PINS = {
   depleted: [213, 0.82],
   'burned-out': [220, 0.92],
   // Moved off an axis they don't belong on.
-  ungrounded: [286, 0.5],    // mild; was near the Negative tip
+  ungrounded: [300, 0.4],    // mild; was near the Negative tip
+  // Rated agitated, not low-energy (grief and shame are aroused states): just
+  // past the Negative axis on the activated side, short of fear and anger.
+  'self-conscious': [282, 0.32],
+  ashamed: [286, 0.74],
+  victim: [292, 0.56],
+  anguish: [283, 0.92],
+  heartbroken: [294, 0.9],
   // Rated low-arousal in the Warriner et al. (2013) norms but filed under
   // activated families (fear, unsettled, angry): moved to calm-negative.
   hesitant: [196, 0.3],
@@ -170,10 +176,11 @@ const PINS = {
   sad: [210, 0.62],
   helpless: [229, 0.5],
   regret: [246, 0.64],
-  embarrassed: [256, 0.48],
-  confused: [293, 0.6],
-  frustrated: [302, 0.5],
-  anxious: [320, 0.6],
+  hurt: [266, 0.56],
+  embarrassed: [283, 0.44],
+  confused: [301, 0.64],
+  frustrated: [313, 0.5],
+  anxious: [326, 0.62],
   stressed: [334, 0.52],
 };
 // The always-visible words. Everything else is deep.
