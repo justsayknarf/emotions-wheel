@@ -6,6 +6,8 @@ import { describeDelta, hasNotableDelta } from '../../data/departure';
 import { AxisSlider } from './AxisSlider';
 import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import { WordTag } from './WordTag';
+import { useDefinitionTooltipApi } from '../../hooks/useDefinitionTooltip';
+import { DEFINITION_TIP_ID } from '../EmotionField/DefinitionTip';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -178,7 +180,23 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     return () => ro.disconnect();
   }, []);
 
+  // The field's definition tooltip (word-definition-tooltips). Read-only
+  // cards stay out of it.
+  const definition = useDefinitionTooltipApi();
+  const defines = definition.enabled && !readOnly;
+  const isBand = definition.layout === 'band';
+  const describedBy = (id: string) => (defines && definition.openId === id ? DEFINITION_TIP_ID : undefined);
+  const hoverChange = (id: string) => (defines ? (on: boolean) => definition.hover(on ? id : null, 'card') : undefined);
+
+  // Desktop: tap names or un-names, as before. Phone tray: tap names the word
+  // and opens its definition; a word already named opens its definition and
+  // is removed with its × instead (R11).
   const toggleName = (id: string) => {
+    if (defines && isBand) {
+      if (!recognizedSet.has(id)) onRecognize(id);
+      definition.tap(id);
+      return;
+    }
     if (recognizedSet.has(id)) onDerecognize(id);
     else onRecognize(id);
   };
@@ -189,6 +207,11 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     return (
       <button
         onClick={(ev) => { ev.stopPropagation(); toggleName(e.id); }}
+        aria-describedby={describedBy(e.id)}
+        onPointerEnter={(ev) => { if (ev.pointerType !== 'touch') hoverChange(e.id)?.(true); }}
+        onPointerLeave={(ev) => { if (ev.pointerType !== 'touch') hoverChange(e.id)?.(false); }}
+        onFocus={() => hoverChange(e.id)?.(true)}
+        onBlur={() => hoverChange(e.id)?.(false)}
         style={{
           background: 'transparent',
           border: 'none',
@@ -208,7 +231,14 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
 
   // A neighborhood tag beneath the question — tappable to name (or un-name).
   const renderTag = (e: NearbyEmotion) => (
-    <WordTag key={e.id} label={e.label} named={recognizedSet.has(e.id)} onToggle={() => toggleName(e.id)} />
+    <WordTag
+      key={e.id}
+      label={e.label}
+      named={recognizedSet.has(e.id)}
+      onToggle={() => toggleName(e.id)}
+      onHoverChange={hoverChange(e.id)}
+      describedBy={describedBy(e.id)}
+    />
   );
 
   // While a slider is dragged, the thumbs follow this local draft; the committed
@@ -561,7 +591,16 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, color: 'var(--ui-gold-dim)', letterSpacing: '0.02em' }}>your words:</span>
             {pin.recognizedWords.map((id) => (
-              <WordTag key={id} label={labelForId(id)} named onToggle={() => onDerecognize(id)} />
+              <WordTag
+                key={id}
+                label={labelForId(id)}
+                named
+                onToggle={defines && isBand ? () => definition.tap(id) : () => onDerecognize(id)}
+                onDismiss={defines && isBand ? () => onDerecognize(id) : undefined}
+                dismissLabel="Remove"
+                onHoverChange={hoverChange(id)}
+                describedBy={describedBy(id)}
+              />
             ))}
           </div>
         )}

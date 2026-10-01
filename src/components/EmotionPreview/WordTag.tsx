@@ -47,9 +47,17 @@ interface Props {
   onToggle?: () => void;
   // A trailing × that sets a suggestion aside without naming it.
   onDismiss?: () => void;
+  // Definition tooltip wiring (word-definition-tooltips R5/R19). Only the
+  // draft card passes these. Pointer enter/leave (never touch) and keyboard
+  // focus/blur report hovering.
+  onHoverChange?: (hovering: boolean) => void;
+  // Points assistive tech at the open definition tooltip.
+  describedBy?: string;
+  // The × button's accessible verb ("Dismiss" a suggestion, "Remove" a tag).
+  dismissLabel?: string;
 }
 
-export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismiss }: Props) {
+export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismiss, onHoverChange, describedBy, dismissLabel = 'Dismiss' }: Props) {
   const t = TONES[tone];
   const text = label.toLowerCase();
   const bodyPadding = onDismiss ? '4px 3px 4px 11px' : '4px 11px';
@@ -63,6 +71,8 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
   return (
     <span
       ref={root}
+      onPointerEnter={onHoverChange ? (e) => { if (e.pointerType !== 'touch') onHoverChange(true); } : undefined}
+      onPointerLeave={onHoverChange ? (e) => { if (e.pointerType !== 'touch') onHoverChange(false); } : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -79,6 +89,9 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
         <button
           type="button"
           aria-pressed={named}
+          aria-describedby={describedBy}
+          onFocus={onHoverChange ? () => onHoverChange(true) : undefined}
+          onBlur={onHoverChange ? () => onHoverChange(false) : undefined}
           onClick={(e) => {
             e.stopPropagation();
             // Keyed to the click itself, so only a real toggle nudges — never
@@ -96,7 +109,7 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
       {onDismiss && (
         <button
           type="button"
-          aria-label={`Dismiss ${text}`}
+          aria-label={`${dismissLabel} ${text}`}
           onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           style={{ ...RESET, padding: '4px 9px 4px 5px', color: 'var(--ui-text-3)', fontSize: 13, lineHeight: 1 }}
         >
