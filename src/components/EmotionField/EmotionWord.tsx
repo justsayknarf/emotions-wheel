@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion, type MotionValue } from 'framer-motion';
 import { animate, splitText, spring, stagger, utils } from 'animejs';
 import type { Emotion } from '../../data/emotions';
 import type { ProximityResult } from '../../hooks/useProximity';
@@ -12,8 +12,11 @@ interface Props {
   isSelected: boolean;
   isHighlighted: boolean;
   // Stage px of the dot — where the field's projection draws this word.
-  x: number;
-  y: number;
+  // Either plain numbers, or `pos`: motion values the field keeps writing,
+  // so a word fading out after unmount still follows the sky camera.
+  x?: number;
+  y?: number;
+  pos?: WordScreenPos;
   // Hide the dot but keep its layout, so the fan and landing measurements
   // don't shift (the night-sky field draws its own star instead).
   hideDot?: boolean;
@@ -33,6 +36,13 @@ interface Props {
   // the user's own toggle and gets the tag moment; any other change (a reopened
   // check-in, a save clearing the draft) just settles quietly.
   tagPulse?: TagPulse | null;
+}
+
+// A word's live screen position, written by the field every projection.
+export interface WordScreenPos {
+  x: MotionValue<number>;
+  y: MotionValue<number>;
+  visibility: MotionValue<string>;
 }
 
 // One user tag toggle. `n` is a counter so two toggles of the same word stay
@@ -109,9 +119,9 @@ function propsEqual(prev: Props, next: Props): boolean {
   return true;
 }
 
-export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSelected, isHighlighted, x, y, hideDot = false, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
-  const left = x;
-  const top = y;
+export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSelected, isHighlighted, x, y, pos, hideDot = false, enterDelay = 0, animateIn = false, offset, emphasis = null, recedeStrength = 0, tagPulse = null }: Props) {
+  const left = pos?.x ?? x;
+  const top = pos?.y ?? y;
 
   const { opacity, scale, isCandidate, nearness } = proximity;
 
@@ -262,6 +272,7 @@ export const EmotionWord = memo(function EmotionWord({ emotion, proximity, isSel
         position: 'absolute',
         left,
         top,
+        visibility: pos?.visibility,
         transform: 'translate(-50%, -50%)',
         pointerEvents: 'none',
         willChange: 'opacity, transform',

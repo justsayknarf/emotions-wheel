@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, motionValue, AnimatePresence, useReducedMotion } from 'framer-motion';
+import type { WordScreenPos } from './EmotionWord';
 import { animate } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { emotions } from '../../data/emotions';
@@ -251,6 +252,26 @@ export function EmotionField({
     if (!sky) return;
     containerRef.current?.dispatchEvent(new CustomEvent('fieldprojectionchange', { bubbles: true }));
   }, [sky, proj]);
+
+  // Deep words' screen positions, as motion values written every projection.
+  // A word leaving the sky fades out under AnimatePresence, which freezes its
+  // last props; a number x/y would pin the fade to one spot on the glass while
+  // the camera pans. The motion values keep tracking, so it fades in place on
+  // the dome. Behind the camera there is no position: the word hides instead.
+  const [deepPos] = useState(() => new Map<string, WordScreenPos>(
+    deepEmotions.map((e) => [e.id, { x: motionValue(0), y: motionValue(0), visibility: motionValue('hidden') }]),
+  ));
+  useLayoutEffect(() => {
+    for (const e of deepEmotions) {
+      const pos = deepPos.get(e.id)!;
+      const at = proj.toPx(e);
+      if (at.visible) {
+        pos.x.set(at.x);
+        pos.y.set(at.y);
+      }
+      pos.visibility.set(at.visible ? 'visible' : 'hidden');
+    }
+  }, [deepPos, proj]);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
     // R15: before minting a new pin, check whether the release lands close
@@ -910,7 +931,6 @@ export function EmotionField({
                 const enterDelay = !isFixed && dwell ? dwell.rank * 0.08 : 0;
                 // Reveal drives opacity; the live cursor drives size + colour.
                 const live = deepProximity.get(e.id);
-                const at = proj.toPx(e);
                 return (
                   <EmotionWord
                     key={e.id}
@@ -918,8 +938,7 @@ export function EmotionField({
                     proximity={{ opacity, scale: live?.scale ?? 1, isCandidate: false, nearness: live?.nearness ?? 0 }}
                     isSelected={selectedIds.has(e.id)}
                     isHighlighted={highlightedIds.has(e.id)}
-                    x={at.x}
-                    y={at.y}
+                    pos={deepPos.get(e.id)!}
                     hideDot={sky}
                     enterDelay={enterDelay}
                     animateIn
