@@ -111,10 +111,12 @@ const CLUSTER_MAX_R = {
 // valence), and each one's floor follows its own target, so the edge of the
 // still point is ragged rather than round.
 const INNER_R = {
+  // Settled and balanced, close to neutral: the one star allowed inside the
+  // core, so the still point's edge doesn't read as a ring of empty sky.
+  centered: 0.12,
   present: 0.23,
   interested: 0.24,
   unsure: 0.24,
-  centered: 0.25,
   sensitive: 0.26,
   questioning: 0.27,
   inhibited: 0.27,
