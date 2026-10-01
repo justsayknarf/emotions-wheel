@@ -4,9 +4,11 @@
 // Tone follows the surface the chip sits on: gold for a draft, recorded blue
 // for a saved check-in (R6). Every color is mixed from the tone's own token
 // so a theme swap (src/config/theme.ts) recolors the chip with it.
-import { useEffect, useRef } from 'react';
+import { useId } from 'react';
 import { animate } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
+import { useHoverHold } from '../../hooks/useHoverHold';
+import { VISUALLY_HIDDEN } from '../visuallyHidden';
 
 export type WordTagTone = 'gold' | 'recorded';
 
@@ -52,28 +54,22 @@ interface Props {
   // draft card passes these. Pointer enter/leave (never touch) and keyboard
   // focus/blur report hovering.
   onHoverChange?: (hovering: boolean) => void;
-  // Points assistive tech at the open definition tooltip.
-  describedBy?: string;
+  // The word's definition, always present for assistive tech as the button's
+  // description (R19), so it is announced on focus without waiting for the
+  // visible tooltip.
+  definition?: string | null;
   // The × button's accessible verb ("Dismiss" a suggestion, "Remove" a tag).
   dismissLabel?: string;
 }
 
-export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismiss, onHoverChange, describedBy, dismissLabel = 'Dismiss' }: Props) {
+export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismiss, onHoverChange, definition, dismissLabel = 'Dismiss' }: Props) {
   const t = TONES[tone];
   const text = label.toLowerCase();
   const bodyPadding = onDismiss ? '4px 3px 4px 11px' : '4px 11px';
-  // An unmounting chip fires no pointerleave/blur, so a chip that is removed
-  // under the pointer (or while focused) would leave its hover stuck on. Track
-  // hovered/focused in event handlers only and release on unmount.
-  const holding = useRef({ hovered: false, focused: false });
-  const latestHoverChange = useRef(onHoverChange);
-  useEffect(() => { latestHoverChange.current = onHoverChange; });
-  useEffect(() => {
-    const state = holding.current;
-    return () => {
-      if (state.hovered || state.focused) latestHoverChange.current?.(false);
-    };
-  }, []);
+  // Hover is released on unmount too (see useHoverHold).
+  const hover = useHoverHold(onHoverChange);
+  const descriptionId = useId();
+  const describe = !!definition && !!onToggle;
   const { root, scope } = useAnimeScope<HTMLSpanElement>((self, reduced) => {
     self.add('nudge', (naming: boolean) => {
       if (reduced || !self.root) return;
@@ -84,8 +80,7 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
   return (
     <span
       ref={root}
-      onPointerEnter={onHoverChange ? (e) => { if (e.pointerType !== 'touch') { holding.current.hovered = true; onHoverChange(true); } } : undefined}
-      onPointerLeave={onHoverChange ? (e) => { if (e.pointerType !== 'touch') { holding.current.hovered = false; onHoverChange(false); } } : undefined}
+      {...hover?.pointer}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -102,9 +97,8 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
         <button
           type="button"
           aria-pressed={named}
-          aria-describedby={describedBy}
-          onFocus={onHoverChange ? () => { holding.current.focused = true; onHoverChange(true); } : undefined}
-          onBlur={onHoverChange ? () => { holding.current.focused = false; onHoverChange(false); } : undefined}
+          aria-describedby={describe ? descriptionId : undefined}
+          {...hover?.focus}
           onClick={(e) => {
             e.stopPropagation();
             // Keyed to the click itself, so only a real toggle nudges — never
@@ -119,6 +113,8 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
       ) : (
         <span style={{ padding: bodyPadding }}>{text}</span>
       )}
+      {/* Outside the button, so it describes the word without joining its name. */}
+      {describe && <span id={descriptionId} style={VISUALLY_HIDDEN}>{definition}</span>}
       {onDismiss && (
         <button
           type="button"
