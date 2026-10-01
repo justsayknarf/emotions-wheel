@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { recentWindow } from '../../utils/recentEntries';
 import { SessionDetailCard } from '../DiaryHistory/SessionDetailCard';
 import { DrawnConstellation } from './DrawnConstellation';
+import { SkyReplay } from './SkyReplay';
+import { useRevealTuning } from '../../config/revealTuning';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -21,19 +23,27 @@ const AXIS_LABEL: React.CSSProperties = {
 };
 
 // Full-surface takeover (view === 'constellation'). Draws the recent window in
-// star by star (DrawnConstellation), then leaves it in place for inspection —
-// tapping a point opens its detail; dismissing returns to the mirror.
+// star by star, then leaves it in place for inspection — tapping a point opens
+// its detail; dismissing returns to the mirror. With the night-sky field on
+// (skyField), the replay tours the same sky instead (SkyReplay); otherwise it
+// draws on the flat plane (DrawnConstellation).
 export function ConstellationReplay({ entries, onDismiss }: Props) {
   // Memoized so its identity is stable across re-renders (e.g. opening a
   // detail card) — the replay timeline keys on this and must not restart.
   const windowed = useMemo(() => recentWindow(entries), [entries]);
   const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
+  const sky = useRevealTuning().skyField;
 
   return (
     <div style={{ position: 'absolute', inset: 0, background: 'var(--ui-bg)', overflow: 'hidden' }}>
-      {/* Faint crosshairs + axes for spatial context */}
-      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgb(var(--ui-gold-rgb) / 0.1)' }} />
-      <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgb(var(--ui-gold-rgb) / 0.1)' }} />
+      {/* Faint crosshairs for spatial context, flat only: in the sky the
+          centre is wherever the gaze is. */}
+      {!sky && (
+        <>
+          <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgb(var(--ui-gold-rgb) / 0.1)' }} />
+          <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgb(var(--ui-gold-rgb) / 0.1)' }} />
+        </>
+      )}
       <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>Positive</div>
       <div style={{ ...AXIS_LABEL, bottom: 16, left: '50%', transform: 'translateX(-50%)' }}>Negative</div>
       <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>Calm</div>
@@ -46,7 +56,9 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
         transition={{ duration: 0.4 }}
         style={{ position: 'absolute', inset: 0 }}
       >
-        <DrawnConstellation entries={windowed} onPointClick={setOpenEntry} />
+        {sky
+          ? <SkyReplay entries={windowed} onPointClick={setOpenEntry} />
+          : <DrawnConstellation entries={windowed} onPointClick={setOpenEntry} />}
       </motion.div>
 
       {/* Header */}
