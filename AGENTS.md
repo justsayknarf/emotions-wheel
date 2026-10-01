@@ -17,6 +17,7 @@ What exists instead is a set of **pure-logic check scripts** under `scripts/`, r
 | `npm run check:theme` | theme drift: generated tokens, theme completeness, DESIGN.md palette, no hardcoded theme colors (see [docs/theme-system.md](docs/theme-system.md)) |
 | `npm run check:landing` | landing page sky geometry |
 | `npm run check:replay` | constellation replay timing and day labels (`src/components/Constellation/replaySchedule.ts`) |
+| `npm run check:skyreplay` | constellation replay in the night sky: the tour's hop timing, the gaze's path, comet and tag-line timing, the lit constellation's pulse and fade, compression of long histories (`src/components/Constellation/skyTour.ts`) |
 | `npm run check:sky` | night-sky projection: orientation, press round-trip, horizon, flat parity, camera frame (`src/utils/skyProjection.ts`) |
 | `npm run check:intro` | night-sky opening pan: starts with the horizon in view, lands on the zenith, stays under its own speed ceiling (`src/utils/skyIntro.ts`) |
 | `npm run check:camera` | night-sky camera: pan cap, no overshoot, carry during flights, tilt limit, target order, drag-to-pan grab and release glide (`src/utils/skyCamera.ts`) |

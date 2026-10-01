@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { createDrawable, createTimeline, utils } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -26,6 +26,8 @@ import {
   QUIET_LINE_OPACITY,
   STREAK_STOPS,
 } from './cometStyle';
+import { ReplayControls } from './ReplayControls';
+import { useReplayScrub } from './useReplayScrub';
 import type { DiaryEntry } from '../../types';
 
 interface Props {
@@ -35,8 +37,6 @@ interface Props {
 
 // Pause before the first star lands, so the overlay's own fade-in settles first.
 const START_DELAY_MS = 400;
-// Scrubber resolution: the range input runs 0..SCRUB_STEPS.
-const SCRUB_STEPS = 1000;
 // Landing ring: final diameter (px). It grows from a fraction of this to 1×,
 // so the border ends at a crisp 1px rather than a thickened stroke.
 const RING_SIZE = 36;
@@ -79,25 +79,7 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
   );
 
   const [playing, setPlaying] = useState(false);
-  const [ended, setEnded] = useState(false);
-  const endedRef = useRef(false);
-  const scrubRef = useRef<HTMLInputElement>(null);
-
-  // Written straight to the input every frame rather than through state, so
-  // playback doesn't re-render the whole sky 60 times a second. `ended` only
-  // changes at the edges, so it's cheap to keep in state for the button icon.
-  const syncScrub = (progress: number) => {
-    const el = scrubRef.current;
-    if (el) {
-      el.value = String(Math.round(progress * SCRUB_STEPS));
-      el.style.setProperty('--p', `${(progress * 100).toFixed(2)}%`);
-    }
-    const isEnd = progress >= 1;
-    if (isEnd !== endedRef.current) {
-      endedRef.current = isEnd;
-      setEnded(isEnd);
-    }
-  };
+  const { scrubRef, ended, syncScrub } = useReplayScrub();
 
   const n = points.length;
   const uid = useId().replace(/:/g, '');
@@ -405,77 +387,13 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
         );
       })}
 
-      {/* Scrubber + play/pause/replay */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          bottom: 40,
-          transform: 'translateX(-50%)',
-          width: 'min(420px, calc(100% - 32px))',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          padding: '9px 16px 9px 10px',
-          borderRadius: 999,
-          background: 'rgb(var(--ui-surface-rgb) / 0.8)',
-          border: '1px solid var(--ui-border)',
-          backdropFilter: 'blur(12px)',
-          zIndex: 10,
-        }}
-      >
-        <button
-          onClick={() => scope.current?.methods.toggle()}
-          aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
-          style={{
-            flexShrink: 0,
-            width: 28,
-            height: 28,
-            padding: 0,
-            border: 'none',
-            borderRadius: '50%',
-            background: 'rgb(var(--ui-gold-rgb) / 0.1)',
-            color: 'var(--ui-gold)',
-            cursor: 'pointer',
-            display: 'grid',
-            placeItems: 'center',
-          }}
-        >
-          <ControlIcon kind={playing ? 'pause' : ended ? 'replay' : 'play'} />
-        </button>
-        <input
-          ref={scrubRef}
-          type="range"
-          className="replay-scrubber"
-          min={0}
-          max={SCRUB_STEPS}
-          step={1}
-          defaultValue={0}
-          aria-label="Replay position"
-          onPointerDown={() => scope.current?.methods.seek(Number(scrubRef.current?.value ?? 0) / SCRUB_STEPS)}
-          onInput={(e) => scope.current?.methods.seek(Number(e.currentTarget.value) / SCRUB_STEPS)}
-        />
-      </div>
+      <ReplayControls
+        playing={playing}
+        ended={ended}
+        scrubRef={scrubRef}
+        onToggle={() => scope.current?.methods.toggle()}
+        onSeek={(progress) => scope.current?.methods.seek(progress)}
+      />
     </div>
-  );
-}
-
-function ControlIcon({ kind }: { kind: 'play' | 'pause' | 'replay' }) {
-  return (
-    <svg width={12} height={12} viewBox="0 0 12 12" aria-hidden="true" style={{ display: 'block' }}>
-      {kind === 'play' && <path d="M3.5 2.2 L10 6 L3.5 9.8 Z" fill="currentColor" />}
-      {kind === 'pause' && (
-        <>
-          <rect x={3} y={2.5} width={2} height={7} rx={0.6} fill="currentColor" />
-          <rect x={7} y={2.5} width={2} height={7} rx={0.6} fill="currentColor" />
-        </>
-      )}
-      {kind === 'replay' && (
-        <>
-          <path d="M9.6 6 A3.6 3.6 0 1 1 8.5 3.4" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
-          <path d="M9.2 1.4 L9.2 4 L6.6 4" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      )}
-    </svg>
   );
 }

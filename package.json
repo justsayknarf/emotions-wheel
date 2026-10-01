@@ -21,6 +21,7 @@
     "check:tags": "npx tsx scripts/test-day-tags.ts",
     "check:landing": "npx tsx scripts/test-landing-sky.ts",
     "check:replay": "npx tsx scripts/test-replay-schedule.ts",
+    "check:skyreplay": "npx tsx scripts/test-sky-replay.ts",
     "check:sky": "npx tsx scripts/test-sky-projection.ts",
     "check:intro": "npx tsx scripts/test-sky-intro.ts",
     "check:camera": "npx tsx scripts/test-sky-camera.ts",
