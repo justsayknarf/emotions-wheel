@@ -115,6 +115,24 @@ check('delay is 500ms, grace 300ms', DEFINITION_DELAY_MS === 500 && DEFINITION_G
   check('tap switches an open tooltip', switched.openId === 'touched', `${switched.openId}`);
 }
 {
+  // Dismiss (Escape, tapping the card, save, clear, leaving the field).
+  const dismiss: DefinitionEvent = { type: 'dismiss' };
+  const open = run([hover('anxious'), timer]).state;
+  const closed = stepDefinition(open, dismiss);
+  check('dismiss closes an open tooltip', closed.state.phase === 'cold' && closed.state.openId === null && !closed.state.pressed, closed.state.phase);
+  check('dismiss clears the timer', closed.timer === 'clear', String(closed.timer));
+  const pending = stepDefinition(run([hover('anxious')]).state, dismiss);
+  check('dismiss cancels a pending open', pending.state.phase === 'cold' && pending.state.pendingId === null && pending.timer === 'clear', pending.state.phase);
+  const graceClosed = stepDefinition(run([hover('anxious'), timer, hover(null)]).state, dismiss);
+  check('dismiss closes during the grace', graceClosed.state.phase === 'cold' && graceClosed.state.openId === null, graceClosed.state.phase);
+  const tapped = stepDefinition(run([{ type: 'tap', id: 'hopeful' }]).state, dismiss);
+  check('dismiss closes a tap-opened tooltip', tapped.state.openId === null, `${tapped.state.openId}`);
+  const idle = stepDefinition(INITIAL_DEFINITION_STATE, dismiss);
+  check('dismiss when closed keeps the same state', idle.state === INITIAL_DEFINITION_STATE, 'same state');
+  const after = stepDefinition(closed.state, hover('nervous'));
+  check('after a dismiss, the delay applies again', after.state.phase === 'waiting', after.state.phase);
+}
+{
   const stale = stepDefinition(INITIAL_DEFINITION_STATE, timer);
   check('a stale timer is ignored', stale.state === INITIAL_DEFINITION_STATE, stale.state.phase);
 }

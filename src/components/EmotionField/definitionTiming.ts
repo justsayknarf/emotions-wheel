@@ -10,6 +10,8 @@
 // - A press (field, pin or slider) closes it and ignores hover until release
 //   (R9). In the tray layout, release names the word nearest the resting pin,
 //   which opens after the delay (R10). A tap opens at once (R11).
+// - A dismiss (Escape, tapping the tooltip, a save, clear or leaving the
+//   field) closes it outright and cancels anything pending.
 
 export const DEFINITION_DELAY_MS = 500;
 export const DEFINITION_GRACE_MS = 300;
@@ -31,6 +33,7 @@ export type DefinitionEvent =
   | { type: 'press' }
   | { type: 'release'; restId: string | null }
   | { type: 'tap'; id: string }
+  | { type: 'dismiss' }
   | { type: 'timer' };
 
 // Start a timer of `set` ms (replacing any running one), cancel it, or
@@ -68,6 +71,10 @@ export function stepDefinition(s: DefinitionState, e: DefinitionEvent): Definiti
         };
       }
       return s.pressed ? { state: { ...s, pressed: false }, timer: null } : unchanged(s);
+
+    case 'dismiss':
+      // Already closed and idle: keep the same object so nothing re-renders.
+      return { state: s.phase === 'cold' && !s.pressed ? s : cold(false), timer: 'clear' };
 
     case 'tap':
       return { state: { phase: 'open', openId: e.id, pendingId: null, pressed: false }, timer: 'clear' };
