@@ -32,6 +32,9 @@ const TEXT_SWAP_S = 0.16;
 const LIFT_PX = 6;
 // stiffness 400, damping 40: ζ = 40 / (2·√400) = 1, critically damped.
 const SLIDE = { stiffness: 400, damping: 40 };
+// After a word switch, position changes keep re-targeting the spring for this
+// long (the new text re-measures the card mid-slide); at rest they jump.
+const SLIDE_WINDOW_MS = 350;
 // The tether starts this far out from the star so it never sits on the dot.
 const STAR_INSET = 6;
 // Height used until the card has been measured (its first frame is invisible).
@@ -68,13 +71,18 @@ export function DefinitionTip({ emotion, star, layout, obstacles, bounds }: Prop
 
   const bx = useSpring(box.x, SLIDE);
   const by = useSpring(box.y, SLIDE);
-  // Only a new word slides; camera frames and re-measures jump, so the card
-  // never trails the sky.
+  // Only a new word slides; camera frames and re-measures at rest jump, so the
+  // card never trails the sky. A switch opens a short window in which same-word
+  // position changes (the new text's re-measure) re-target the spring instead.
   const lastIdRef = useRef(emotion.id);
+  const slideUntilRef = useRef(0);
   useLayoutEffect(() => {
-    const switched = lastIdRef.current !== emotion.id;
-    lastIdRef.current = emotion.id;
-    if (switched && !reduce) {
+    const now = performance.now();
+    if (lastIdRef.current !== emotion.id) {
+      lastIdRef.current = emotion.id;
+      slideUntilRef.current = now + SLIDE_WINDOW_MS;
+    }
+    if (!reduce && now < slideUntilRef.current) {
       bx.set(box.x);
       by.set(box.y);
     } else {
