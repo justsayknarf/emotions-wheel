@@ -794,12 +794,16 @@ export function EmotionField({
       if (at.visible) out.push({ x: at.x - 10, y: at.y - 10, w: 20, h: 20, weight: MARK_OBSTACLE_WEIGHT });
     }
     if (anchorMark) {
-      const r = anchorMark.ringSize / 2 + 4;
+      const r = anchorMark.ringSize / 2 + 10;
       out.push({ x: anchorMark.x - r, y: anchorMark.y - r, w: r * 2, h: r * 2, weight: MARK_OBSTACLE_WEIGHT });
     }
     return out;
   }, [wordTargets, definitionOpenId, pins, proj, anchorMark]);
   const definitionBounds = computeDefinitionBounds(size, definitionLayout, definitionTopInset, skyOccluderTop);
+  // A star the tray covers (the flat phone field runs on behind it) gets no
+  // tooltip: the band would point at nothing.
+  const definitionStarShown = !!definitionStar?.visible &&
+    (definitionLayout !== 'band' || definitionStar.y <= definitionBounds.y + definitionBounds.h);
 
   // Axes read legibly at rest and brighten (emphasis) while the intro runs.
   const crosshairColor = `rgb(var(--ui-gold-rgb) / ${axisEmphasis ? 0.22 : 0.1})`;
@@ -1340,7 +1344,7 @@ export function EmotionField({
               key: a new word re-targets the same card; a fresh open draws the
               tether again. */}
           <AnimatePresence>
-            {definitionEmotion && definitionStar?.visible && (
+            {definitionEmotion && definitionStar && definitionStarShown && (
               <DefinitionTip
                 key="definition-tip"
                 emotion={definitionEmotion}
