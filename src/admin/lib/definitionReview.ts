@@ -6,7 +6,7 @@
 // src/data/descriptions.ts against its base, 5a3b3ce).
 export const NEWLY_WRITTEN_IDS: ReadonlySet<string> = new Set([
   'worthy', 'valiant', 'intrigued', 'involved', 'fascinated', 'exploring', 'stimulated', 'centered',
-  'trusting', 'patient', 'reflective', 'accepting', 'caring', 'empathy', 'self-loving', 'compassion',
+  'trusting', 'patient', 'reflective', 'accepting', 'caring', 'empathetic', 'self-loving', 'compassionate',
   'affectionate', 'humbled', 'grace', 'fortunate', 'thankful', 'blessed', 'expectant', 'encouraged',
   'moody', 'grouchy', 'cynical', 'disdain', 'disgruntled', 'impatient', 'bitter', 'edgy', 'contempt',
   'upset', 'disturbed', 'exasperated', 'aggravated', 'agitated', 'vindictive', 'hostile', 'pissed',

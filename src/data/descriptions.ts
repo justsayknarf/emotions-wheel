@@ -594,31 +594,31 @@ export const descriptions: Record<string, EmotionDescription> = {
   // radial-intensity: loving cluster
   reflective: {
     description: "Turned gently inward, looking back over something. Unhurried, letting it settle and show you what it means.",
-    relatedIds: ['vulnerable', 'accepting', 'caring', 'empathy'],
+    relatedIds: ['vulnerable', 'accepting', 'caring', 'empathetic'],
   },
   accepting: {
     description: "Letting something be as it is, without needing it to change first. Sometimes that something is you.",
-    relatedIds: ['vulnerable', 'caring', 'empathy', 'reflective'],
+    relatedIds: ['vulnerable', 'caring', 'empathetic', 'reflective'],
   },
   caring: {
     description: "Wanting good things for someone and keeping an eye on how they're doing.",
-    relatedIds: ['accepting', 'empathy', 'self-loving', 'vulnerable'],
+    relatedIds: ['accepting', 'empathetic', 'self-loving', 'vulnerable'],
   },
-  empathy: {
+  empathetic: {
     description: "Feeling a little of what someone else feels, from the inside. Their weather reaches you too.",
-    relatedIds: ['caring', 'self-loving', 'compassion', 'accepting'],
+    relatedIds: ['caring', 'self-loving', 'compassionate', 'accepting'],
   },
   'self-loving': {
     description: "Treating yourself with the kindness you'd give a good friend. On your own side, gently and on purpose.",
-    relatedIds: ['compassion', 'empathy', 'caring', 'affectionate'],
+    relatedIds: ['compassionate', 'empathetic', 'caring', 'affectionate'],
   },
-  compassion: {
+  compassionate: {
     description: "Seeing someone's pain and wanting to ease it. Your heart moves toward them instead of away.",
-    relatedIds: ['self-loving', 'affectionate', 'empathy', 'warm'],
+    relatedIds: ['self-loving', 'affectionate', 'empathetic', 'warm'],
   },
   affectionate: {
     description: "Fondness that wants to show itself: a hug, a nickname, a hand on the shoulder.",
-    relatedIds: ['warm', 'compassion', 'self-loving', 'loving'],
+    relatedIds: ['warm', 'compassionate', 'self-loving', 'loving'],
   },
   // radial-intensity: grateful cluster
   humbled: {
