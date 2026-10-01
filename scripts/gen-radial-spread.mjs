@@ -214,6 +214,9 @@ const PINS = {
   // Filed under "stressed", whose sector hugs the Activated axis, but it is
   // irritable and clearly negative: with Grouchy and Irritated.
   cranky: [305, 0.32],
+  // Fear and uncertainty, not readiness: kept off the Activated axis.
+  apprehensive: [322, 0.36], // dread of what's ahead, a milder Worried
+  unsure: [290, 0.27],       // mild uncertainty, little charge
   // Rated restful, not energetic: calm-positive.
   refreshed: [157, 0.42],
   vulnerable: [250, 0.36],   // exposed, not mildly positive
