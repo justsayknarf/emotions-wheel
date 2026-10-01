@@ -137,7 +137,6 @@ const INNER_R = {
   questioning: 0.27,
   inhibited: 0.27,
   humbled: 0.28,
-  grouchy: 0.28,
   teary: 0.3,
   sorry: 0.3,
   worthy: 0.3,
@@ -229,6 +228,7 @@ const PINS = {
   // Filed under "stressed", whose sector hugs the Activated axis, but it is
   // irritable and clearly negative: with Grouchy and Irritated.
   cranky: [305, 0.32],
+  grouchy: [295, 0.36],      // Cranky's near-synonym: simmering, not activated
   // Fear and uncertainty, not readiness: kept off the Activated axis.
   apprehensive: [322, 0.36], // dread of what's ahead, a milder Worried
   unsure: [290, 0.27],       // mild uncertainty, little charge
