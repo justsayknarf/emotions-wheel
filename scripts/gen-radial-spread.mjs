@@ -417,13 +417,17 @@ if (ORGANIC) {
   }
   // Dense patches pack tighter; sparse ones keep their few words far apart.
   for (const r of rows) r.space = SPACE_MAX - (SPACE_MAX - SPACE_MIN) * density(r.tx, r.ty);
-  // Knots: deep, unpinned words of one cluster, seeded in a fixed order.
+  // Knots: deep, unpinned words of one cluster. Each cluster draws from its
+  // own seeded sequence, so pinning or freeing a word reshapes only its own
+  // cluster's knots, not every cluster drawn after it.
   let knotId = 0;
   for (const cluster of Object.keys(byCluster)) {
     const free = rows.filter((r) => r.cluster === cluster && r.band === undefined && r.depth === 'deep');
+    const clusterSeed = [...cluster].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0, SEED);
+    const krand = mulberry32(clusterSeed);
     while (free.length) {
       const seed = free.shift();
-      const size = KNOT_SIZES[Math.floor(rand() * KNOT_SIZES.length)];
+      const size = KNOT_SIZES[Math.floor(krand() * KNOT_SIZES.length)];
       const near = free
         .map((r) => [Math.hypot(r.tx - seed.tx, r.ty - seed.ty), r])
         .filter(([d]) => d < KNOT_REACH)
@@ -436,7 +440,7 @@ if (ORGANIC) {
       const cx = knot.reduce((s, r) => s + r.tx, 0) / knot.length;
       const cy = knot.reduce((s, r) => s + r.ty, 0) / knot.length;
       // Nudge the whole knot a little, so knots don't sit on the sector's grid.
-      const jr = rand() * 0.05, ja = rand() * Math.PI * 2;
+      const jr = krand() * 0.05, ja = krand() * Math.PI * 2;
       for (const r of knot) {
         r.knot = knotId;
         r.tx += (cx - r.tx) * KNOT_PULL + jr * Math.cos(ja);
