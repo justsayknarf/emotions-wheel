@@ -24,6 +24,9 @@ import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import { useViewHistory } from './hooks/useViewHistory';
+import { DefinitionTooltipContext, useDefinitionTooltip } from './hooks/useDefinitionTooltip';
+import { nearestWordId } from './components/EmotionField/definitionPlacement';
+import { VISIBILITY_RADIUS } from './hooks/useProximity';
 import type { DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
@@ -152,6 +155,10 @@ export default function App() {
   const { entries, record, updateEntry } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
+  // The field's definition tooltip (word-definition-tooltips): tethered
+  // beside its star on the desktop rail layout, in a band above the tray on
+  // phones.
+  const definition = useDefinitionTooltip(sideBySide ? 'tethered' : 'band');
   const tuning = useRevealTuning();
   const reducedMotion = useReducedMotion();
 
@@ -447,6 +454,22 @@ export default function App() {
         : new Set<string>(),
     [selectedPin, tetherSuppressed, tuning.tagCount],
   );
+
+  // A card word under the pointer lights its star at once and, if it is a
+  // hidden deep word, reveals it (R5); the open word stays lit and revealed
+  // so its tooltip always has a star to point at. Both ride highlightedIds,
+  // which already lights and reveals.
+  const fieldHighlightedIds = useMemo(() => {
+    const extra = [definition.litId, definition.openId].filter((id): id is string => !!id && !highlightedIds.has(id));
+    return extra.length ? new Set([...highlightedIds, ...extra]) : highlightedIds;
+  }, [highlightedIds, definition.litId, definition.openId]);
+
+  // A direct field press is a deliberate no-op during the new-tab pre-mint
+  // landing (matches handleFieldPress's own guard). Field hover must not open
+  // a tooltip then either.
+  const fieldPressDisabled = desktopLandingActive && desktopCardProgress === 0 && pins.length === 0;
+  const { hover: hoverDefinition, press: pressDefinition, release: releaseDefinition } = definition;
+  const handleDefinitionHover = useCallback((id: string | null) => hoverDefinition(id, 'field'), [hoverDefinition]);
 
   // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
   // pair it draws between.
@@ -876,7 +899,10 @@ export default function App() {
   const handleAdjustPin = useCallback((pinId: string, x: number, y: number) => {
     setPins((prev) => prev.map((p) => (p.id === pinId ? adjustPin(p, x, y) : p)));
     setAdjustDraft(null);
-  }, []);
+    // Phone tray: the word nearest where the pin came to rest gets its
+    // definition after the delay (R10).
+    releaseDefinition(sideBySide ? null : nearestWordId({ x, y }, emotions, VISIBILITY_RADIUS));
+  }, [releaseDefinition, sideBySide]);
 
   // U5: the card list's scroll position across a drag's shrink/restore. Capture
   // happens synchronously here, before the shrink renders (the list is still
@@ -896,8 +922,17 @@ export default function App() {
     } else if (coord === null) {
       wasDraggingRef.current = false;
     }
+    // A slider drag closes the definition and holds it off until release (R9).
+    if (coord !== null) pressDefinition();
+    else releaseDefinition(null);
     setAdjustDraft(coord);
-  }, []);
+  }, [pressDefinition, releaseDefinition]);
+
+  const handleDepartureDrag = useCallback((coord: { x: number; y: number } | null) => {
+    if (coord !== null) pressDefinition();
+    else releaseDefinition(null);
+    setDepartureDraftCoord(coord);
+  }, [pressDefinition, releaseDefinition]);
 
   const prevDraggingPinIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1147,7 +1182,7 @@ export default function App() {
           skySwellPlay={skySwellPlay}
           skyIntro={showWelcome}
           pins={pins}
-          highlightedIds={highlightedIds}
+          highlightedIds={fieldHighlightedIds}
           tagPulse={tagPulse}
           onPinRelease={handleFieldPress}
           onPinSelect={handlePinSelect}
@@ -1168,7 +1203,12 @@ export default function App() {
           // bug-fix comment) — otherwise the cursor/hover cue would keep
           // reading "not clickable" through the post-save settle window
           // even after the fix above made a press there work again.
-          dropDisabled={desktopLandingActive && desktopCardProgress === 0 && pins.length === 0}
+          dropDisabled={fieldPressDisabled}
+          definitionOpenId={view === 'field' ? definition.openId : null}
+          definitionLayout={definition.layout}
+          onDefinitionHover={fieldPressDisabled ? undefined : handleDefinitionHover}
+          onDefinitionPress={pressDefinition}
+          onDefinitionRelease={releaseDefinition}
           // The field plane starts at the top of the same ancestor the
           // sheet reports against, so its top edge is already in stage px.
           skyOccluderTop={sideBySide ? null : sheetTop}
@@ -1176,6 +1216,7 @@ export default function App() {
       </div>
 
       {/* Field-only chrome: welcome + hint + drawer + history button */}
+      <DefinitionTooltipContext.Provider value={definition}>
       {view === 'field' && (
         <>
           {/* Grounding welcome — layered above the first-run hint/demo (its own
@@ -1286,7 +1327,7 @@ export default function App() {
                 justSavedEntryId={justSavedEntryId}
                 onRecognizeSaved={handleRecognizeSaved}
                 onDepart={handleDepart}
-                onDepartureDrag={setDepartureDraftCoord}
+                onDepartureDrag={handleDepartureDrag}
                 onLandingSave={handleLandingSave}
                 onMoveToRail={handleMoveToRail}
                 cardFocusProgress={desktopCardProgress}
@@ -1363,6 +1404,7 @@ export default function App() {
           )}
         </>
       )}
+      </DefinitionTooltipContext.Provider>
 
       {/* Overlays rendered on top of the always-visible field */}
       <AnimatePresence mode="wait">
