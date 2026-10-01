@@ -138,7 +138,6 @@ const INNER_R = {
   inhibited: 0.27,
   humbled: 0.28,
   grouchy: 0.28,
-  cynical: 0.3,
   teary: 0.3,
   sorry: 0.3,
   worthy: 0.3,
@@ -220,6 +219,7 @@ const PINS = {
   concerned: [214, 0.5],
   disdain: [203, 0.62],
   disgruntled: [221, 0.58],
+  cynical: [238, 0.42],      // cool distrust, no heat: beside Disdain, not Irritated
   // Innermost words whose cluster put them on the wrong side of the
   // Activated axis.
   grounded: [142, 0.36],     // settled, not energized: calm-positive
