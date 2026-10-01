@@ -10,6 +10,18 @@ import {
   type DefinitionState,
   type TimerCommand,
 } from '../src/components/EmotionField/definitionTiming';
+import {
+  BAND_GUTTER,
+  describeWordRegion,
+  hitTestWord,
+  nearestWordId,
+  placeBand,
+  placeTethered,
+  tetherEnd,
+  type Box,
+  type Obstacle,
+  type WordTarget,
+} from '../src/components/EmotionField/definitionPlacement';
 
 let failures = 0;
 function check(name: string, ok: boolean, detail: string) {
@@ -107,7 +119,81 @@ check('delay is 500ms, grace 300ms', DEFINITION_DELAY_MS === 500 && DEFINITION_G
   check('a stale timer is ignored', stale.state === INITIAL_DEFINITION_STATE, stale.state.phase);
 }
 
-// GEOMETRY CHECKS (Task 4) GO HERE
+// --- geometry ---
+const field: Box = { x: 0, y: 0, w: 1000, h: 700 };
+const tip = { w: 236, h: 96 };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const inside = (a: Box, b: Box) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h;
+{
+  const star = { x: 500, y: 400 };
+  const box = placeTethered(star, tip, [], field);
+  check('open sky: tooltip goes above the star (R13)', box.y + box.h <= star.y, `box bottom ${box.y + box.h}, star ${star.y}`);
+  check('open sky: within the field', inside(box, field), JSON.stringify(box));
+  const gap = star.y - (box.y + box.h);
+  check('open sky: standoff about 95px', gap > 80 && gap < 110, `gap ${gap.toFixed(1)}`);
+}
+{
+  const star = { x: 500, y: 400 };
+  const blockers: Obstacle[] = [{ x: 330, y: 150, w: 340, h: 160, weight: 30 }];
+  const box = placeTethered(star, tip, blockers, field);
+  check('labels above: tooltip avoids them', !overlaps(box, blockers[0]), JSON.stringify(box));
+}
+{
+  const star = { x: 500, y: 60 };
+  const box = placeTethered(star, tip, [], field);
+  check('near the top edge: stays inside', inside(box, field), JSON.stringify(box));
+}
+{
+  const star = { x: 970, y: 400 };
+  const box = placeTethered(star, tip, [], field);
+  check('near the right edge: stays inside', inside(box, field), JSON.stringify(box));
+}
+{
+  const star = { x: 500, y: 400 };
+  const pin: Obstacle = { x: 490, y: 190, w: 20, h: 20, weight: 80 };
+  const box = placeTethered(star, tip, [pin], field);
+  check('never covers the pin', !overlaps(box, pin), JSON.stringify(box));
+}
+{
+  const band: Box = { x: 0, y: 0, w: 390, h: 480 };
+  const low = placeBand({ x: 200, y: 400 }, 90, band);
+  check('band: anchors to the top (R14)', low.y === BAND_GUTTER && low.x === BAND_GUTTER && low.w === 390 - 2 * BAND_GUTTER, JSON.stringify(low));
+  const high = placeBand({ x: 200, y: 60 }, 90, band);
+  check('band: star under the top spot moves it to the bottom', high.y + high.h === 480 - BAND_GUTTER, JSON.stringify(high));
+}
+{
+  const star = { x: 200, y: 400 };
+  const box: Box = { x: 12, y: 12, w: 366, h: 90 };
+  const end = tetherEnd(star, box, 'band');
+  check('band tether: drops straight to the bottom edge', end.x === 200 && end.y === 102, JSON.stringify(end));
+  const edge = tetherEnd({ x: 5, y: 400 }, box, 'band');
+  check('band tether: clamped inside the card', edge.x >= box.x + 18, JSON.stringify(edge));
+}
+{
+  const star = { x: 500, y: 400 };
+  const box: Box = { x: 382, y: 209, w: 236, h: 96 };
+  const end = tetherEnd(star, box, 'tethered');
+  check('tethered: meets the card edge facing the star', Math.abs(end.y - 305) < 0.01 && Math.abs(end.x - 500) < 0.01, JSON.stringify(end));
+}
+{
+  const targets: WordTarget[] = [
+    { id: 'anxious', dotX: 300, dotY: 300, labelX: 300, labelY: 289, halfW: 30, halfH: 9 },
+    { id: 'nervous', dotX: 400, dotY: 300, labelX: 400, labelY: 289, halfW: 30, halfH: 9 },
+  ];
+  check('hit: on the label', hitTestWord({ x: 320, y: 286 }, targets) === 'anxious', 'anxious');
+  check('hit: on the dot', hitTestWord({ x: 404, y: 304 }, targets) === 'nervous', 'nervous');
+  check('hit: empty sky', hitTestWord({ x: 350, y: 400 }, targets) === null, 'null');
+}
+{
+  check('region: calm pleasant mild', describeWordRegion(-0.2, 0.3) === 'calm · pleasant · mild', describeWordRegion(-0.2, 0.3));
+  check('region: activated unpleasant intense', describeWordRegion(0.68, -0.64) === 'activated · unpleasant · intense', describeWordRegion(0.68, -0.64));
+  check('region: steady neutral', describeWordRegion(0.05, -0.1) === 'steady · neutral · mild', describeWordRegion(0.05, -0.1));
+}
+{
+  const words = [{ id: 'a', x: 0.3, y: 0.3 }, { id: 'b', x: 0.5, y: 0.5 }];
+  check('nearest word within reach', nearestWordId({ x: 0.32, y: 0.31 }, words, 0.35) === 'a', 'a');
+  check('nothing within reach', nearestWordId({ x: -0.8, y: -0.8 }, words, 0.35) === null, 'null');
+}
 
 console.log(`\n${failures === 0 ? 'OK' : 'FAIL'} — ${failures} failure(s).`);
 process.exit(failures > 0 ? 1 : 0);
