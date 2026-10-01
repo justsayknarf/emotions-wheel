@@ -104,6 +104,33 @@ const CLUSTER_MAX_R = {
   shame: 0.9,
 };
 
+// Inner radii. Every cluster's mildest word would otherwise target R_INNER,
+// and the clamp holds anything pushed inward at the same floor, so the words
+// nearest the core sat on a perfect circle. These give the innermost words a
+// radius by how far each one actually sits from neutral (activation and
+// valence), and each one's floor follows its own target, so the edge of the
+// still point is ragged rather than round.
+const INNER_R = {
+  present: 0.23,
+  interested: 0.24,
+  unsure: 0.24,
+  centered: 0.25,
+  sensitive: 0.26,
+  questioning: 0.27,
+  inhibited: 0.27,
+  humbled: 0.28,
+  grouchy: 0.28,
+  cynical: 0.3,
+  teary: 0.3,
+  sorry: 0.3,
+  worthy: 0.3,
+  renewed: 0.33,
+  yearning: 0.34,
+  free: 0.36,
+};
+// How far inside its own target radius a word may be pushed.
+const FLOOR_SLACK = 0.02;
+
 // Hand-placed words: degrees (0 activated, 90 positive, 180 calm, 270
 // negative) and radius (intensity). Held within PIN_BAND of the angle and
 // PIN_R_BAND of the radius. Radius > 1 reaches into the square's corners,
@@ -176,6 +203,12 @@ const PINS = {
   concerned: [214, 0.5],
   disdain: [203, 0.62],
   disgruntled: [221, 0.58],
+  // Innermost words whose cluster put them on the wrong side of the
+  // Activated axis.
+  grounded: [142, 0.36],     // settled, not energized: calm-positive
+  expectant: [80, 0.3],      // anticipation carries some charge
+  uneasy: [306, 0.3],        // low-level anxiety, not numbness
+  moody: [248, 0.42],        // sulky and low, not activated
   // Rated restful, not energetic: calm-positive.
   refreshed: [157, 0.42],
   vulnerable: [250, 0.36],   // exposed, not mildly positive
@@ -248,7 +281,7 @@ if (rows.length === 0 || rows.length < rawCount) {
 const byCluster = {};
 for (const r of rows) (byCluster[r.cluster] ??= []).push(r);
 const newIds = new Set(NEW_WORDS.map((w) => w.id));
-for (const id of [...Object.keys(PINS), ...SURFACE]) {
+for (const id of [...Object.keys(PINS), ...SURFACE, ...Object.keys(INNER_R)]) {
   if (!newIds.has(id) && !rows.some((r) => r.id === id)) { console.error(`gen-radial-spread: word "${id}" not found`); process.exit(1); }
 }
 for (const w of NEW_WORDS) {
@@ -269,7 +302,8 @@ for (const [cluster, list] of Object.entries(byCluster)) {
     const u = n === 1 ? 0.5 : i / (n - 1);
     r.rmax = CLUSTER_MAX_R[cluster] ?? R_OUTER;
     const t = (0.5 + i * PHI) % 1;
-    let rad = Math.sqrt(R_INNER ** 2 + u * (r.rmax ** 2 - R_INNER ** 2));
+    let rad = INNER_R[r.id] ?? Math.sqrt(R_INNER ** 2 + u * (r.rmax ** 2 - R_INNER ** 2));
+    r.rmin = r.id in INNER_R ? rad - FLOOR_SLACK : R_INNER;
     let ang = a0 + (0.12 + 0.76 * t) * (a1 - a0);
     const pin = PINS[r.id];
     if (pin) {
@@ -401,7 +435,7 @@ function constrain(r) {
   }
   let ang = Math.atan2(Math.abs(r.y), Math.abs(r.x));
   ang = Math.max(AXIS_MARGIN, Math.min(Math.PI / 2 - AXIS_MARGIN, ang));
-  rad = Math.max(R_INNER, Math.min(r.rmax, rad));
+  rad = Math.max(r.rmin, Math.min(r.rmax, rad));
   r.x = r.sx * rad * Math.cos(ang);
   r.y = r.sy * rad * Math.sin(ang);
 }
