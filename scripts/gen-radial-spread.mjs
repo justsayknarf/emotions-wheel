@@ -211,6 +211,9 @@ const PINS = {
   expectant: [80, 0.3],      // anticipation carries some charge
   uneasy: [306, 0.3],        // low-level anxiety, not numbness
   moody: [248, 0.42],        // sulky and low, not activated
+  // Filed under "stressed", whose sector hugs the Activated axis, but it is
+  // irritable and clearly negative: with Grouchy and Irritated.
+  cranky: [305, 0.32],
   // Rated restful, not energetic: calm-positive.
   refreshed: [157, 0.42],
   vulnerable: [250, 0.36],   // exposed, not mildly positive
