@@ -477,8 +477,19 @@ function constrain(r) {
   r.y = r.sy * rad * Math.sin(ang);
 }
 
+// The spacing rules ask for more room than the annulus holds, so without
+// slack the relaxation never settles: every pair sits on its limit and one
+// moved word shoves its neighbours, theirs, and so on across the field.
+// Scaling every gap except surface-surface (the lint's real check) leaves
+// room to settle, so a pin change stays local. 1 = the jammed original.
+const SLACK = 0.9;
+
 function gap(a, b) {
   if (a.depth === 'surface' && b.depth === 'surface') return MIN_DIST_SURFACE_PAIR;
+  return SLACK * looseGap(a, b);
+}
+
+function looseGap(a, b) {
   if (a.depth === 'surface' || b.depth === 'surface') return MIN_DIST_SURFACE;
   const base = a.cluster === b.cluster ? MIN_DIST : MIN_DIST_CROSS;
   if (!ORGANIC) return base;
