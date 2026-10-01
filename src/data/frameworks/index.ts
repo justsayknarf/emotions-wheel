@@ -3,6 +3,7 @@ import { circumplexCustom } from './circumplex-custom';
 import { radialIntensity } from './radial-intensity';
 import { radialSpread } from './radial-spread';
 import { radialClustered } from './radial-clustered';
+import { radialOrganic } from './radial-organic';
 
 export type { Emotion, EmotionDepth, Framework } from './types';
 
@@ -12,11 +13,12 @@ export const frameworks: Record<string, Framework> = {
   [radialIntensity.id]: radialIntensity,
   [radialSpread.id]: radialSpread,
   [radialClustered.id]: radialClustered,
+  [radialOrganic.id]: radialOrganic,
 };
 
 // The framework currently driving the field. A constant for now —
 // a runtime switcher is deferred to follow-up work.
-export const activeFrameworkId = 'radial-intensity';
+export const activeFrameworkId = 'radial-organic';
 
 // Dev-only preview: ?framework=<id> swaps the vocabulary for one load, so a
 // proposed layout can be seen in the real field before it is adopted.

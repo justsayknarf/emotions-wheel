@@ -22,14 +22,33 @@
 // Two variants, differing only in how hard clusters hold together:
 //   node scripts/gen-radial-spread.mjs              → radial-spread (even sky)
 //   node scripts/gen-radial-spread.mjs --clustered  → radial-clustered (islands)
+//   node scripts/gen-radial-spread.mjs --organic    → radial-organic (star-like)
 // Deterministic + re-runnable.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const SRC = 'src/data/frameworks/radial-intensity.ts';
 const CLUSTERED = process.argv.includes('--clustered');
-const VARIANT = CLUSTERED
-  ? { id: 'radial-clustered', exportName: 'radialClustered', name: 'Radial clustered (proposal)', same: 0.09, cross: 0.15 }
-  : { id: 'radial-spread', exportName: 'radialSpread', name: 'Radial spread (proposal)', same: 0.10, cross: 0.13 };
+const ORGANIC = process.argv.includes('--organic');
+const VARIANT = ORGANIC
+  ? { id: 'radial-organic', exportName: 'radialOrganic', name: 'Radial organic', same: 0.07, cross: 0.09 }
+  : CLUSTERED
+    ? { id: 'radial-clustered', exportName: 'radialClustered', name: 'Radial clustered (proposal)', same: 0.09, cross: 0.15 }
+    : { id: 'radial-spread', exportName: 'radialSpread', name: 'Radial spread (proposal)', same: 0.10, cross: 0.13 };
+
+// Organic variant. One minimum gap for every pair relaxes into a lattice
+// (Clark–Evans R ≈ 1.8; real star fields sit near 1). Instead, deep words are
+// gathered into small knots that sit close together, and the spacing between
+// knots swells and shrinks with a smooth noise field, leaving dense patches
+// and dark voids. Tips, corners, landmarks and pins are untouched.
+const KNOT_GAP = 0.055;          // two words in one knot
+const SPACING_FLOOR = 0.05;      // no two words closer than this, whatever the noise says
+const KNOT_SIZES = [1, 2, 2, 3, 3, 4, 4, 5]; // drawn per knot; 1 = a lone star
+const KNOT_REACH = 0.26;         // knot members come from within this of the seed word
+const KNOT_PULL = 0.7;           // how far members' targets move toward the knot's centre
+const SPACE_MIN = 0.6;           // noise scales the between-knot gap from ×0.6 ...
+const SPACE_MAX = 1.6;           // ... to ×1.6
+const DRIFT = 0.25;             // how far deep words drift toward the noise field's dense patches
+const SEED = 7;
 const OUT = `src/data/frameworks/${VARIANT.id}.ts`;
 
 const R_INNER = 0.22;
@@ -183,6 +202,19 @@ const PINS = {
   anxious: [326, 0.62],
   stressed: [334, 0.52],
 };
+// Organic variant: corner shoulders at uneven offsets, so the four corners
+// aren't mirror images. Each stays within reveal range of its corner.
+const ORGANIC_PINS = {
+  thrilled: [35, 1.2],
+  passionate: [52, 1.12],
+  bliss: [125, 1.17],
+  peaceful: [146, 1.2],
+  despondent: [214, 1.2],
+  hopeless: [231, 1.14],
+  furious: [305, 1.17],
+  panic: [326, 1.2],
+};
+if (ORGANIC) Object.assign(PINS, ORGANIC_PINS);
 // The always-visible words. Everything else is deep.
 const SURFACE = new Set([
   'energized', 'curious', 'confident', 'excited', 'happy', 'hopeful', 'loving', 'grateful', 'relaxed',
@@ -271,6 +303,86 @@ for (const w of NEW_WORDS) {
   rows.splice(at + 1, 0, row);
 }
 
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Smooth 2D value noise over the field square, in [0, 1].
+function valueNoise(rand, cells) {
+  const n = cells + 1;
+  const g = Array.from({ length: n * n }, rand);
+  const fade = (t) => t * t * (3 - 2 * t);
+  return (x, y) => {
+    const fx = ((Math.max(-1.3, Math.min(1.3, x)) + 1.3) / 2.6) * cells;
+    const fy = ((Math.max(-1.3, Math.min(1.3, y)) + 1.3) / 2.6) * cells;
+    const i = Math.min(cells - 1, Math.floor(fx)), j = Math.min(cells - 1, Math.floor(fy));
+    const u = fade(fx - i), v = fade(fy - j);
+    const at = (a, b) => g[b * n + a];
+    const top = at(i, j) * (1 - u) + at(i + 1, j) * u;
+    const bot = at(i, j + 1) * (1 - u) + at(i + 1, j + 1) * u;
+    return top * (1 - v) + bot * v;
+  };
+}
+
+if (ORGANIC) {
+  const rand = mulberry32(SEED);
+  const density = valueNoise(rand, 4);
+  // Relaxation fills any gap it can, so voids have to be built into the
+  // targets: deep, unpinned words drift up the density field's slope, emptying
+  // the sparse patches into dark sky. Gaps there are wide, knots here are tight.
+  const h = 0.02;
+  for (const r of rows) {
+    if (r.band !== undefined || r.depth !== 'deep') continue;
+    const gx = (density(r.tx + h, r.ty) - density(r.tx - h, r.ty)) / (2 * h);
+    const gy = (density(r.tx, r.ty + h) - density(r.tx, r.ty - h)) / (2 * h);
+    const g = Math.hypot(gx, gy) || 1;
+    const amt = DRIFT * Math.min(1, g / 1.5);
+    r.tx += (gx / g) * amt;
+    r.ty += (gy / g) * amt;
+    r.x = r.tx;
+    r.y = r.ty;
+  }
+  // Dense patches pack tighter; sparse ones keep their few words far apart.
+  for (const r of rows) r.space = SPACE_MAX - (SPACE_MAX - SPACE_MIN) * density(r.tx, r.ty);
+  // Knots: deep, unpinned words of one cluster, seeded in a fixed order.
+  let knotId = 0;
+  for (const cluster of Object.keys(byCluster)) {
+    const free = rows.filter((r) => r.cluster === cluster && r.band === undefined && r.depth === 'deep');
+    while (free.length) {
+      const seed = free.shift();
+      const size = KNOT_SIZES[Math.floor(rand() * KNOT_SIZES.length)];
+      const near = free
+        .map((r) => [Math.hypot(r.tx - seed.tx, r.ty - seed.ty), r])
+        .filter(([d]) => d < KNOT_REACH)
+        .sort((p, q) => p[0] - q[0])
+        .slice(0, size - 1)
+        .map(([, r]) => r);
+      const knot = [seed, ...near];
+      for (const r of near) free.splice(free.indexOf(r), 1);
+      if (knot.length < 2) continue;
+      const cx = knot.reduce((s, r) => s + r.tx, 0) / knot.length;
+      const cy = knot.reduce((s, r) => s + r.ty, 0) / knot.length;
+      // Nudge the whole knot a little, so knots don't sit on the sector's grid.
+      const jr = rand() * 0.05, ja = rand() * Math.PI * 2;
+      for (const r of knot) {
+        r.knot = knotId;
+        r.tx += (cx - r.tx) * KNOT_PULL + jr * Math.cos(ja);
+        r.ty += (cy - r.ty) * KNOT_PULL + jr * Math.sin(ja);
+        r.x = r.tx;
+        r.y = r.ty;
+      }
+      knotId++;
+    }
+  }
+}
+
 // Keep a point in its quadrant (with a margin off both axes) and inside the
 // annulus [R_INNER, its cluster's ceiling].
 function constrain(r) {
@@ -297,7 +409,10 @@ function constrain(r) {
 function gap(a, b) {
   if (a.depth === 'surface' && b.depth === 'surface') return MIN_DIST_SURFACE_PAIR;
   if (a.depth === 'surface' || b.depth === 'surface') return MIN_DIST_SURFACE;
-  return a.cluster === b.cluster ? MIN_DIST : MIN_DIST_CROSS;
+  const base = a.cluster === b.cluster ? MIN_DIST : MIN_DIST_CROSS;
+  if (!ORGANIC) return base;
+  if (a.knot !== undefined && a.knot === b.knot) return KNOT_GAP;
+  return Math.max(SPACING_FLOOR, (base * (a.space + b.space)) / 2);
 }
 
 // 4. Relax.
@@ -315,7 +430,9 @@ for (let it = 0; it < ITER; it++) {
       b.x += dx * push; b.y += dy * push;
     }
   }
-  const k = SPRING * (1 - it / ITER); // spring fades so the last passes are pure separation
+  // The spring fades so the last passes are pure separation — except in the
+  // organic variant, which keeps a light hold so knots and voids survive.
+  const k = SPRING * Math.max(ORGANIC ? 0.35 : 0, 1 - it / ITER);
   for (const r of rows) {
     r.x += (r.tx - r.x) * k;
     r.y += (r.ty - r.y) * k;
@@ -346,14 +463,19 @@ for (const r of rows) {
 
 writeFileSync(OUT, `import type { Emotion, Framework } from './types';
 
-// ${VARIANT.name}: a proposed re-layout of radial-intensity. Each word keeps
+// ${VARIANT.name}: ${ORGANIC ? 'the active layout, a re-layout' : 'a proposed re-layout'} of radial-intensity. Each word keeps
 // its cluster and its intensity rank (radius order) within the cluster, under a
 // per-cluster intensity ceiling. Clusters get angular sectors that tile each
 // quadrant, so the field no longer collapses onto the diagonals. Axis and corner
 // tips are hand-placed (the corners, r > 1, are where both sliders at an end
 // land), ${SURFACE.size} everyday surface words are spread ~20° apart as landmarks, and
-// ${NEW_WORDS.length} new words (marked) fill the axes. Every pair is held at least ${MIN_DIST}
-// apart — ${MIN_DIST_CROSS} across clusters, ${MIN_DIST_SURFACE} next to a surface word.
+// ${NEW_WORDS.length} new words (marked) fill the axes. ${ORGANIC
+  ? `Deep words gather into knots of up to ${Math.max(...KNOT_SIZES)}
+// (${KNOT_GAP} apart) and the gap between knots follows a noise field
+// (×${SPACE_MIN}–${SPACE_MAX}), so the field reads as a sky rather than a grid; no two
+// words sit closer than ${SPACING_FLOOR}, and surface words keep ${MIN_DIST_SURFACE} clear.`
+  : `Every pair is held at least ${MIN_DIST}
+// apart — ${MIN_DIST_CROSS} across clusters, ${MIN_DIST_SURFACE} next to a surface word.`}
 // The core (r < ${R_INNER}) stays a wordless still point.
 // Generated by scripts/gen-radial-spread.mjs — re-run to regenerate.
 const emotions: Emotion[] = [
