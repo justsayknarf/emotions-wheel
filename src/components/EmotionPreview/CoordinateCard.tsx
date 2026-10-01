@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { emotions, labelForId } from '../../data/emotions';
 import { nearbyEmotions, type NearbyEmotion } from '../../data/regions';
@@ -6,6 +6,10 @@ import { describeDelta, hasNotableDelta } from '../../data/departure';
 import { AxisSlider } from './AxisSlider';
 import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import { WordTag } from './WordTag';
+import { useDefinitionTooltipApi } from '../../hooks/useDefinitionTooltip';
+import { definitionFor } from '../../data/descriptions';
+import { useHoverHold } from '../../hooks/useHoverHold';
+import { VISUALLY_HIDDEN } from '../visuallyHidden';
 import type { PinEntry } from '../../types';
 
 // The caption offers the two nearest words as guesses and this many more beneath
@@ -110,6 +114,45 @@ interface Props {
   frosted?: boolean;
 }
 
+// A guess word inside the card's question. Like WordTag, it releases its
+// definition hover if it unmounts while hovered or focused, and carries its
+// definition as an always-present description (R19).
+function GuessWord({ label, named, onToggle, onHoverChange, definition }: {
+  label: string;
+  named: boolean;
+  onToggle: () => void;
+  onHoverChange?: (hovering: boolean) => void;
+  definition?: string | null;
+}) {
+  const hover = useHoverHold(onHoverChange);
+  const descriptionId = useId();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(ev) => { ev.stopPropagation(); onToggle(); }}
+        aria-describedby={definition ? descriptionId : undefined}
+        {...hover?.pointer}
+        {...hover?.focus}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: FIELD_SERIF,
+          fontSize: 15.5,
+          letterSpacing: '0.01em',
+          color: named ? 'var(--ui-gold)' : 'var(--ui-text-1)',
+          borderBottom: named ? '1px solid var(--ui-gold-dim)' : '1px dotted var(--ui-gold-dim)',
+          padding: '0 1px 1px',
+        }}
+      >
+        {label.toLowerCase()}{named ? ' ✓' : ''}
+      </button>
+      {definition && <span id={descriptionId} style={VISUALLY_HIDDEN}>{definition}</span>}
+    </>
+  );
+}
+
 export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, onRecognize, onDerecognize, onRemove, hideRemove = false, onAdjust, onAdjustDraft, dissolve, readOnly = false, onReopen, reopenLabel = 'Reopen', reopenDisabled = false, anchor = null, anchorLabel = null, frosted = false }: Props) {
   const recognizedSet = new Set(pin.recognizedWords);
 
@@ -178,37 +221,50 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
     return () => ro.disconnect();
   }, []);
 
+  // The field's definition tooltip (word-definition-tooltips). Read-only
+  // cards stay out of it.
+  const definition = useDefinitionTooltipApi();
+  const defines = definition.enabled && !readOnly;
+  const isBand = definition.layout === 'band';
+  // Each defined word carries its definition for assistive tech (R19).
+  const describe = (id: string) => (defines ? definitionFor(id) : null);
+  const hoverChange = (id: string) => (defines ? (on: boolean) => definition.hover(on ? id : null, 'card') : undefined);
+
+  // Desktop: tap names or un-names, as before. Phone tray: tap names the word
+  // and opens its definition; a word already named opens its definition and
+  // is removed with its × instead (R11).
   const toggleName = (id: string) => {
+    if (defines && isBand) {
+      if (!recognizedSet.has(id)) onRecognize(id);
+      definition.tap(id);
+      return;
+    }
     if (recognizedSet.has(id)) onDerecognize(id);
     else onRecognize(id);
   };
 
   // A guess word inside the question — tappable to name (or un-name).
-  const renderGuess = (e: NearbyEmotion) => {
-    const named = recognizedSet.has(e.id);
-    return (
-      <button
-        onClick={(ev) => { ev.stopPropagation(); toggleName(e.id); }}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          fontFamily: FIELD_SERIF,
-          fontSize: 15.5,
-          letterSpacing: '0.01em',
-          color: named ? 'var(--ui-gold)' : 'var(--ui-text-1)',
-          borderBottom: named ? '1px solid var(--ui-gold-dim)' : '1px dotted var(--ui-gold-dim)',
-          padding: '0 1px 1px',
-        }}
-      >
-        {e.label.toLowerCase()}{named ? ' ✓' : ''}
-      </button>
-    );
-  };
+  const renderGuess = (e: NearbyEmotion) => (
+    <GuessWord
+      key={e.id}
+      label={e.label}
+      named={recognizedSet.has(e.id)}
+      onToggle={() => toggleName(e.id)}
+      onHoverChange={hoverChange(e.id)}
+      definition={describe(e.id)}
+    />
+  );
 
   // A neighborhood tag beneath the question — tappable to name (or un-name).
   const renderTag = (e: NearbyEmotion) => (
-    <WordTag key={e.id} label={e.label} named={recognizedSet.has(e.id)} onToggle={() => toggleName(e.id)} />
+    <WordTag
+      key={e.id}
+      label={e.label}
+      named={recognizedSet.has(e.id)}
+      onToggle={() => toggleName(e.id)}
+      onHoverChange={hoverChange(e.id)}
+      definition={describe(e.id)}
+    />
   );
 
   // While a slider is dragged, the thumbs follow this local draft; the committed
@@ -561,7 +617,16 @@ export function CoordinateCard({ pin, isSelected, isEntering = false, onSelect, 
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 11, color: 'var(--ui-gold-dim)', letterSpacing: '0.02em' }}>your words:</span>
             {pin.recognizedWords.map((id) => (
-              <WordTag key={id} label={labelForId(id)} named onToggle={() => onDerecognize(id)} />
+              <WordTag
+                key={id}
+                label={labelForId(id)}
+                named
+                onToggle={defines && isBand ? () => definition.tap(id) : () => onDerecognize(id)}
+                onDismiss={defines && isBand ? () => onDerecognize(id) : undefined}
+                dismissLabel="Remove"
+                onHoverChange={hoverChange(id)}
+                definition={describe(id)}
+              />
             ))}
           </div>
         )}

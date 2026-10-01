@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 // a listener syncs state" shape as theme.ts/revealTuning.ts use for
 // cross-tab sync, just same-tab here since there's nothing to persist.
 
-export const ADMIN_ROUTES = ['emotions', 'reveal', 'themes'] as const;
+export const ADMIN_ROUTES = ['emotions', 'definitions', 'reveal', 'themes'] as const;
 export type AdminRoute = (typeof ADMIN_ROUTES)[number];
 
 export const DEFAULT_ADMIN_ROUTE: AdminRoute = 'emotions';

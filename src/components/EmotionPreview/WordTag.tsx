@@ -4,8 +4,11 @@
 // Tone follows the surface the chip sits on: gold for a draft, recorded blue
 // for a saved check-in (R6). Every color is mixed from the tone's own token
 // so a theme swap (src/config/theme.ts) recolors the chip with it.
+import { useId } from 'react';
 import { animate } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
+import { useHoverHold } from '../../hooks/useHoverHold';
+import { VISUALLY_HIDDEN } from '../visuallyHidden';
 
 export type WordTagTone = 'gold' | 'recorded';
 
@@ -47,12 +50,26 @@ interface Props {
   onToggle?: () => void;
   // A trailing × that sets a suggestion aside without naming it.
   onDismiss?: () => void;
+  // Definition tooltip wiring (word-definition-tooltips R5/R19). Only the
+  // draft card passes these. Pointer enter/leave (never touch) and keyboard
+  // focus/blur report hovering.
+  onHoverChange?: (hovering: boolean) => void;
+  // The word's definition, always present for assistive tech as the button's
+  // description (R19), so it is announced on focus without waiting for the
+  // visible tooltip.
+  definition?: string | null;
+  // The × button's accessible verb ("Dismiss" a suggestion, "Remove" a tag).
+  dismissLabel?: string;
 }
 
-export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismiss }: Props) {
+export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismiss, onHoverChange, definition, dismissLabel = 'Dismiss' }: Props) {
   const t = TONES[tone];
   const text = label.toLowerCase();
   const bodyPadding = onDismiss ? '4px 3px 4px 11px' : '4px 11px';
+  // Hover is released on unmount too (see useHoverHold).
+  const hover = useHoverHold(onHoverChange);
+  const descriptionId = useId();
+  const describe = !!definition && !!onToggle;
   const { root, scope } = useAnimeScope<HTMLSpanElement>((self, reduced) => {
     self.add('nudge', (naming: boolean) => {
       if (reduced || !self.root) return;
@@ -63,6 +80,7 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
   return (
     <span
       ref={root}
+      {...hover?.pointer}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -79,6 +97,8 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
         <button
           type="button"
           aria-pressed={named}
+          aria-describedby={describe ? descriptionId : undefined}
+          {...hover?.focus}
           onClick={(e) => {
             e.stopPropagation();
             // Keyed to the click itself, so only a real toggle nudges — never
@@ -93,10 +113,12 @@ export function WordTag({ label, tone = 'gold', named = false, onToggle, onDismi
       ) : (
         <span style={{ padding: bodyPadding }}>{text}</span>
       )}
+      {/* Outside the button, so it describes the word without joining its name. */}
+      {describe && <span id={descriptionId} style={VISUALLY_HIDDEN}>{definition}</span>}
       {onDismiss && (
         <button
           type="button"
-          aria-label={`Dismiss ${text}`}
+          aria-label={`${dismissLabel} ${text}`}
           onClick={(e) => { e.stopPropagation(); onDismiss(); }}
           style={{ ...RESET, padding: '4px 9px 4px 5px', color: 'var(--ui-text-3)', fontSize: 13, lineHeight: 1 }}
         >
