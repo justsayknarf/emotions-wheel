@@ -19,6 +19,8 @@ export interface DefinitionTooltipApi {
   press(): void;
   release(restId: string | null): void;
   tap(id: string): void;
+  // Close outright: Escape, tapping the band card, save, clear, leaving the field.
+  close(): void;
 }
 
 const noop = () => {};
@@ -31,6 +33,7 @@ export const DefinitionTooltipContext = createContext<DefinitionTooltipApi>({
   press: noop,
   release: noop,
   tap: noop,
+  close: noop,
 });
 
 export function useDefinitionTooltipApi(): DefinitionTooltipApi {
@@ -87,9 +90,24 @@ export function useDefinitionTooltip(layout: TipLayout): DefinitionTooltipApi {
   }, [dispatch]);
   const release = useCallback((restId: string | null) => dispatch({ type: 'release', restId }), [dispatch]);
   const tap = useCallback((id: string) => dispatch({ type: 'tap', id }), [dispatch]);
+  const close = useCallback(() => {
+    setLitId(null);
+    dispatch({ type: 'dismiss' });
+  }, [dispatch]);
+
+  // Escape dismisses an open tooltip (WCAG 1.4.13), listening only while one is.
+  const isOpen = openId !== null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, close]);
 
   return useMemo(
-    () => ({ enabled: true, layout, openId, litId, hover, press, release, tap }),
-    [layout, openId, litId, hover, press, release, tap],
+    () => ({ enabled: true, layout, openId, litId, hover, press, release, tap, close }),
+    [layout, openId, litId, hover, press, release, tap, close],
   );
 }

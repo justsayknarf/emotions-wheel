@@ -27,7 +27,7 @@ import { useViewHistory } from './hooks/useViewHistory';
 import { DefinitionTooltipContext, useDefinitionTooltip } from './hooks/useDefinitionTooltip';
 import { nearestWordId } from './components/EmotionField/definitionPlacement';
 import { VISIBILITY_RADIUS } from './hooks/useProximity';
-import type { DiaryEntry, PinEntry } from './types';
+import type { AppView, DiaryEntry, PinEntry } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
 
@@ -474,7 +474,14 @@ export default function App() {
   // landing (matches handleFieldPress's own guard). Field hover must not open
   // a tooltip then either.
   const fieldPressDisabled = desktopLandingActive && desktopCardProgress === 0 && pins.length === 0;
-  const { hover: hoverDefinition, press: pressDefinition, release: releaseDefinition } = definition;
+  const { hover: hoverDefinition, press: pressDefinition, release: releaseDefinition, close: closeDefinition } = definition;
+  // Leaving the field for an overlay closes the definition, so it isn't still
+  // open on the way back. (Browser forward into an overlay skips this; the
+  // field gates the tooltip on view === 'field' meanwhile.)
+  const leaveField = useCallback((next: AppView) => {
+    closeDefinition();
+    navigateTo(next);
+  }, [closeDefinition, navigateTo]);
   const handleDefinitionHover = useCallback((id: string | null) => hoverDefinition(id, 'field'), [hoverDefinition]);
 
   // U6/R6: the departure connector's one-shot trigger + the anchor/new-pin
@@ -684,6 +691,7 @@ export default function App() {
   // reopen), so there is no draftId branch to mirror here.
   const handleLandingSave = useCallback(() => {
     if (pins.length === 0) return;
+    closeDefinition();
     // docs/plans/2026-09-04-001-feat-newtab-first-checkin-simplify-plan.md,
     // U3 (generalized, see `justLanded`'s own comment above): every
     // landing save expands the mirror so the confirmation card doesn't
@@ -707,7 +715,7 @@ export default function App() {
     setSelectedPinId(null);
     setDesktopCardProgress(1);
     scheduleLandingSettle();
-  }, [pins, record, entrySource, scheduleLandingSettle, fireDepartureTrace]);
+  }, [pins, record, entrySource, scheduleLandingSettle, fireDepartureTrace, closeDefinition]);
 
   // EmotionDrawer's onMoveToRail (see its own prop comment): a returning
   // user's post-mint escape hatch out of the centered card, without saving
@@ -950,6 +958,8 @@ export default function App() {
   }, [draggingPinId]);
 
   const handleRecord = useCallback(() => {
+    // A saved check-in's words leave the card; its tooltip goes with them.
+    closeDefinition();
     if (draftId) {
       // Saving a reopened check-in (U7/R25) updates its existing record
       // rather than appending a new one. timestamp and sessionDurationMs
@@ -1004,7 +1014,7 @@ export default function App() {
       // picks it up via justSavedEntryId, same as handleLandingSave.
       setJustSavedEntryId(entry.id);
     }
-  }, [pins, record, updateEntry, draftId, entrySource, fireDepartureTrace]);
+  }, [pins, record, updateEntry, draftId, entrySource, fireDepartureTrace, closeDefinition]);
 
   const handleDone = useCallback(() => {
     if (pins.length > 0) handleRecord();
@@ -1216,6 +1226,7 @@ export default function App() {
           onDefinitionHover={fieldPressDisabled ? undefined : handleDefinitionHover}
           onDefinitionPress={pressDefinition}
           onDefinitionRelease={releaseDefinition}
+          onDefinitionDismiss={closeDefinition}
           // The field plane starts at the top of the same ancestor the
           // sheet reports against, so its top edge is already in stage px.
           skyOccluderTop={sideBySide ? null : sheetTop}
@@ -1329,7 +1340,7 @@ export default function App() {
                 onAdjustDraft={handleAdjustDraft}
                 dissolve={{ fadeOut: tuning.captionFadeOut, fadeIn: tuning.captionFadeIn, hold: tuning.captionHold }}
                 onDone={handleDone}
-                onClear={() => { setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
+                onClear={() => { closeDefinition(); setPins([]); setDraftId(null); setExpandedPinIds(new Set()); }}
                 onReopen={handleReopen}
                 justSavedEntryId={justSavedEntryId}
                 onRecognizeSaved={handleRecognizeSaved}
@@ -1391,11 +1402,11 @@ export default function App() {
 
           {/* Right-hand pills: settings always, history once there is one. */}
           <div style={{ position: 'absolute', top: HEADER_PILL_TOP, right: sideBySide ? `calc(${RAIL_WIDTH} + 20px)` : 20, display: 'flex', gap: 8, zIndex: 20 }}>
-            <button onClick={() => navigateTo('settings')} style={{ ...HEADER_PILL, position: 'static' }}>
+            <button onClick={() => leaveField('settings')} style={{ ...HEADER_PILL, position: 'static' }}>
               settings
             </button>
             {entries.length > 0 && (
-              <button onClick={() => navigateTo('history')} style={{ ...HEADER_PILL, position: 'static' }}>
+              <button onClick={() => leaveField('history')} style={{ ...HEADER_PILL, position: 'static' }}>
                 history
               </button>
             )}
@@ -1403,7 +1414,7 @@ export default function App() {
 
           {showMirror && (
             <button
-              onClick={() => navigateTo('constellation')}
+              onClick={() => leaveField('constellation')}
               style={{ ...HEADER_PILL, left: 20 }}
             >
               ✦ replay

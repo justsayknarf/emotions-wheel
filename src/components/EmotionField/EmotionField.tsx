@@ -167,6 +167,8 @@ interface Props {
   // A field press ended. restId is the word nearest the resting pin in the
   // band layout (R10), else null.
   onDefinitionRelease?: (restId: string | null) => void;
+  // The band tooltip card was tapped: close it.
+  onDefinitionDismiss?: () => void;
 }
 
 export function EmotionField({
@@ -198,6 +200,7 @@ export function EmotionField({
   onDefinitionHover,
   onDefinitionPress,
   onDefinitionRelease,
+  onDefinitionDismiss,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -1352,6 +1355,7 @@ export function EmotionField({
                 layout={definitionLayout}
                 obstacles={definitionObstacles}
                 bounds={definitionBounds}
+                onDismiss={onDefinitionDismiss}
               />
             )}
           </AnimatePresence>

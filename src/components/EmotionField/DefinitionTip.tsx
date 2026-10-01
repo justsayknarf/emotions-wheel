@@ -46,9 +46,11 @@ interface Props {
   layout: TipLayout;
   obstacles: Obstacle[];
   bounds: Box;
+  // Band layout only: tapping the card closes it (and doesn't reach the field).
+  onDismiss?: () => void;
 }
 
-export function DefinitionTip({ emotion, star, layout, obstacles, bounds }: Props) {
+export function DefinitionTip({ emotion, star, layout, obstacles, bounds, onDismiss }: Props) {
   const reduce = !!useReducedMotion();
   const cardRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<SVGLineElement>(null);
@@ -114,6 +116,7 @@ export function DefinitionTip({ emotion, star, layout, obstacles, bounds }: Prop
   });
 
   const definition = definitionFor(emotion.id);
+  const takesTap = layout === 'band' && !!onDismiss;
 
   return (
     <>
@@ -141,8 +144,14 @@ export function DefinitionTip({ emotion, star, layout, obstacles, bounds }: Prop
             : { pathLength: 0, transition: { duration: RETRACT_S, delay: FADE_OUT_S, ease: 'easeIn' } }}
         />
       </svg>
+      {/* Desktop: the card never takes the pointer, so hover passes through
+          to the field. Phone band: the card takes the tap and closes, rather
+          than letting it fall through and move the pin. */}
       <motion.div
-        style={{ position: 'absolute', left: 0, top: 0, x: bx, y: by, width, zIndex: 20, pointerEvents: 'none' }}
+        onPointerDown={takesTap ? (e) => { e.stopPropagation(); onDismiss?.(); } : undefined}
+        onPointerUp={takesTap ? (e) => e.stopPropagation() : undefined}
+        onClick={takesTap ? (e) => e.stopPropagation() : undefined}
+        style={{ position: 'absolute', left: 0, top: 0, x: bx, y: by, width, zIndex: 20, pointerEvents: takesTap ? 'auto' : 'none' }}
       >
         <motion.div
           ref={cardRef}
