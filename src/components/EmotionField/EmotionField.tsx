@@ -250,7 +250,7 @@ export function EmotionField({
   // mount counts as interaction too.
   const introInterrupt = useRef(false);
   const [mountPinCount] = useState(pins.length);
-  const { proj, look: skyLook, fovDeg: skyFovDeg } = useSkyCamera({
+  const { proj, look: skyLook, fovDeg: skyFovDeg, pan: skyPan } = useSkyCamera({
     enabled: sky,
     target: skyTarget,
     lean: pins.length > 0 || departureDraft !== null,
@@ -269,6 +269,10 @@ export function EmotionField({
   // this element or an ancestor of it (U1's recede wrapper in App.tsx), so
   // it would go stale relative to the transform-aware getBoundingClientRect
   // gesture math reads instead.
+  const sizeRef = useRef(size);
+  useLayoutEffect(() => {
+    sizeRef.current = size;
+  });
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -350,7 +354,25 @@ export function EmotionField({
     landingRootRef.current = el;
   }, [landingRootRef]);
 
-  const { isPressed, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
+  // Drag-to-pan on the night sky: a press that travels drags the dome, and
+  // its release plants nothing. A tap still plants a pin.
+  const fieldPan = useMemo(
+    () => (sky
+      ? {
+        start: skyPan.start,
+        move: (dx: number, dy: number, rect: DOMRect) => {
+          const sx = rect.width > 0 && sizeRef.current.width > 0 ? sizeRef.current.width / rect.width : 1;
+          skyPan.move(dx * sx, dy * sx);
+        },
+        end: () => {
+          skyPan.end();
+          onDefinitionRelease?.(null);
+        },
+      }
+      : undefined),
+    [sky, skyPan, onDefinitionRelease],
+  );
+  const { isPressed, isPanning, isRevealed, revealCenter, dwellCenter, handlers } = useFieldGesture({
     containerRef,
     onRelease: handleRelease,
     onFirstInteraction,
@@ -367,6 +389,7 @@ export function EmotionField({
           ? skyProjection({ look: skyLook, fovDeg: skyFovDeg, width: rect.width, height: rect.height }).fromPx(lx, ly)
           : flatProjection(rect).fromPx(lx, ly)
         : proj.fromPx(lx * (size.width / rect.width), ly * (size.height / rect.height)),
+    pan: fieldPan,
   });
   // U1: hover-only (no active press) — the receded field's pointer/hover
   // affordance should read as "backgrounded but reachable," not fight with
@@ -887,7 +910,7 @@ export function EmotionField({
         // direct press is a deliberate no-op during the pre-mint
         // departure-float landing, so neither the crosshair cursor nor the
         // gold "clickable" hover ring should imply otherwise.
-        cursor: recedeProgress > 0 || dropDisabled ? 'pointer' : 'crosshair',
+        cursor: recedeProgress > 0 || dropDisabled ? 'pointer' : isPanning ? 'grabbing' : 'crosshair',
         boxShadow: (recedeProgress > 0 || dropDisabled) && isHoveringOnly ? 'inset 0 0 0 1px var(--ui-gold-dim)' : 'none',
         transition: reducedMotion ? 'none' : 'box-shadow 0.2s ease-out',
       }}

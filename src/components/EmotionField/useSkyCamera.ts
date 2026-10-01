@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { flatProjection, skyProjection, type FieldCoord, type FieldProjection, type SkyViewport } from '../../utils/skyProjection';
-import { initialCamera, isSettled, stepCamera, type CameraParams, type CameraState } from '../../utils/skyCamera';
+import { coastStart, initialCamera, isSettled, panLook, stepCamera, stepCoast, type CameraParams, type CameraState } from '../../utils/skyCamera';
 import { introLook, type IntroSpec } from '../../utils/skyIntro';
 
 // Steps the night-sky camera toward `target` on requestAnimationFrame and
@@ -19,6 +19,12 @@ import { introLook, type IntroSpec } from '../../utils/skyIntro';
 // until it lands or `interruptRef` goes true (a field press or live draft),
 // which ends the rise where it is. Either way the spring then glides from
 // there to the normal target. Reduced motion skips it entirely.
+//
+// `pan` is drag-to-pan: while a drag holds the sky, the gaze follows the
+// finger one-for-one, and on release it glides on with the finger's speed
+// and slows to rest. The gaze then stays where the user left it until the
+// target moves (a new pin, a slider drag, another pin selected), when the
+// spring takes it back as usual.
 const BAND_RATE = 5; // 1/s, exponential ease of the visible band's edges
 export function useSkyCamera(opts: {
   enabled: boolean;
@@ -29,7 +35,7 @@ export function useSkyCamera(opts: {
   viewport?: SkyViewport | null;
   intro?: IntroSpec | null;
   interruptRef?: RefObject<boolean>;
-}): { proj: FieldProjection; look: FieldCoord; fovDeg: number } {
+}): { proj: FieldProjection; look: FieldCoord; fovDeg: number; pan: SkyPan } {
   const { enabled, target, lean, params, size, viewport = null, intro = null, interruptRef } = opts;
   const reduced = !!useReducedMotion();
   // Mount-only: later renders' arguments are ignored.
@@ -51,6 +57,17 @@ export function useSkyCamera(opts: {
   // spring and the fov ease for as long as the target keeps moving. Null
   // means the loop is asleep; only a wake seeds it.
   const lastRef = useRef<number | null>(null);
+  // Set while the user holds the gaze (a drag-pan, its glide, and the rest
+  // after it). `targetAt` is the target when the pan began: once the target
+  // moves off it, the hold ends.
+  const manualRef = useRef<{
+    targetAt: FieldCoord;
+    dragging: boolean;
+    vel: FieldCoord | null;
+    samples: Array<{ t: number; look: FieldCoord }>;
+  } | null>(null);
+  // Bumped to wake the loop when a pan lets go into a glide.
+  const [wake, setWake] = useState(0);
   // Written in a layout effect rather than during render (react-hooks/refs);
   // layout effects run before the loop effect below, so its first tick
   // already reads this render's target.
@@ -89,6 +106,30 @@ export function useSkyCamera(opts: {
         }
         prevTargetRef.current = null;
       }
+      const held = manualRef.current;
+      if (held && (held.targetAt.x !== targetRef.current.x || held.targetAt.y !== targetRef.current.y)) {
+        // The target moved: the spring takes the gaze back from where it is.
+        manualRef.current = null;
+        prevTargetRef.current = null;
+      }
+      const m = manualRef.current;
+      if (m) {
+        let look = camRef.current.look;
+        if (m.vel) {
+          const c = stepCoast(look, m.vel, dt, params);
+          look = c.look;
+          m.vel = c.done ? null : c.vel;
+        }
+        // The spring aimed at the gaze itself only eases the field of view.
+        const fovDeg = stepCamera(camRef.current, { target: look, prevTarget: null, lean, reduced }, dt, params).fovDeg;
+        const next = { look, vel: { x: 0, y: 0 }, fovDeg };
+        camRef.current = next;
+        setCam(next);
+        prevTargetRef.current = targetRef.current;
+        if (!m.vel && isSettled(next, look, lean, params)) lastRef.current = null;
+        else raf = requestAnimationFrame(tick);
+        return;
+      }
       const next = stepCamera(camRef.current, { target: targetRef.current, prevTarget: prevTargetRef.current, lean, reduced }, dt, params);
       prevTargetRef.current = targetRef.current;
       camRef.current = next;
@@ -99,7 +140,7 @@ export function useSkyCamera(opts: {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // target.x/y wake the loop; the loop itself reads targetRef.
-  }, [enabled, target.x, target.y, lean, reduced, params, interruptRef]);
+  }, [enabled, target.x, target.y, lean, reduced, params, interruptRef, wake]);
 
   // The band's edges as insets from the stage's top and bottom, so a stage
   // resize applies at once while a band change eases.
@@ -142,5 +183,66 @@ export function useSkyCamera(opts: {
       : flatProjection(size)),
     [enabled, cam.look, cam.fovDeg, size, inset.top, inset.bottom, bandHeight],
   );
-  return { proj, look: cam.look, fovDeg: cam.fovDeg };
+  const projRef = useRef(proj);
+  const paramsRef = useRef(params);
+  const reducedRef = useRef(reduced);
+  useLayoutEffect(() => {
+    projRef.current = proj;
+    paramsRef.current = params;
+    reducedRef.current = reduced;
+  });
+
+  const [pan] = useState<SkyPan>(() => ({
+    start: () => {
+      if (introRef.current) introRef.current.done = true;
+      manualRef.current = {
+        targetAt: targetRef.current,
+        dragging: true,
+        vel: null,
+        samples: [{ t: performance.now(), look: camRef.current.look }],
+      };
+    },
+    move: (dxPx, dyPx) => {
+      const m = manualRef.current;
+      const F = projRef.current.frame?.F;
+      if (!m || !m.dragging || !F) return;
+      const look = panLook(camRef.current.look, dxPx, dyPx, F, paramsRef.current);
+      const now = performance.now();
+      m.samples.push({ t: now, look });
+      while (m.samples.length > 2 && now - m.samples[0].t > PAN_SAMPLE_MS) m.samples.shift();
+      const next = { look, vel: { x: 0, y: 0 }, fovDeg: camRef.current.fovDeg };
+      camRef.current = next;
+      setCam(next);
+    },
+    end: () => {
+      const m = manualRef.current;
+      if (!m || !m.dragging) return;
+      m.dragging = false;
+      // The finger's speed over its last few moves; a finger that stopped
+      // before lifting leaves the sky where it is.
+      const now = performance.now();
+      const a = m.samples[0];
+      const b = m.samples[m.samples.length - 1];
+      const span = (b.t - a.t) / 1000;
+      if (!reducedRef.current && span > 0.008 && now - b.t < PAN_STILL_MS) {
+        m.vel = coastStart({ x: (b.look.x - a.look.x) / span, y: (b.look.y - a.look.y) / span }, paramsRef.current);
+      }
+      m.samples = [];
+      setWake((w) => w + 1);
+    },
+  }));
+
+  return { proj, look: cam.look, fovDeg: cam.fovDeg, pan };
+}
+
+// Velocity window for a drag-pan's release, and how long a finger may rest
+// before lifting and still fling the sky.
+const PAN_SAMPLE_MS = 100;
+const PAN_STILL_MS = 60;
+
+export interface SkyPan {
+  start(): void;
+  // A pointer move, in stage layout px.
+  move(dxPx: number, dyPx: number): void;
+  end(): void;
 }

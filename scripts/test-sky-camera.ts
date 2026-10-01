@@ -1,6 +1,6 @@
 // Behavioural check for the night-sky camera (src/utils/skyCamera.ts).
 // Run: npm run check:camera
-import { stepCamera, initialCamera, isSettled, cameraTarget, degToField, DEFAULT_CAMERA_PARAMS as P, type CameraState } from '../src/utils/skyCamera';
+import { stepCamera, initialCamera, isSettled, cameraTarget, degToField, panLook, coastStart, stepCoast, DEFAULT_CAMERA_PARAMS as P, type CameraState } from '../src/utils/skyCamera';
 import { skyProjection } from '../src/utils/skyProjection';
 
 let failures = 0;
@@ -44,6 +44,47 @@ const DT = 1 / 60;
     prevPx = px; prevTarget = target;
   }
   check('flight keeps the pin steady on screen', worst < 2, `worst frame-to-frame move ${worst.toFixed(2)}px`);
+}
+
+// Drag-to-pan: the star under the finger stays under it, the sky moves the
+// way the finger does, and the gaze never tilts past lookMax.
+{
+  const W = 900, H = 700, fov = P.fovRest;
+  let look = { x: 0.2, y: -0.1 };
+  const proj0 = skyProjection({ look, fovDeg: fov, width: W, height: H });
+  let finger = { x: W / 2 + 40, y: H / 2 - 30 };
+  const grabbed = proj0.fromPx(finger.x, finger.y)!;
+  for (let i = 0; i < 20; i++) {
+    const step = { x: 6, y: 4 };
+    const F = skyProjection({ look, fovDeg: fov, width: W, height: H }).frame!.F;
+    look = panLook(look, step.x, step.y, F, P);
+    finger = { x: finger.x + step.x, y: finger.y + step.y };
+  }
+  const at = skyProjection({ look, fovDeg: fov, width: W, height: H }).toPx(grabbed);
+  const err = Math.hypot(at.x - finger.x, at.y - finger.y);
+  check('pan keeps the grabbed star under the finger', err < 12, `drift ${err.toFixed(1)}px over a 144px drag`);
+  check('dragging right and down turns the gaze left and up', look.x < 0.2 && look.y > -0.1, `look ${look.x.toFixed(3)},${look.y.toFixed(3)}`);
+  let edge = { x: 0, y: 0 };
+  for (let i = 0; i < 200; i++) edge = panLook(edge, -20, 0, 600, P);
+  check('pan respects lookMax', Math.hypot(edge.x, edge.y) <= P.lookMax + 1e-9, `|look| = ${Math.hypot(edge.x, edge.y).toFixed(4)}`);
+}
+
+// A released pan glides under its ceiling, slows monotonically, and comes to rest.
+{
+  let vel = coastStart({ x: 50, y: 0 }, P);
+  const cap = degToField(P.coastMaxDegPerSec);
+  check('fling is capped', Math.hypot(vel.x, vel.y) <= cap + 1e-9, `${Math.hypot(vel.x, vel.y).toFixed(3)} ≤ ${cap.toFixed(3)} field/s`);
+  let look = { x: -0.5, y: 0 }, t = 0, done = false, prevSp = Infinity, monotone = true;
+  while (!done && t < 5) {
+    const c = stepCoast(look, vel, DT, P);
+    const sp = Math.hypot(c.vel.x, c.vel.y);
+    if (sp > prevSp + 1e-12) monotone = false;
+    prevSp = sp; look = c.look; vel = c.vel; done = c.done; t += DT;
+  }
+  check('glide slows monotonically and stops', monotone && done && t < 2.5, `rest after ${t.toFixed(2)}s at x ${look.x.toFixed(3)}`);
+  let v2 = coastStart({ x: 50, y: 0 }, P), l2 = { x: 1.1, y: 0 }, stopped = false;
+  for (let i = 0; i < 30 && !stopped; i++) { const c = stepCoast(l2, v2, DT, P); l2 = c.look; v2 = c.vel; stopped = c.done; }
+  check('glide stops at the tilt limit', stopped && Math.hypot(l2.x, l2.y) <= P.lookMax + 1e-9, `|look| = ${Math.hypot(l2.x, l2.y).toFixed(4)}`);
 }
 
 // Carry stops at the tilt limit instead of pushing the gaze past it.
