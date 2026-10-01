@@ -34,6 +34,18 @@ import { clampIntroDuration, introStart, type IntroSpec } from '../../utils/skyI
 const TETHER_THRESHOLD = 26;
 import type { PinEntry } from '../../types';
 import { placeAnchorLabel, ANCHOR_LABEL_H } from './anchorLabel';
+import { DefinitionTip } from './DefinitionTip';
+import {
+  hitTestWord,
+  nearestWordId,
+  LABEL_OBSTACLE_WEIGHT,
+  MARK_OBSTACLE_WEIGHT,
+  type Box,
+  type Obstacle,
+  type TipLayout,
+  type WordTarget,
+} from './definitionPlacement';
+import { definitionFor } from '../../data/descriptions';
 
 // The previous check-in's anchor mark: a hollow ring with its day label ("TODAY").
 // Shared by the render and the fan's obstacle boxes, so revealed labels are
@@ -142,6 +154,17 @@ interface Props {
   // Open with the rise from the Negative horizon to the still point (sky
   // mode only). Read once at mount; App passes it while the welcome shows.
   skyIntro?: boolean;
+  // The word whose definition tooltip is open, and the layout it uses
+  // (word-definition-tooltips). App's useDefinitionTooltip owns this state.
+  definitionOpenId?: string | null;
+  definitionLayout?: TipLayout;
+  // The pointer is over this word (or none): field-side hover (R4).
+  onDefinitionHover?: (id: string | null) => void;
+  // A field press began (R9).
+  onDefinitionPress?: () => void;
+  // A field press ended. restId is the word nearest the resting pin in the
+  // band layout (R10), else null.
+  onDefinitionRelease?: (restId: string | null) => void;
 }
 
 export function EmotionField({
@@ -167,6 +190,11 @@ export function EmotionField({
   skyOccluderTop = null,
   skySwellPlay = 0,
   skyIntro = false,
+  definitionOpenId = null,
+  definitionLayout = 'tethered',
+  onDefinitionHover,
+  onDefinitionPress,
+  onDefinitionRelease,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -253,6 +281,13 @@ export function EmotionField({
   }, [sky, proj]);
 
   const handleRelease = useCallback((center: { x: number; y: number }) => {
+    // Band layout (phone tray): the word nearest where the pin comes to rest
+    // gets its definition after the delay (R10). The nearest word in reach is
+    // always revealed: surface words always show, and a pin reveals its
+    // nearest deep words.
+    onDefinitionRelease?.(
+      definitionLayout === 'band' ? nearestWordId(center, emotions, VISIBILITY_RADIUS) : null,
+    );
     // R15: before minting a new pin, check whether the release lands close
     // enough to an existing pin — draft or recorded — to select it instead.
     // Pin dots render with pointerEvents: 'none' — the field is the single
@@ -278,7 +313,7 @@ export function EmotionField({
       regionDescription: getRegionDescription(center.x, center.y, emotions),
     };
     onPinRelease(entry);
-  }, [onPinRelease, onPinSelect, pins, recordedPins, proj]);
+  }, [onPinRelease, onPinSelect, pins, recordedPins, proj, onDefinitionRelease, definitionLayout]);
 
   // Pin lands, field notices (usePinLanding). Its anime scope is rooted at the
   // field container, so the container takes both refs.
@@ -707,6 +742,67 @@ export function EmotionField({
     return raw.map(({ seg }, i) => ({ ...seg, delay: i * tuning.staggerStep }));
   }, [revealedDeep, deepLabelOffsets, fociPx, size.width, proj, tuning]);
 
+  // Every word as it draws right now, for the hover hit-test and as obstacles
+  // for the definition tooltip. Words are pointerEvents: none — the field is
+  // the only pointer target — so hover is found in px here.
+  const wordTargets = useMemo<WordTarget[]>(() => {
+    if (size.width === 0) return [];
+    const out: WordTarget[] = [];
+    const add = (e: (typeof emotions)[number], o: { dx: number; dy: number }) => {
+      const p = proj.toPx(e);
+      if (!p.visible) return;
+      out.push({
+        id: e.id,
+        dotX: p.x,
+        dotY: p.y,
+        labelX: p.x + o.dx,
+        labelY: p.y - LABEL_STANDOFF + o.dy,
+        halfW: labelHalfWidth(e.label, e.depth),
+        halfH: LABEL_LINE_H / 2,
+      });
+    };
+    for (const e of surfaceEmotions) add(e, { dx: 0, dy: 0 });
+    for (const e of revealedDeep) add(e, deepLabelOffsets.get(e.id) ?? { dx: 0, dy: 0 });
+    return out;
+  }, [size.width, proj, revealedDeep, deepLabelOffsets]);
+
+  // Pointer position in layout px (the space proj works in), corrected for a
+  // CSS transform on the field or an ancestor, as toCoord does above.
+  const layoutPx = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (size.width / rect.width),
+      y: (e.clientY - rect.top) * (size.height / rect.height),
+    };
+  };
+
+  // The open definition: its word, where its star draws, what it should not
+  // cover, and the area it may use (the band above the tray on phones).
+  const definitionEmotion = definitionOpenId && definitionFor(definitionOpenId)
+    ? emotions.find((e) => e.id === definitionOpenId) ?? null
+    : null;
+  const definitionStar = definitionEmotion ? proj.toPx(definitionEmotion) : null;
+  const definitionObstacles = useMemo<Obstacle[]>(() => {
+    const out: Obstacle[] = wordTargets
+      .filter((t) => t.id !== definitionOpenId)
+      .map((t) => ({ x: t.labelX - t.halfW, y: t.labelY - t.halfH, w: t.halfW * 2, h: t.halfH * 2, weight: LABEL_OBSTACLE_WEIGHT }));
+    for (const p of pins) {
+      const at = proj.toPx(p);
+      if (at.visible) out.push({ x: at.x - 10, y: at.y - 10, w: 20, h: 20, weight: MARK_OBSTACLE_WEIGHT });
+    }
+    if (anchorMark) {
+      const r = anchorMark.ringSize / 2 + 4;
+      out.push({ x: anchorMark.x - r, y: anchorMark.y - r, w: r * 2, h: r * 2, weight: MARK_OBSTACLE_WEIGHT });
+    }
+    return out;
+  }, [wordTargets, definitionOpenId, pins, proj, anchorMark]);
+  const definitionBounds: Box = {
+    x: 0,
+    y: 0,
+    w: size.width,
+    h: definitionLayout === 'band' && skyOccluderTop !== null ? Math.min(size.height, skyOccluderTop) : size.height,
+  };
+
   // Axes read legibly at rest and brighten (emphasis) while the intro runs.
   const crosshairColor = `rgb(var(--ui-gold-rgb) / ${axisEmphasis ? 0.22 : 0.1})`;
   const AXIS_REST = 0.45;    // resting label opacity
@@ -732,11 +828,26 @@ export function EmotionField({
     <div
       ref={setContainerRef}
       onPointerEnter={handlers.onPointerEnter}
-      onPointerLeave={handlers.onPointerLeave}
-      onPointerDown={handlers.onPointerDown}
-      onPointerMove={handlers.onPointerMove}
+      onPointerLeave={(e) => {
+        handlers.onPointerLeave(e);
+        if (e.pointerType !== 'touch') onDefinitionHover?.(null);
+      }}
+      onPointerDown={(e) => {
+        onDefinitionPress?.();
+        handlers.onPointerDown(e);
+      }}
+      onPointerMove={(e) => {
+        handlers.onPointerMove(e);
+        // Hover only: a mouse or pen with no button down. Touch never hovers.
+        if (e.pointerType !== 'touch' && e.buttons === 0) {
+          onDefinitionHover?.(hitTestWord(layoutPx(e), wordTargets));
+        }
+      }}
       onPointerUp={handlers.onPointerUp}
-      onPointerCancel={handlers.onPointerCancel}
+      onPointerCancel={() => {
+        handlers.onPointerCancel();
+        onDefinitionRelease?.(null);
+      }}
       className="relative w-full h-full overflow-hidden"
       style={{
         touchAction: 'none',
@@ -1226,6 +1337,22 @@ export function EmotionField({
               </div>
             );
           })}
+
+          {/* The definition tooltip (word-definition-tooltips). One constant
+              key: a new word re-targets the same card; a fresh open draws the
+              tether again. */}
+          <AnimatePresence>
+            {definitionEmotion && definitionStar?.visible && (
+              <DefinitionTip
+                key="definition-tip"
+                emotion={definitionEmotion}
+                star={{ x: definitionStar.x, y: definitionStar.y }}
+                layout={definitionLayout}
+                obstacles={definitionObstacles}
+                bounds={definitionBounds}
+              />
+            )}
+          </AnimatePresence>
         </>
       )}
     </div>
