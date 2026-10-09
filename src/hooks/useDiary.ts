@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { readDiary, appendEntry, updateEntry as updateEntryInStore, clearDiary } from '../store/diary';
-import type { DiaryEntry, PinEntry } from '../types';
+import { readDiary, appendEntry, updateEntry as updateEntryInStore, setEntryNotes, clearDiary } from '../store/diary';
+import type { DiaryEntry, JournalNote, PinEntry } from '../types';
 
 export function useDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>(() => readDiary());
@@ -27,10 +27,17 @@ export function useDiary() {
     setEntries(readDiary());
   }, []);
 
+  // Returns whether the write landed (see setEntryNotes).
+  const setNotes = useCallback((entryId: string, notes: JournalNote[]): boolean => {
+    const ok = setEntryNotes(entryId, notes);
+    setEntries(readDiary());
+    return ok;
+  }, []);
+
   const clear = useCallback(() => {
     clearDiary();
     setEntries([]);
   }, []);
 
-  return { entries, record, updateEntry, clear };
+  return { entries, record, updateEntry, setNotes, clear };
 }

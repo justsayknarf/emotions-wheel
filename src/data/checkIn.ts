@@ -44,6 +44,12 @@ export function updateEntryInList(entries: DiaryEntry[], updated: DiaryEntry): D
     sessionDurationMs: original.sessionDurationMs,
     source: original.source,
   };
+  // Journal notes ride along the same way when the update leaves the key out
+  // entirely (App.tsx's correction path builds a fresh entry without them).
+  // A present key — even an empty array — is a deliberate note write and wins.
+  if (!('notes' in updated) && original.notes !== undefined) {
+    next[index].notes = original.notes;
+  }
   return next;
 }
 
