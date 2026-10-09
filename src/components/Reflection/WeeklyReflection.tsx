@@ -6,6 +6,7 @@ import { useSidePanelLayout } from '../../hooks/useSidePanelLayout';
 import { reflectionWindow, pickMoments, momentPoint } from '../../data/reflection';
 import { momentPrompt } from '../../data/reflectionPrompts';
 import { atTimeNote, walkNote } from '../../data/journal';
+import { markJournalNoticeSeen } from '../../store/reflections';
 import { dateKey } from '../../utils/diaryAggregation';
 import { formatDate } from '../../utils/formatDate';
 import { OpeningCard, ReplayingCard, MomentCard, ClosingCard, EmptyWeekCard } from './ReflectionCards';
@@ -106,6 +107,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
     if (draft.trim() === savedNote(index).trim()) return true;
     const ok = onSetLookingBackNote(moments[index].id, walk.id, draft);
     setFailed(!ok);
+    if (ok && draft.trim()) markJournalNoticeSeen();
     return ok;
   };
 
@@ -199,11 +201,12 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
         {showSky && (
           <DrawnConstellation
             entries={walk.week}
-            onPointClick={() => {}}
             highlightEntryId={current?.id ?? null}
             showControls={false}
             jumpToEnd={jump}
-            onReplayEnd={() => goToMoment(0)}
+            // Only the first ending opens moment one: a timeline rebuilt later
+            // (a reduced-motion flip) must not pull the user back mid-walk.
+            onReplayEnd={() => { if (phase === 'replaying') goToMoment(0); }}
           />
         )}
       </div>

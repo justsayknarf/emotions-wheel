@@ -1,5 +1,5 @@
 import type { Reflection } from '../types';
-import { escapeCsvField } from './diaryCsv';
+import { datedCsvName, downloadCsv, escapeCsvField } from './diaryCsv';
 
 // The weekly reflections as their own CSV (docs/plans/2026-10-09-001-feat-
 // weekly-reflection-journal-plan.md, KTD13): one row per completed
@@ -26,22 +26,11 @@ export function reflectionsToCsv(reflections: Reflection[]): string {
 
 // e.g. emotions-wheel-reflections-2026-10-09.csv
 export function reflectionsCsvFilename(now: Date = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `emotions-wheel-reflections-${y}-${m}-${d}.csv`;
+  return datedCsvName('emotions-wheel-reflections', now);
 }
 
 /** Download every reflection as CSV. No-op when there are none. */
 export function downloadReflectionsCsv(reflections: Reflection[], now: Date = new Date()): void {
   if (reflections.length === 0) return;
-  const blob = new Blob([reflectionsToCsv(reflections)], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = reflectionsCsvFilename(now);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadCsv(reflectionsToCsv(reflections), reflectionsCsvFilename(now));
 }

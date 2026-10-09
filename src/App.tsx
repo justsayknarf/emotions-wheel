@@ -176,12 +176,27 @@ export default function App() {
   // One short fading line after a reflection action ("Okay, tomorrow.").
   const [ack, setAck] = useState<{ id: number; text: string } | null>(null);
   const say = useCallback((text: string) => setAck((prev) => ({ id: (prev?.id ?? 0) + 1, text })), []);
-  // Derived at render, never stored (KTD11), against the session's start
-  // time: a reload (every new tab is one) picks up a new day. Snooze, skip
-  // and completion all write timestamps after it, so each hides the
-  // invitation at once.
-  const [renderNow] = useState(() => new Date());
-  const inviteDue = inviteStatus(entries, reflections, inviteState, renderNow) === 'due';
+  // Derived, never stored (KTD11). `clock` is the "now" it is judged
+  // against: refreshed when the tab regains focus and every few minutes, so
+  // a long-lived tab still sees the week turn over and a Later snooze lapse
+  // at midnight. Memoized because App re-renders on every drag move.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => setClock(Date.now());
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    const interval = window.setInterval(tick, 5 * 60 * 1000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+  const inviteDue = useMemo(
+    () => inviteStatus(entries, reflections, inviteState, new Date(clock)) === 'due',
+    [entries, reflections, inviteState, clock],
+  );
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
   // The field's definition tooltip (word-definition-tooltips): tethered

@@ -9,6 +9,23 @@ import { FIELD_SERIF, QUIET_BUTTON } from './noteStyles';
 // Save button. NoteEditor wraps it for the saved check-in card and History's
 // entry detail: collapsed affordance → editing → saved, with an explicit Save.
 
+// Scroll only the nearest scrolling list (the rail, the mobile sheet's card
+// list) so a just-opened field is in view. scrollIntoView would also scroll
+// App's overflow-hidden root, which is why focus uses preventScroll.
+function revealInScroller(el: HTMLElement) {
+  let scroller = el.parentElement;
+  while (scroller) {
+    const { overflowY } = getComputedStyle(scroller);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && scroller.scrollHeight > scroller.clientHeight) break;
+    scroller = scroller.parentElement;
+  }
+  if (!scroller) return;
+  const box = scroller.getBoundingClientRect();
+  const target = el.getBoundingClientRect();
+  if (target.bottom > box.bottom) scroller.scrollTop += target.bottom - box.bottom + 12;
+  else if (target.top < box.top) scroller.scrollTop -= box.top - target.top + 12;
+}
+
 interface FieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -40,6 +57,7 @@ export function NoteField({ value, onChange, label, placeholder, autoFocus, onKe
     el.focus({ preventScroll: true });
     // Editing an existing note: continue from its end, not its start.
     el.setSelectionRange(el.value.length, el.value.length);
+    revealInScroller(el.parentElement ?? el);
     // Mount-only: focus once when the field opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

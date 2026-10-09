@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { NoteField } from '../Journal/NoteEditor';
+import { JournalNotice, NoteField } from '../Journal/NoteEditor';
 import { FIELD_SERIF } from '../Journal/noteStyles';
 
 // The weekly reflection walk's cards (docs/plans/2026-10-09-001-feat-weekly-
@@ -143,6 +143,7 @@ export function MomentCard({ index, total, when, prompt, thenNote, draft, onDraf
       </p>
 
       <NoteField value={draft} onChange={onDraft} label="Looking back" placeholder="A line is plenty." />
+      <JournalNotice />
       {failed && (
         <p role="alert" style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--ui-text-2)' }}>
           Couldn't save that note.

@@ -33,7 +33,9 @@ import type { DiaryEntry } from '../../types';
 
 interface Props {
   entries: DiaryEntry[];    // recent window, chronological (oldest first)
-  onPointClick: (entry: DiaryEntry) => void;
+  // Omitted in the reflection walk: the stars are then plain marks, out of
+  // the tab order, rather than buttons that do nothing.
+  onPointClick?: (entry: DiaryEntry) => void;
   // The weekly reflection walk (docs/plans/2026-10-09-001-feat-weekly-
   // reflection-journal-plan.md, KTD9) drives the same replay through these;
   // every one defaults to the ordinary replay's behavior.
@@ -361,7 +363,9 @@ export function DrawnConstellation({
         return (
           <div key={p.entry.id}>
             <button
-              onClick={() => onPointClick(p.entry)}
+              onClick={onPointClick ? () => onPointClick(p.entry) : undefined}
+              tabIndex={onPointClick ? undefined : -1}
+              aria-hidden={onPointClick ? undefined : true}
               aria-label={`Check-in ${i + 1}${dayLabels[i] ? `, ${dayLabels[i]!.toLowerCase()}` : ''}`}
               style={{
                 position: 'absolute',
@@ -374,7 +378,7 @@ export function DrawnConstellation({
                 border: 'none',
                 borderRadius: '50%',
                 background: 'transparent',
-                cursor: 'pointer',
+                cursor: onPointClick ? 'pointer' : 'inherit',
                 display: 'grid',
                 placeItems: 'center',
               }}
