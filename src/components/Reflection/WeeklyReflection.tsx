@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { DrawnConstellation } from '../Constellation/DrawnConstellation';
@@ -60,6 +60,18 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   });
 
   const [phase, setPhase] = useState<Phase>(showOpening ? 'opening' : 'replaying');
+
+  // Every way out (Done, Later, Skip this week, Close, Escape) runs at most
+  // once. The view fades out over a few hundred ms after the first, and a
+  // second press in that window would record the reflection twice and step
+  // history back twice, out of the app.
+  const leaving = useRef(false);
+  const once = <A extends unknown[]>(fn: (...args: A) => void) => (...args: A) => {
+    if (leaving.current) return;
+    leaving.current = true;
+    fn(...args);
+  };
+  const close = once(onClose);
   const [index, setIndex] = useState(0);
   const [jump, setJump] = useState(false);
   const [draft, setDraft] = useState('');
@@ -70,11 +82,11 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   // Escape leaves the walk, from any card.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !e.repeat && !e.isComposing) close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  });
 
   // During the replay, any key skips ahead to the first moment.
   useEffect(() => {
@@ -121,7 +133,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
     goToMoment(index - 1);
   };
 
-  const done = () => {
+  const done = once(() => {
     const name = weekName.trim();
     const line = openLine.trim();
     onComplete({
@@ -133,7 +145,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
       ...(line ? { openLine: line } : {}),
       ...(name ? { weekName: name } : {}),
     });
-  };
+  });
 
   const current = phase === 'moment' ? moments[index] : null;
   const currentPoint = current ? momentPoint(current) : null;
@@ -141,9 +153,9 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
 
   let card;
   if (moments.length === 0) {
-    card = <EmptyWeekCard onClose={onClose} />;
+    card = <EmptyWeekCard onClose={close} />;
   } else if (phase === 'opening') {
-    card = <OpeningCard onBegin={() => setPhase('replaying')} onLater={onLater} onSkipWeek={onSkipWeek} />;
+    card = <OpeningCard onBegin={() => setPhase('replaying')} onLater={once(onLater)} onSkipWeek={once(onSkipWeek)} />;
   } else if (phase === 'replaying') {
     card = <ReplayingCard onSkip={() => setJump(true)} />;
   } else if (phase === 'moment' && current && currentPoint) {
@@ -228,7 +240,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
 
       <button
         type="button"
-        onClick={onClose}
+        onClick={close}
         style={{
           position: 'absolute',
           top: 16,

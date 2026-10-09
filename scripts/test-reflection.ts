@@ -11,6 +11,8 @@ import {
   laterUntil,
   canLookBack,
   momentPoint,
+  latestReflectionIn,
+  withWeekName,
 } from '../src/data/reflection';
 import { PROMPT_TEMPLATES, momentPrompt, positionPhrase, dayPhrase } from '../src/data/reflectionPrompts';
 import type { DiaryEntry, PinEntry, Reflection } from '../src/types';
@@ -177,6 +179,39 @@ check('AE7: 2 check-ins → look back', canLookBack([entry('a', daysAgo(1), [pin
   check('different seeds give different wording for the same moment', momentPrompt(p, ts, 0, 0, NOW) !== momentPrompt(p, ts, 0, 1, NOW), '');
   const walk = [0, 1, 2].map((i) => momentPrompt(p, ts, i, 7, NOW));
   check('one walk never repeats a template across its three moments', new Set(walk).size === 3, walk.join(' | '));
+}
+
+// --- position phrases: every branch and the band edge ---
+check('position: on the pleasant side', positionPhrase(0, 0.5) === 'on the pleasant side', positionPhrase(0, 0.5));
+check('position: on the unpleasant side', positionPhrase(0, -0.5) === 'on the unpleasant side', positionPhrase(0, -0.5));
+check('position: even and activated', positionPhrase(0.5, 0) === 'even and activated', positionPhrase(0.5, 0));
+check('position: even and calm', positionPhrase(-0.5, 0) === 'even and calm', positionPhrase(-0.5, 0));
+check('position: the band edge (0.2) names both axes', positionPhrase(0.2, 0.2) === 'pleasant and activated', positionPhrase(0.2, 0.2));
+check('position: just inside the band is the middle', positionPhrase(0.19, 0.19) === 'near the middle', positionPhrase(0.19, 0.19));
+
+// --- the week name History shows ---
+{
+  const named = (id: string, at: Date, weekName?: string): Reflection => ({
+    ...reflection(at, 'invite'), id, ...(weekName ? { weekName } : {}),
+  });
+  const days = [0, 1, 2, 3, 4, 5, 6].map((d) => daysAgo(d)).reverse();
+  const older = named('older', daysAgo(5), 'the long one');
+  const newer = named('newer', daysAgo(1), 'the quiet one');
+  const outside = named('outside', daysAgo(9), 'last week');
+
+  check('latest reflection in the window wins', latestReflectionIn([older, newer, outside], days)?.id === 'newer', String(latestReflectionIn([older, newer, outside], days)?.id));
+  check('a reflection outside the window is ignored', latestReflectionIn([outside], days) === null, 'null');
+  check('two on the same day: the later one wins', latestReflectionIn([named('a', daysAgo(1, 9), 'a'), named('b', daysAgo(1, 20), 'b')], days)?.id === 'b', '');
+
+  const cleared = withWeekName([older, newer], 'newer', '   ');
+  check('blank rename removes the name key', !('weekName' in cleared[1]), JSON.stringify(cleared[1]));
+  check('blank rename leaves other reflections alone', cleared[0].weekName === 'the long one', String(cleared[0].weekName));
+  check(
+    'after clearing the newest name, History still titles the week with it (no older name resurfaces)',
+    latestReflectionIn(cleared, days)?.id === 'newer' && latestReflectionIn(cleared, days)?.weekName === undefined,
+    JSON.stringify(latestReflectionIn(cleared, days)),
+  );
+  check('rename trims and replaces', withWeekName([newer], 'newer', '  the turning one ')[0].weekName === 'the turning one', '');
 }
 
 if (failures > 0) {

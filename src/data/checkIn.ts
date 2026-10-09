@@ -44,12 +44,12 @@ export function updateEntryInList(entries: DiaryEntry[], updated: DiaryEntry): D
     sessionDurationMs: original.sessionDurationMs,
     source: original.source,
   };
-  // Journal notes ride along the same way when the update leaves the key out
-  // entirely (App.tsx's correction path builds a fresh entry without them).
-  // A present key — even an empty array — is a deliberate note write and wins.
-  if (!('notes' in updated) && original.notes !== undefined) {
-    next[index].notes = original.notes;
-  }
+  // Journal notes are always the stored ones, like `source`: the correction
+  // path builds a fresh entry without them, and handleRecognizeSaved spreads
+  // a possibly stale snapshot. Notes are written only by withEntryNotes
+  // (src/data/journal.ts), so nothing here can drop or resurrect one.
+  if (original.notes !== undefined) next[index].notes = original.notes;
+  else delete next[index].notes;
   return next;
 }
 

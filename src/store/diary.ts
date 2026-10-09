@@ -1,6 +1,6 @@
 import type { DiaryEntry, JournalNote } from '../types';
 import { updateEntryInList } from '../data/checkIn';
-import { pruneEntries } from '../data/journal';
+import { pruneEntries, withEntryNotes } from '../data/journal';
 
 const DIARY_KEY = 'emotion-selector-diary';
 
@@ -42,15 +42,16 @@ export function updateEntry(entry: DiaryEntry): void {
   }
 }
 
-// Write one entry's journal notes. Unlike updateEntry, reports whether the
-// write landed, so the note editor can say so instead of failing silently.
-// `notes` is always passed explicitly (possibly empty): see updateEntryInList.
-export function setEntryNotes(entryId: string, notes: JournalNote[]): boolean {
+// Write one entry's journal notes. `update` receives the entry as stored
+// right now, not the caller's React snapshot, so a note saved in another tab
+// since this one last read the diary is built on rather than overwritten.
+// Unlike updateEntry, reports whether the write landed, so the note editor
+// can say so instead of failing silently.
+export function setEntryNotes(entryId: string, update: (entry: DiaryEntry) => JournalNote[]): boolean {
   try {
-    const entries = readDiary();
-    const entry = entries.find((e) => e.id === entryId);
-    if (!entry) return false;
-    localStorage.setItem(DIARY_KEY, JSON.stringify(updateEntryInList(entries, { ...entry, notes })));
+    const next = withEntryNotes(readDiary(), entryId, update);
+    if (!next) return false;
+    localStorage.setItem(DIARY_KEY, JSON.stringify(next));
     return true;
   } catch {
     return false;

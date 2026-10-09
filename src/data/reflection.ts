@@ -1,5 +1,5 @@
 import type { DiaryEntry, Reflection, ReflectionInviteState } from '../types';
-import { entriesInWindow, last7Days } from '../utils/diaryAggregation';
+import { dateKey, entriesInWindow, last7Days } from '../utils/diaryAggregation';
 
 // Pure logic for the weekly reflection: which check-ins a walk covers, which
 // moments it pauses on, and whether the invitation is due. No storage, so
@@ -118,4 +118,30 @@ export function laterUntil(now: Date): Date {
 /** History's "look back" is offered once there are two check-ins to look across (R18). */
 export function canLookBack(entries: DiaryEntry[]): boolean {
   return entries.length >= 2;
+}
+
+/**
+ * The latest reflection that finished on one of `days`, named or not (KTD16).
+ * History titles the week with it, so clearing its name shows a quiet
+ * "name this week" prompt rather than an older reflection's name.
+ */
+export function latestReflectionIn(reflections: Reflection[], days: Date[]): Reflection | null {
+  const keys = new Set(days.map(dateKey));
+  let latest: Reflection | null = null;
+  for (const r of reflections) {
+    if (!keys.has(dateKey(new Date(r.completedAt)))) continue;
+    if (!latest || r.completedAt > latest.completedAt) latest = r;
+  }
+  return latest;
+}
+
+/** Rename one reflection's week; blank text removes the name. */
+export function withWeekName(reflections: Reflection[], reflectionId: string, name: string): Reflection[] {
+  const trimmed = name.trim();
+  return reflections.map((r) => {
+    if (r.id !== reflectionId) return r;
+    const next: Reflection = { ...r };
+    delete next.weekName;
+    return trimmed ? { ...next, weekName: trimmed } : next;
+  });
 }

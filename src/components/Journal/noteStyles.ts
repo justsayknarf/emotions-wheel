@@ -2,9 +2,6 @@ import type { CSSProperties } from 'react';
 
 // Shared by the journal's note controls and the reflection walk.
 
-// Matches the field's own words and every other caption (CoordinateCard.tsx).
-export const FIELD_SERIF = "'Palatino', 'Palatino Linotype', 'Book Antiqua', Georgia, serif";
-
 // The same quiet dotted-underline text button as SavedCheckInSummary's
 // "+ Add tags", so the two read as one family.
 export const QUIET_BUTTON: CSSProperties = {

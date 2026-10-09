@@ -1,7 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { markJournalNoticeSeen, readJournalNoticeSeen } from '../../store/reflections';
-import { FIELD_SERIF, QUIET_BUTTON } from './noteStyles';
+import { QUIET_BUTTON } from './noteStyles';
+import { FIELD_FONT } from '../EmotionField/EmotionWord';
 
 // The private journal's note controls (docs/plans/2026-10-09-001-feat-weekly-
 // reflection-journal-plan.md, U3). NoteField is the bare autosizing textarea,
@@ -96,7 +97,7 @@ export function NoteField({ value, onChange, label, placeholder, autoFocus, onKe
           border: '1px solid var(--ui-border)',
           background: 'rgb(var(--ui-bg-rgb) / 0.45)',
           color: 'var(--ui-text-1)',
-          fontFamily: FIELD_SERIF,
+          fontFamily: FIELD_FONT,
           fontSize: 14,
           lineHeight: 1.5,
         }}
@@ -215,6 +216,18 @@ export function NoteEditor({ note, onSave, label, addLabel = '+ Add a note', pla
 
   return (
     <div>
+      <SavedNote caption={caption} text={note} />
+      <button ref={editButtonRef} type="button" onClick={open} style={QUIET_BUTTON} aria-label={`Edit ${label.toLowerCase()}`}>
+        Edit
+      </button>
+    </div>
+  );
+}
+
+/** A saved note as text, with an optional small caption above it. */
+export function SavedNote({ caption, text }: { caption?: string; text: string }) {
+  return (
+    <div>
       {caption && (
         <span
           style={{
@@ -233,7 +246,7 @@ export function NoteEditor({ note, onSave, label, addLabel = '+ Add a note', pla
       <p
         style={{
           margin: 0,
-          fontFamily: FIELD_SERIF,
+          fontFamily: FIELD_FONT,
           fontSize: 13.5,
           lineHeight: 1.5,
           color: 'var(--ui-text-1)',
@@ -241,11 +254,8 @@ export function NoteEditor({ note, onSave, label, addLabel = '+ Add a note', pla
           overflowWrap: 'anywhere',
         }}
       >
-        {note}
+        {text}
       </p>
-      <button ref={editButtonRef} type="button" onClick={open} style={QUIET_BUTTON} aria-label={`Edit ${label.toLowerCase()}`}>
-        Edit
-      </button>
     </div>
   );
 }

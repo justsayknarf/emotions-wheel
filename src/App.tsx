@@ -1081,33 +1081,23 @@ export default function App() {
     setExpandedPinIds(new Set([pinId]));
   }, [entries, pins]);
 
-  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
-  // U3: accepting a suggestion on the confirmation card (SavedCheckInSummary)
-  // recognizes a word against a pin that's already saved, outside the
-  // draft/reopen flow entirely — mirrors handleReopen's own entries.find
-  // lookup rather than routing through `pins`, since the pin being
-  // annotated isn't in the draft. updateEntryInList (src/data/checkIn.ts)
-  // already preserves the original timestamp/sessionDurationMs/source
-  // regardless of what's passed here. The `!includes` guard just keeps a
-  // stale double-accept from duplicating the id; the UI itself only ever
-  // offers accept on a not-yet-recognized candidate.
   // The private journal (docs/plans/2026-10-09-001-feat-weekly-reflection-
   // journal-plan.md, U3): note writes against an already-saved entry, outside
-  // the draft entirely, like handleRecognizeSaved below. Each passes an
-  // explicit notes array (possibly empty) so a cleared note stays cleared
-  // (updateEntryInList only carries notes forward when the key is absent).
+  // the draft entirely, like handleRecognizeSaved below. Each note is built on
+  // the entry as stored at write time (setEntryNotes), never on this tab's
+  // possibly stale `entries`, so another tab's note isn't overwritten.
   // Returns whether the write landed, so the editor can say when it didn't.
-  const handleSetAtTimeNote = useCallback((entryId: string, text: string): boolean => {
-    const entry = entries.find((e) => e.id === entryId);
-    if (!entry) return false;
-    return setNotes(entryId, withAtTimeNote(entry, text, new Date(), uuidv4));
-  }, [entries, setNotes]);
+  const handleSetAtTimeNote = useCallback(
+    (entryId: string, text: string): boolean =>
+      setNotes(entryId, (stored) => withAtTimeNote(stored, text, new Date(), uuidv4)),
+    [setNotes],
+  );
 
-  const handleSetLookingBackNote = useCallback((entryId: string, walkId: string, text: string): boolean => {
-    const entry = entries.find((e) => e.id === entryId);
-    if (!entry) return false;
-    return setNotes(entryId, withLookingBackNote(entry, walkId, text, new Date(), uuidv4));
-  }, [entries, setNotes]);
+  const handleSetLookingBackNote = useCallback(
+    (entryId: string, walkId: string, text: string): boolean =>
+      setNotes(entryId, (stored) => withLookingBackNote(stored, walkId, text, new Date(), uuidv4)),
+    [setNotes],
+  );
 
   const openReflection = useCallback((opened: Reflection['opened'], showOpening = false) => {
     setReflectionOpened(opened);
@@ -1141,6 +1131,16 @@ export default function App() {
     [inviteDue, entrySource, openReflection, handleInviteLater, handleInviteSkipWeek],
   );
 
+  // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
+  // U3: accepting a suggestion on the confirmation card (SavedCheckInSummary)
+  // recognizes a word against a pin that's already saved, outside the
+  // draft/reopen flow entirely — mirrors handleReopen's own entries.find
+  // lookup rather than routing through `pins`, since the pin being
+  // annotated isn't in the draft. updateEntryInList (src/data/checkIn.ts)
+  // already preserves the original timestamp/sessionDurationMs/source
+  // regardless of what's passed here. The `!includes` guard just keeps a
+  // stale double-accept from duplicating the id; the UI itself only ever
+  // offers accept on a not-yet-recognized candidate.
   const handleRecognizeSaved = useCallback((entryId: string, pinId: string, emotionId: string) => {
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;

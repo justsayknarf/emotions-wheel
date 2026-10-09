@@ -29,9 +29,7 @@ export function walkNote(entry: DiaryEntry, walkId: string): JournalNote | null 
 
 // Replace (or add, or remove) the note matching `match`. Blank text removes
 // it. An edit keeps the note's id and its first-written date, since the label
-// it's shown under is "written on". Always returns an explicit array, so a
-// cleared journal is written back as `[]` rather than left out (KTD2: a
-// missing key would carry the old notes forward through updateEntryInList).
+// it's shown under is "written on".
 function replaceNote(
   entry: DiaryEntry,
   match: (n: JournalNote) => boolean,
@@ -83,25 +81,50 @@ export function withLookingBackNote(
 
 export const MAX_ENTRIES = 500;
 export const PRUNE_COUNT = 50;
+/** Check-ins this recent are never pruned: they are next week's reflection. */
+export const PRUNE_PROTECT_DAYS = 7;
 
 /**
- * The diary's size cap, with notes protected: once the diary holds `max`
- * entries, drop up to `count` of the oldest entries that have no notes.
- * A check-in with a note is never removed (R19). Below the cap, unchanged.
+ * The diary's size cap, with the journal protected: once the diary holds
+ * `max` entries, drop up to `count` of the oldest entries that have no notes
+ * and are older than PRUNE_PROTECT_DAYS. A check-in with a note is never
+ * removed (R19), and neither is a recent one, so a mostly-annotated diary
+ * grows past the cap instead of eating this week's check-ins.
  * `entries` is in insertion order (oldest first), as the store keeps it.
  */
 export function pruneEntries(
   entries: DiaryEntry[],
   max: number = MAX_ENTRIES,
   count: number = PRUNE_COUNT,
+  now: Date = new Date(),
 ): DiaryEntry[] {
   if (entries.length < max) return entries;
+  const protectFrom = now.getTime() - PRUNE_PROTECT_DAYS * 24 * 60 * 60 * 1000;
   let toDrop = count;
   return entries.filter((e) => {
-    if (toDrop > 0 && !hasNotes(e)) {
+    if (toDrop > 0 && !hasNotes(e) && Date.parse(e.timestamp) < protectFrom) {
       toDrop--;
       return false;
     }
     return true;
   });
+}
+
+/**
+ * Write one entry's notes, built by `update` from that entry as it is in
+ * `entries` (the store passes a fresh read, never a React snapshot).
+ * Returns null when the id isn't in the diary, so a pruned entry is never
+ * resurrected. Notes are written here and only here: updateEntryInList
+ * always keeps an entry's stored notes.
+ */
+export function withEntryNotes(
+  entries: DiaryEntry[],
+  entryId: string,
+  update: (entry: DiaryEntry) => JournalNote[],
+): DiaryEntry[] | null {
+  const index = entries.findIndex((e) => e.id === entryId);
+  if (index === -1) return null;
+  const next = [...entries];
+  next[index] = { ...entries[index], notes: update(entries[index]) };
+  return next;
 }

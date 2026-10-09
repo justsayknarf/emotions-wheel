@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { JournalNotice, NoteField } from '../Journal/NoteEditor';
-import { FIELD_SERIF } from '../Journal/noteStyles';
+import { FIELD_FONT } from '../EmotionField/EmotionWord';
 
 // The weekly reflection walk's cards (docs/plans/2026-10-09-001-feat-weekly-
 // reflection-journal-plan.md, U4): the opening card shown when the walk comes
@@ -18,7 +18,7 @@ const CAPTION: CSSProperties = {
 
 const HEADING: CSSProperties = {
   margin: '6px 0 0',
-  fontFamily: FIELD_SERIF,
+  fontFamily: FIELD_FONT,
   fontWeight: 400,
   fontSize: 19,
   lineHeight: 1.35,
@@ -132,13 +132,13 @@ export function MomentCard({ index, total, when, prompt, thenNote, draft, onDraf
       {thenNote && (
         <div style={{ marginTop: 12, paddingLeft: 10, borderLeft: '1px solid var(--ui-recorded-dim)' }}>
           <span style={CAPTION}>You wrote then</span>
-          <p style={{ margin: '4px 0 0', fontFamily: FIELD_SERIF, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ui-text-2)', whiteSpace: 'pre-wrap' }}>
+          <p style={{ margin: '4px 0 0', fontFamily: FIELD_FONT, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ui-text-2)', whiteSpace: 'pre-wrap' }}>
             {thenNote}
           </p>
         </div>
       )}
 
-      <p aria-live="polite" style={{ margin: '14px 0 14px', fontFamily: FIELD_SERIF, fontSize: 18, lineHeight: 1.4, color: 'var(--ui-text-1)' }}>
+      <p aria-live="polite" style={{ margin: '14px 0 14px', fontFamily: FIELD_FONT, fontSize: 18, lineHeight: 1.4, color: 'var(--ui-text-1)' }}>
         {prompt}
       </p>
 
@@ -196,7 +196,7 @@ export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack
           border: '1px solid var(--ui-border)',
           background: 'rgb(var(--ui-bg-rgb) / 0.45)',
           color: 'var(--ui-text-1)',
-          fontFamily: FIELD_SERIF,
+          fontFamily: FIELD_FONT,
           fontSize: 14,
         }}
       />

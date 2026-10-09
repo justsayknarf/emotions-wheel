@@ -1,4 +1,5 @@
 import type { Reflection, ReflectionInviteState } from '../types';
+import { withWeekName } from '../data/reflection';
 
 // localStorage for the weekly reflection: completed reflections, the
 // invitation's snooze state, and the one-time journal storage notice. Pure
@@ -38,16 +39,7 @@ export function appendReflection(reflection: Reflection): boolean {
 
 /** Rename a reflection's week, or clear the name with blank text. */
 export function setWeekName(reflectionId: string, name: string): boolean {
-  const trimmed = name.trim();
-  return writeJson(
-    REFLECTIONS_KEY,
-    readReflections().map((r) => {
-      if (r.id !== reflectionId) return r;
-      const next: Reflection = { ...r };
-      delete next.weekName;
-      return trimmed ? { ...next, weekName: trimmed } : next;
-    }),
-  );
+  return writeJson(REFLECTIONS_KEY, withWeekName(readReflections(), reflectionId, name));
 }
 
 export function readInviteState(): ReflectionInviteState {

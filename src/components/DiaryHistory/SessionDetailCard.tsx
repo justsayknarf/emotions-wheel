@@ -3,7 +3,7 @@ import { labelForId } from '../../data/emotions';
 import { WordTag } from '../EmotionPreview/WordTag';
 import { formatDate } from '../../utils/formatDate';
 import { MiniCircumplex } from './MiniCircumplex';
-import { NoteEditor } from '../Journal/NoteEditor';
+import { NoteEditor, SavedNote } from '../Journal/NoteEditor';
 import { atTimeNote, lookingBackNotes } from '../../data/journal';
 import type { DiaryEntry } from '../../types';
 
@@ -151,7 +151,7 @@ function Notes({ entry, onSetAtTimeNote, onSetLookingBackNote }: { entry: DiaryE
           placeholder="What's going on?"
         />
       ) : atTime && (
-        <ReadOnlyNote caption="At the time" text={atTime.text} />
+        <SavedNote caption="At the time" text={atTime.text} />
       )}
       {lookingBack.map((n) =>
         onSetLookingBackNote && n.walkId ? (
@@ -163,20 +163,9 @@ function Notes({ entry, onSetAtTimeNote, onSetLookingBackNote }: { entry: DiaryE
             caption={`Looking back · ${shortDate(n.writtenAt)}`}
           />
         ) : (
-          <ReadOnlyNote key={n.id} caption={`Looking back · ${shortDate(n.writtenAt)}`} text={n.text} />
+          <SavedNote key={n.id} caption={`Looking back · ${shortDate(n.writtenAt)}`} text={n.text} />
         ),
       )}
-    </div>
-  );
-}
-
-function ReadOnlyNote({ caption, text }: { caption: string; text: string }) {
-  return (
-    <div>
-      <span style={{ display: 'block', fontSize: 9, fontWeight: 600, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--ui-text-3)', marginBottom: 4 }}>
-        {caption}
-      </span>
-      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ui-text-1)', whiteSpace: 'pre-wrap' }}>{text}</p>
     </div>
   );
 }

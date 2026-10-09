@@ -10,6 +10,7 @@ import {
   lookingBackNotes,
   hasNotes,
   pruneEntries,
+  withEntryNotes,
 } from '../src/data/journal';
 import { updateEntryInList } from '../src/data/checkIn';
 import type { DiaryEntry, JournalNote } from '../src/types';
@@ -79,47 +80,68 @@ check('no notes key → not noted', !hasNotes(entry('x')), 'undefined');
 check('empty notes array → not noted', !hasNotes(entry('x', [])), '[]');
 check('one note → noted', hasNotes(entry('x', withAtTimeNote(entry('x'), 'hi', now, newId))), '1 note');
 
-// --- updateEntryInList carries notes forward only when the key is absent ---
+// --- updateEntryInList always keeps the stored notes; withEntryNotes writes them ---
 {
   const notes = withAtTimeNote(entry('e3'), 'keep me', now, newId);
   const before = [entry('e3', notes)];
   const correction = entry('e3'); // built fresh, no notes key — App.tsx's correction path
   const kept = updateEntryInList(before, correction)[0];
-  check('update without a notes key keeps the original notes', kept.notes?.[0]?.text === 'keep me', JSON.stringify(kept.notes));
+  check('a correction without notes keeps the stored notes', kept.notes?.[0]?.text === 'keep me', JSON.stringify(kept.notes));
 
-  const explicit = updateEntryInList(before, { ...entry('e3'), notes: [] })[0];
-  check('update with notes: [] clears them (the old note is not carried back)', explicit.notes?.length === 0, JSON.stringify(explicit.notes));
-
-  const replaced = updateEntryInList(before, { ...entry('e3'), notes: withAtTimeNote(entry('e3'), 'new', now, newId) })[0];
-  check('update with explicit notes uses them', replaced.notes?.[0]?.text === 'new', JSON.stringify(replaced.notes));
+  const stale = updateEntryInList(before, { ...entry('e3'), notes: [] })[0];
+  check('an update carrying a stale notes array cannot clear the stored notes', stale.notes?.[0]?.text === 'keep me', JSON.stringify(stale.notes));
 
   const plain = updateEntryInList([entry('e4')], entry('e4'))[0];
   check('entry that never had notes gains no notes key', !('notes' in plain), JSON.stringify(plain));
+
+  const cleared = withEntryNotes(before, 'e3', (e) => withAtTimeNote(e, '', now, newId));
+  check('withEntryNotes clearing the only note leaves zero notes', cleared?.[0].notes?.length === 0, JSON.stringify(cleared?.[0].notes));
+
+  // Another tab added a looking-back note after this tab read the diary:
+  // the write builds on the stored entry it is handed, so both survive.
+  const stored = [entry('e5', [...withLookingBackNote(entry('e5'), 'w1', 'from the other tab', now, newId)])];
+  const merged = withEntryNotes(stored, 'e5', (e) => withAtTimeNote(e, 'from this tab', now, newId));
+  check(
+    'withEntryNotes builds on the stored entry, so a note from another tab survives',
+    merged?.[0].notes?.length === 2,
+    JSON.stringify(merged?.[0].notes),
+  );
+  check('withEntryNotes on a missing id is null (never resurrects a pruned entry)', withEntryNotes(stored, 'gone', () => []) === null, 'null');
 }
 
-// --- pruneEntries: notes protect a check-in ---
+// --- pruneEntries: notes and recent check-ins are protected ---
 {
+  const PRUNE_NOW = new Date('2027-06-01T12:00:00.000Z'); // every helper entry is months old
+  const at = (daysAgo: number) => new Date(PRUNE_NOW.getTime() - daysAgo * 86_400_000).toISOString();
   const noted = (i: number) => entry(`e${i}`, withAtTimeNote(entry(`e${i}`), 'note', now, newId));
   const diary: DiaryEntry[] = Array.from({ length: 500 }, (_, i) => (i === 0 ? noted(i) : entry(`e${i}`)));
 
-  const pruned = pruneEntries(diary);
+  const pruned = pruneEntries(diary, 500, 50, PRUNE_NOW);
   check('AE8: at the cap, the oldest entry with a note is kept', pruned[0].id === 'e0', pruned[0].id);
   check('at the cap, 50 un-noted entries are dropped', pruned.length === 450, String(pruned.length));
   check('the dropped ones are the 50 oldest un-noted (e1–e50)', pruned[1].id === 'e51', pruned[1].id);
 
-  const mostlyNoted: DiaryEntry[] = Array.from({ length: 500 }, (_, i) => (i < 480 ? noted(i) : entry(`e${i}`)));
-  const prunedFew = pruneEntries(mostlyNoted);
+  // 480 noted, then 20 un-noted check-ins from this week: none may go.
+  const mostlyNoted: DiaryEntry[] = Array.from({ length: 500 }, (_, i) =>
+    i < 480 ? noted(i) : { ...entry(`e${i}`), timestamp: at(500 - i < 7 ? 1 : 2) },
+  );
+  const prunedRecent = pruneEntries(mostlyNoted, 500, 50, PRUNE_NOW);
   check(
-    'with only 20 un-noted entries, only those 20 go and no noted one does',
-    prunedFew.length === 480 && prunedFew.every(hasNotes),
-    String(prunedFew.length),
+    'with the old entries all noted, this week\'s un-noted check-ins survive (the diary grows instead)',
+    prunedRecent.length === 500,
+    String(prunedRecent.length),
   );
 
+  // 480 noted + 20 un-noted months old: those 20 go, no noted one does.
+  const oldFew: DiaryEntry[] = Array.from({ length: 500 }, (_, i) => (i < 480 ? noted(i) : entry(`e${i}`)));
+  const prunedFew = pruneEntries(oldFew, 500, 50, PRUNE_NOW);
+  check('only old un-noted entries are dropped, never a noted one', prunedFew.length === 480 && prunedFew.every(hasNotes), String(prunedFew.length));
+
   const small = diary.slice(0, 499);
-  check('below the cap the input comes back unchanged', pruneEntries(small) === small, String(pruneEntries(small).length));
+  check('below the cap the input comes back unchanged', pruneEntries(small, 500, 50, PRUNE_NOW) === small, '499');
 
   const emptied = [entry('e0', []), ...diary.slice(1)];
-  check('an entry with notes: [] is prunable', pruneEntries(emptied)[0].id !== 'e0', pruneEntries(emptied)[0].id);
+  check('an entry with notes: [] is prunable', pruneEntries(emptied, 500, 50, PRUNE_NOW)[0].id !== 'e0', pruneEntries(emptied, 500, 50, PRUNE_NOW)[0].id);
 }
 
 if (failures > 0) {

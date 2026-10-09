@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { FIELD_SERIF } from '../Journal/noteStyles';
+import { FIELD_FONT } from '../EmotionField/EmotionWord';
 
 // The weekly reflection's invitation (docs/plans/2026-10-09-001-feat-weekly-
 // reflection-journal-plan.md, U5, KTD12). Quiet by design: the check-in stays
@@ -36,7 +36,7 @@ export function ReflectionInviteCard({ onReflect, onLater, onSkipWeek }: InviteA
         border: '1px solid rgb(var(--ui-gold-rgb) / 0.22)',
       }}
     >
-      <p style={{ margin: 0, fontFamily: FIELD_SERIF, fontStyle: 'italic', fontSize: 14, lineHeight: 1.45, color: 'var(--ui-text-1)' }}>
+      <p style={{ margin: 0, fontFamily: FIELD_FONT, fontStyle: 'italic', fontSize: 14, lineHeight: 1.45, color: 'var(--ui-text-1)' }}>
         A week of check-ins. Look back at it?
       </p>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>

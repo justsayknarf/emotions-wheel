@@ -11,6 +11,7 @@ import { SessionDetailCard, type NoteWrites } from './SessionDetailCard';
 import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days, groupByDay, dateKey } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
 import { downloadReflectionsCsv } from '../../utils/reflectionsCsv';
+import { latestReflectionIn } from '../../data/reflection';
 import { formatWeekdayAndDate } from '../../utils/formatDate';
 import { NoteEditor } from '../Journal/NoteEditor';
 import { QUIET_BUTTON } from '../Journal/noteStyles';
@@ -25,17 +26,6 @@ interface Props extends NoteWrites {
   onLookBack?: () => void;
   reflections?: Reflection[];
   onRenameWeek?: (reflectionId: string, name: string) => boolean;
-}
-
-// The latest named reflection that finished on one of `days` (KTD16).
-function namedReflectionIn(reflections: Reflection[], days: Date[]): Reflection | null {
-  const keys = new Set(days.map(dateKey));
-  let latest: Reflection | null = null;
-  for (const r of reflections) {
-    if (!r.weekName || !keys.has(dateKey(new Date(r.completedAt)))) continue;
-    if (!latest || r.completedAt > latest.completedAt) latest = r;
-  }
-  return latest;
 }
 
 // Shared shape for the two "go back one level" text buttons (outer header,
@@ -200,7 +190,7 @@ export function DiaryHistory({ entries, onBack, onSetAtTimeNote, onSetLookingBac
                 onBackToWeek={() => setDayDetailFor(null)}
                 onBack={onBack}
                 onOpenEntry={(e) => setOpenEntryId(e.id)}
-                weekName={namedReflectionIn(reflections, [dayDetailFor])?.weekName}
+                weekName={latestReflectionIn(reflections, [dayDetailFor])?.weekName}
               />
             </motion.div>
           )}
@@ -247,7 +237,7 @@ function WeekScreen({ entries, onSelectDay, onLookBack, reflections, onRenameWee
     };
   }, [entries]);
 
-  const named = namedReflectionIn(reflections, days);
+  const named = latestReflectionIn(reflections, days);
 
   return (
     <div style={{ padding: '12px 0' }}>
@@ -259,11 +249,12 @@ function WeekScreen({ entries, onSelectDay, onLookBack, reflections, onRenameWee
               note={named.weekName ?? ''}
               onSave={(text) => onRenameWeek(named.id, text)}
               label="Name this week"
+              addLabel="+ Name this week"
               caption={`Week ending ${formatWeekdayAndDate(new Date(named.completedAt))}`}
             />
-          ) : (
+          ) : named.weekName ? (
             <span style={{ fontSize: 13, color: 'var(--ui-text-1)' }}>{named.weekName}</span>
-          )}
+          ) : null}
         </div>
       )}
       <WeekChart entries={windowEntries} />
@@ -286,7 +277,7 @@ function WeekScreen({ entries, onSelectDay, onLookBack, reflections, onRenameWee
             date={day}
             sessions={byDay.get(dateKey(day)) ?? []}
             onSelect={onSelectDay}
-            weekName={namedReflectionIn(reflections, [day])?.weekName}
+            weekName={latestReflectionIn(reflections, [day])?.weekName}
           />
         ))}
       </div>

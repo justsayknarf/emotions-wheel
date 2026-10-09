@@ -27,9 +27,9 @@ export function useDiary() {
     setEntries(readDiary());
   }, []);
 
-  // Returns whether the write landed (see setEntryNotes).
-  const setNotes = useCallback((entryId: string, notes: JournalNote[]): boolean => {
-    const ok = setEntryNotes(entryId, notes);
+  // Returns whether the write landed. `update` sees the stored entry (see setEntryNotes).
+  const setNotes = useCallback((entryId: string, update: (entry: DiaryEntry) => JournalNote[]): boolean => {
+    const ok = setEntryNotes(entryId, update);
     setEntries(readDiary());
     return ok;
   }, []);
