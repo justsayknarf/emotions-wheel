@@ -7,12 +7,12 @@ import { DailySummaryRow } from './DailySummaryRow';
 import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { MiniCircumplex } from './MiniCircumplex';
-import { SessionDetailCard } from './SessionDetailCard';
+import { SessionDetailCard, type NoteWrites } from './SessionDetailCard';
 import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days, groupByDay, dateKey } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
 import type { DiaryEntry } from '../../types';
 
-interface Props {
+interface Props extends NoteWrites {
   entries: DiaryEntry[];
   onBack: () => void;
 }
@@ -41,9 +41,12 @@ function screenMotionProps(offsetX: number) {
   };
 }
 
-export function DiaryHistory({ entries, onBack }: Props) {
+export function DiaryHistory({ entries, onBack, onSetAtTimeNote, onSetLookingBackNote }: Props) {
   const [dayDetailFor, setDayDetailFor] = useState<Date | null>(null);
-  const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
+  // Held by id and resolved from `entries` at render, so a note saved in the
+  // open card shows at once instead of the card keeping a pre-edit snapshot.
+  const [openEntryId, setOpenEntryId] = useState<string | null>(null);
+  const openEntry = openEntryId === null ? null : entries.find((e) => e.id === openEntryId) ?? null;
   const swipeCloseRef = useRef<{ x: number; y: number } | null>(null);
 
   // Gated on dayDetailFor: while day-detail is open, this pops back to the
@@ -169,7 +172,7 @@ export function DiaryHistory({ entries, onBack }: Props) {
                 onNext={() => shiftDate(1)}
                 onBackToWeek={() => setDayDetailFor(null)}
                 onBack={onBack}
-                onOpenEntry={setOpenEntry}
+                onOpenEntry={(e) => setOpenEntryId(e.id)}
               />
             </motion.div>
           )}
@@ -182,7 +185,12 @@ export function DiaryHistory({ entries, onBack }: Props) {
           Local state layered on top of whichever content (week screen or day-detail)
           is currently rendered; dismissing it lands back on that same content, no
           new wiring needed. */}
-      <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
+      <SessionDetailCard
+        entry={openEntry}
+        onDismiss={() => setOpenEntryId(null)}
+        onSetAtTimeNote={onSetAtTimeNote}
+        onSetLookingBackNote={onSetLookingBackNote}
+      />
     </div>
   );
 }

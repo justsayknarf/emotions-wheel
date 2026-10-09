@@ -4,6 +4,7 @@ import { CoordinateCard } from './CoordinateCard';
 import { DepartureFloat } from './DepartureFloat';
 import { SavedCheckInSummary } from './SavedCheckInSummary';
 import { isDepartureEligible } from '../../data/departure';
+import { atTimeNote } from '../../data/journal';
 import { useRevealTuning } from '../../config/revealTuning';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
 import { formatRelative } from '../../utils/formatDate';
@@ -116,6 +117,10 @@ interface Props {
   // for how this gates which card renders.
   justSavedEntryId: string | null;
   onRecognizeSaved: (entryId: string, pinId: string, emotionId: string) => void;
+  // The private journal: writes the just-saved check-in's at-the-time note
+  // (blank clears it). Returns whether the write landed. See
+  // docs/plans/2026-10-09-001-feat-weekly-reflection-journal-plan.md, U3.
+  onSetAtTimeNote?: (entryId: string, text: string) => boolean;
   // U2: mints a new draft pin departing from the previous check-in's anchor
   // (its newest pin) — fired by the pre-mint DepartureFloat landing's own
   // sliders when the draft is empty. Never touches the anchor itself
@@ -228,6 +233,7 @@ export function EmotionDrawer({
   onReopen,
   justSavedEntryId,
   onRecognizeSaved,
+  onSetAtTimeNote,
   onDepart,
   onDepartureDrag,
   cardFocusProgress = 0,
@@ -1050,6 +1056,9 @@ export function EmotionDrawer({
                   onRecognize={(emotionId) => onRecognizeSaved(previousCheckIn!.id, previousPins[0].id, emotionId)}
                   onReopen={() => onReopen(previousCheckIn!.id, previousPins[0].id)}
                   reopenDisabled={canSave}
+                  note={atTimeNote(previousCheckIn!)?.text ?? ''}
+                  onSaveNote={onSetAtTimeNote ? (text) => onSetAtTimeNote(previousCheckIn!.id, text) : undefined}
+                  firstCheckIn={entries.length === 1}
                 />
               </motion.div>
             ) : (

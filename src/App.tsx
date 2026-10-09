@@ -22,6 +22,7 @@ import { nextCue } from './data/groundingCues';
 import { ConstellationReplay } from './components/Constellation/ConstellationReplay';
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
+import { withAtTimeNote, withLookingBackNote } from './data/journal';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import { useViewHistory } from './hooks/useViewHistory';
 import { DefinitionTooltipContext, useDefinitionTooltip } from './hooks/useDefinitionTooltip';
@@ -158,7 +159,7 @@ export default function App() {
   const [axisPulseOn, setAxisPulseOn] = useState(true);
   const [axisPulseNonce] = useState(0);
 
-  const { entries, record, updateEntry } = useDiary();
+  const { entries, record, updateEntry, setNotes } = useDiary();
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
   // The field's definition tooltip (word-definition-tooltips): tethered
@@ -1053,6 +1054,24 @@ export default function App() {
   // regardless of what's passed here. The `!includes` guard just keeps a
   // stale double-accept from duplicating the id; the UI itself only ever
   // offers accept on a not-yet-recognized candidate.
+  // The private journal (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U3): note writes against an already-saved entry, outside
+  // the draft entirely, like handleRecognizeSaved below. Each passes an
+  // explicit notes array (possibly empty) so a cleared note stays cleared
+  // (updateEntryInList only carries notes forward when the key is absent).
+  // Returns whether the write landed, so the editor can say when it didn't.
+  const handleSetAtTimeNote = useCallback((entryId: string, text: string): boolean => {
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return false;
+    return setNotes(entryId, withAtTimeNote(entry, text, new Date(), uuidv4));
+  }, [entries, setNotes]);
+
+  const handleSetLookingBackNote = useCallback((entryId: string, walkId: string, text: string): boolean => {
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return false;
+    return setNotes(entryId, withLookingBackNote(entry, walkId, text, new Date(), uuidv4));
+  }, [entries, setNotes]);
+
   const handleRecognizeSaved = useCallback((entryId: string, pinId: string, emotionId: string) => {
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;
@@ -1348,6 +1367,7 @@ export default function App() {
                 onReopen={handleReopen}
                 justSavedEntryId={justSavedEntryId}
                 onRecognizeSaved={handleRecognizeSaved}
+                onSetAtTimeNote={handleSetAtTimeNote}
                 onDepart={handleDepart}
                 onDepartureDrag={handleDepartureDrag}
                 onLandingSave={handleLandingSave}
@@ -1459,6 +1479,8 @@ export default function App() {
             <DiaryHistory
               entries={entries}
               onBack={goBack}
+              onSetAtTimeNote={handleSetAtTimeNote}
+              onSetLookingBackNote={handleSetLookingBackNote}
             />
           </motion.div>
         )}
@@ -1486,6 +1508,8 @@ export default function App() {
             <ConstellationReplay
               entries={entries}
               onDismiss={goBack}
+              onSetAtTimeNote={handleSetAtTimeNote}
+              onSetLookingBackNote={handleSetLookingBackNote}
             />
           </motion.div>
         )}

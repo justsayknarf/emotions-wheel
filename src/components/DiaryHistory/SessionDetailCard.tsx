@@ -3,14 +3,24 @@ import { labelForId } from '../../data/emotions';
 import { WordTag } from '../EmotionPreview/WordTag';
 import { formatDate } from '../../utils/formatDate';
 import { MiniCircumplex } from './MiniCircumplex';
+import { NoteEditor } from '../Journal/NoteEditor';
+import { atTimeNote, lookingBackNotes } from '../../data/journal';
 import type { DiaryEntry } from '../../types';
 
-interface Props {
+// Journal note writes (docs/plans/2026-10-09-001-feat-weekly-reflection-
+// journal-plan.md, U3). Each returns whether the write landed. Without them
+// the card shows no note controls.
+export interface NoteWrites {
+  onSetAtTimeNote?: (entryId: string, text: string) => boolean;
+  onSetLookingBackNote?: (entryId: string, walkId: string, text: string) => boolean;
+}
+
+interface Props extends NoteWrites {
   entry: DiaryEntry | null;
   onDismiss: () => void;
 }
 
-export function SessionDetailCard({ entry, onDismiss }: Props) {
+export function SessionDetailCard({ entry, onDismiss, onSetAtTimeNote, onSetLookingBackNote }: Props) {
   return (
     <AnimatePresence>
       {entry && (
@@ -96,6 +106,8 @@ export function SessionDetailCard({ entry, onDismiss }: Props) {
                     {entry.pins[0].regionDescription.relational.replace(/\*/g, '')}
                   </p>
                 )}
+
+                <Notes entry={entry} onSetAtTimeNote={onSetAtTimeNote} onSetLookingBackNote={onSetLookingBackNote} />
               </div>
             </div>
           </motion.div>
@@ -117,4 +129,58 @@ function WordRow({ entry }: { entry: DiaryEntry }) {
       ))}
     </div>
   );
+}
+
+// At-the-time note first, then looking-back notes oldest first, each labelled
+// with the date it was written (a note from a walk left early has no recorded
+// reflection to take a date from). Both kinds can be edited or cleared.
+function Notes({ entry, onSetAtTimeNote, onSetLookingBackNote }: { entry: DiaryEntry } & NoteWrites) {
+  const atTime = atTimeNote(entry);
+  const lookingBack = lookingBackNotes(entry);
+  if (!onSetAtTimeNote && !atTime && lookingBack.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+      {onSetAtTimeNote ? (
+        <NoteEditor
+          key={`${entry.id}-at-time`}
+          note={atTime?.text ?? ''}
+          onSave={(text) => onSetAtTimeNote(entry.id, text)}
+          label="A note on this check-in"
+          caption="At the time"
+          placeholder="What's going on?"
+        />
+      ) : atTime && (
+        <ReadOnlyNote caption="At the time" text={atTime.text} />
+      )}
+      {lookingBack.map((n) =>
+        onSetLookingBackNote && n.walkId ? (
+          <NoteEditor
+            key={n.id}
+            note={n.text}
+            onSave={(text) => onSetLookingBackNote(entry.id, n.walkId!, text)}
+            label="A note looking back"
+            caption={`Looking back · ${shortDate(n.writtenAt)}`}
+          />
+        ) : (
+          <ReadOnlyNote key={n.id} caption={`Looking back · ${shortDate(n.writtenAt)}`} text={n.text} />
+        ),
+      )}
+    </div>
+  );
+}
+
+function ReadOnlyNote({ caption, text }: { caption: string; text: string }) {
+  return (
+    <div>
+      <span style={{ display: 'block', fontSize: 9, fontWeight: 600, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--ui-text-3)', marginBottom: 4 }}>
+        {caption}
+      </span>
+      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--ui-text-1)', whiteSpace: 'pre-wrap' }}>{text}</p>
+    </div>
+  );
+}
+
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

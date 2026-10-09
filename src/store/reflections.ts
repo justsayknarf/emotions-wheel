@@ -43,8 +43,9 @@ export function setWeekName(reflectionId: string, name: string): boolean {
     REFLECTIONS_KEY,
     readReflections().map((r) => {
       if (r.id !== reflectionId) return r;
-      const { weekName: _old, ...rest } = r;
-      return trimmed ? { ...rest, weekName: trimmed } : rest;
+      const next: Reflection = { ...r };
+      delete next.weekName;
+      return trimmed ? { ...next, weekName: trimmed } : next;
     }),
   );
 }

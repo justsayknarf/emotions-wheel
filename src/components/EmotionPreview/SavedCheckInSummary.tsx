@@ -3,6 +3,7 @@ import { emotions } from '../../data/emotions';
 import { nearbyEmotions } from '../../data/regions';
 import { MiniCircumplex } from '../DiaryHistory/MiniCircumplex';
 import { WordTag } from './WordTag';
+import { NoteEditor } from '../Journal/NoteEditor';
 import type { PinEntry } from '../../types';
 
 // Matches CoordinateCard.tsx's own FIELD_SERIF — this surface is for
@@ -29,6 +30,15 @@ interface Props {
   // own defensive `if (pins.length > 0) return;`), and this card's rail
   // placement (hideHistory never hides it there) makes that reachable.
   reopenDisabled?: boolean;
+  // The private journal (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U3): this check-in's at-the-time note ('' when none) and
+  // its write, which reports whether it landed. Optional so the card still
+  // renders without the journal wired in.
+  note?: string;
+  onSaveNote?: (text: string) => boolean;
+  // True for the user's very first check-in: one line setting the
+  // expectation that the record is for looking back on (R20).
+  firstCheckIn?: boolean;
 }
 
 // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
@@ -43,7 +53,7 @@ interface Props {
 // EmotionDrawer in place of the ordinary read-only CoordinateCard only
 // while this entry is the just-saved one — every other previous check-in
 // keeps rendering that ordinary card, unchanged.
-export function SavedCheckInSummary({ pin, onRecognize, onReopen, reopenDisabled = false }: Props) {
+export function SavedCheckInSummary({ pin, onRecognize, onReopen, reopenDisabled = false, note = '', onSaveNote, firstCheckIn = false }: Props) {
   // Seeded once per mount (the caller keys this component by the pin's id
   // AND coordinate, so a new saved entry — or the same entry's pin moved
   // via a reopen — gets a fresh candidate list rather than this one being
@@ -144,6 +154,32 @@ export function SavedCheckInSummary({ pin, onRecognize, onReopen, reopenDisabled
         >
           + Add tags
         </button>
+
+        {onSaveNote && (
+          <div style={{ marginTop: 8 }}>
+            <NoteEditor
+              note={note}
+              onSave={onSaveNote}
+              label="A note on this check-in"
+              placeholder="What's going on?"
+            />
+          </div>
+        )}
+
+        {firstCheckIn && (
+          <p
+            style={{
+              margin: '12px 0 0',
+              fontFamily: FIELD_SERIF,
+              fontStyle: 'italic',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              color: 'var(--ui-text-3)',
+            }}
+          >
+            Check in through the week, then look back and see it as it happened.
+          </p>
+        )}
       </div>
     </div>
   );
