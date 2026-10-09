@@ -1,5 +1,6 @@
 import type { DiaryEntry } from '../types';
 import { labelForId } from '../data/emotions';
+import { atTimeNote, lookingBackNotes } from '../data/journal';
 
 // One row per pin. Columns chosen so every coordinate is a clean, chartable
 // data point; the session is preserved as a shared id + timestamp across its
@@ -12,7 +13,27 @@ const HEADERS = [
   'region',
   'narrative',
   'recognized_words',
+  // The private journal (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U6). Repeated on each pin row of a multi-pin entry, the
+  // same way timestamp and session_id are.
+  'note_at_the_time',
+  'notes_looking_back',
 ] as const;
+
+// A check-in's looking-back notes in one cell, oldest first, each prefixed
+// with the local date it was written: "2026-10-09: it went fine | …".
+function lookingBackCell(entry: DiaryEntry): string {
+  return lookingBackNotes(entry)
+    .map((n) => `${localDate(new Date(n.writtenAt))}: ${n.text}`)
+    .join(' | ');
+}
+
+function localDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 // RFC 4180 field escaping: quote any field containing a comma, quote, CR, or
 // LF, doubling internal quotes. The region narrative routinely contains commas
@@ -50,6 +71,8 @@ export function diaryToCsv(entries: DiaryEntry[]): string {
         plainRegion(pin.regionDescription.relational),
         pin.regionDescription.narrative,
         pin.recognizedWords.map(labelForId).join('; '),
+        atTimeNote(entry)?.text ?? '',
+        lookingBackCell(entry),
       ]);
     }
   }

@@ -10,6 +10,7 @@ import { MiniCircumplex } from './MiniCircumplex';
 import { SessionDetailCard, type NoteWrites } from './SessionDetailCard';
 import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days, groupByDay, dateKey } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
+import { downloadReflectionsCsv } from '../../utils/reflectionsCsv';
 import { formatWeekdayAndDate } from '../../utils/formatDate';
 import { NoteEditor } from '../Journal/NoteEditor';
 import { QUIET_BUTTON } from '../Journal/noteStyles';
@@ -289,6 +290,15 @@ function WeekScreen({ entries, onSelectDay, onLookBack, reflections, onRenameWee
           />
         ))}
       </div>
+      {/* Reflections export as their own file (KTD13); the header's Export
+          CSV carries check-ins and their notes. */}
+      {reflections.length > 0 && (
+        <div style={{ padding: '14px 20px 0' }}>
+          <button type="button" onClick={() => downloadReflectionsCsv(reflections)} style={QUIET_BUTTON}>
+            Export reflections (CSV)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
