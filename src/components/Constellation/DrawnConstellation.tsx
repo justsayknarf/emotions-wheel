@@ -1,4 +1,5 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { createDrawable, createTimeline, utils } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
 import { toPercent } from '../../utils/fieldGeometry';
@@ -33,6 +34,17 @@ import type { DiaryEntry } from '../../types';
 interface Props {
   entries: DiaryEntry[];    // recent window, chronological (oldest first)
   onPointClick: (entry: DiaryEntry) => void;
+  // The weekly reflection walk (docs/plans/2026-10-09-001-feat-weekly-
+  // reflection-journal-plan.md, KTD9) drives the same replay through these;
+  // every one defaults to the ordinary replay's behavior.
+  /** A soft halo marks this check-in's star, gliding when it changes. */
+  highlightEntryId?: string | null;
+  /** The scrubber and play/pause. Hidden in the walk. */
+  showControls?: boolean;
+  /** Fires once when the drawing finishes, is skipped, or resolves for reduced motion. */
+  onReplayEnd?: () => void;
+  /** Flipping to true jumps the drawing to its end (tap to skip). */
+  jumpToEnd?: boolean;
 }
 
 // Pause before the first star lands, so the overlay's own fade-in settles first.
@@ -56,7 +68,19 @@ const emotionById = new Map(emotions.map((e) => [e.id, e]));
 // gold star — "now" — the rest keep the recorded teal the field uses for a
 // past pin. Reduced motion shows the finished constellation; the scrubber can
 // still seek it.
-export function DrawnConstellation({ entries, onPointClick }: Props) {
+export function DrawnConstellation({
+  entries,
+  onPointClick,
+  highlightEntryId = null,
+  showControls = true,
+  onReplayEnd,
+  jumpToEnd = false,
+}: Props) {
+  // Read through a ref so a new callback identity never rebuilds the timeline.
+  const onReplayEndRef = useRef(onReplayEnd);
+  useEffect(() => {
+    onReplayEndRef.current = onReplayEnd;
+  }, [onReplayEnd]);
   const points = useMemo(
     () =>
       entries
@@ -100,11 +124,20 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
       const glows = createDrawable('.replay-glow');
       utils.set([...lines, ...streaks, ...glows], { draw: '0 0' });
       utils.set('[data-head]', { opacity: 0 });
+      let endFired = false;
+      const fireEnd = () => {
+        if (endFired) return;
+        endFired = true;
+        onReplayEndRef.current?.();
+      };
       const tl = createTimeline({
         autoplay: false,
         onUpdate: (t) => syncScrub(t.progress),
         onPause: () => setPlaying(false),
-        onComplete: () => setPlaying(false),
+        onComplete: () => {
+          setPlaying(false);
+          fireEnd();
+        },
       });
 
       points.forEach((p, i) => {
@@ -181,6 +214,7 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
         tl.pause();
         tl.seek(tl.duration);
       };
+      const start = { timer: undefined as number | undefined };
 
       self.add('toggle', () => {
         if (!tl.paused) {
@@ -207,20 +241,33 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
         tl.pause();
         tl.seek(progress * tl.duration);
       });
+      self.add('skip', () => {
+        window.clearTimeout(start.timer);
+        toEnd();
+        setPlaying(false);
+        fireEnd();
+      });
 
       if (reduced) {
         toEnd();
+        fireEnd();
         return;
       }
       tl.seek(0);
-      const start = window.setTimeout(() => {
+      start.timer = window.setTimeout(() => {
         tl.play();
         setPlaying(true);
       }, START_DELAY_MS);
-      return () => window.clearTimeout(start);
+      return () => window.clearTimeout(start.timer);
     },
     [points, dayLabels],
   );
+
+  useEffect(() => {
+    if (jumpToEnd) scope.current?.methods.skip();
+  }, [jumpToEnd, scope]);
+
+  const highlighted = highlightEntryId ? points.find((p) => p.entry.id === highlightEntryId) ?? null : null;
 
   if (n === 0) return null;
   const last = n - 1;
@@ -387,13 +434,36 @@ export function DrawnConstellation({ entries, onPointClick }: Props) {
         );
       })}
 
-      <ReplayControls
-        playing={playing}
-        ended={ended}
-        scrubRef={scrubRef}
-        onToggle={() => scope.current?.methods.toggle()}
-        onSeek={(progress) => scope.current?.methods.seek(progress)}
-      />
+      {/* The walk's current moment: a halo that glides from star to star.
+          Outside the timeline, so the drawing's inline styles never touch it. */}
+      {highlighted && (
+        <motion.span
+          aria-hidden="true"
+          initial={false}
+          animate={{ left: `${highlighted.lx}%`, top: `${highlighted.ly}%` }}
+          transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+          style={{
+            position: 'absolute',
+            width: 30,
+            height: 30,
+            margin: '-15px 0 0 -15px',
+            borderRadius: '50%',
+            border: '1px solid rgb(var(--ui-gold-rgb) / 0.8)',
+            boxShadow: '0 0 18px 4px rgb(var(--ui-gold-rgb) / 0.3)',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+
+      {showControls && (
+        <ReplayControls
+          playing={playing}
+          ended={ended}
+          scrubRef={scrubRef}
+          onToggle={() => scope.current?.methods.toggle()}
+          onSeek={(progress) => scope.current?.methods.seek(progress)}
+        />
+      )}
     </div>
   );
 }

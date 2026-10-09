@@ -23,12 +23,16 @@ import { ConstellationReplay } from './components/Constellation/ConstellationRep
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { withAtTimeNote, withLookingBackNote } from './data/journal';
+import { useReflections } from './hooks/useReflections';
+import { inviteStatus, canLookBack } from './data/reflection';
+import { WeeklyReflection } from './components/Reflection/WeeklyReflection';
+import { QuietAck } from './components/Reflection/QuietAck';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import { useViewHistory } from './hooks/useViewHistory';
 import { DefinitionTooltipContext, useDefinitionTooltip } from './hooks/useDefinitionTooltip';
 import { nearestWordId } from './components/EmotionField/definitionPlacement';
 import { VISIBILITY_RADIUS } from './hooks/useProximity';
-import type { AppView, DiaryEntry, PinEntry } from './types';
+import type { AppView, DiaryEntry, PinEntry, Reflection } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
 
@@ -160,6 +164,24 @@ export default function App() {
   const [axisPulseNonce] = useState(0);
 
   const { entries, record, updateEntry, setNotes } = useDiary();
+  // The weekly reflection (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U4/U5).
+  const { reflections, inviteState, complete: completeReflection, renameWeek, snooze, skipWeek } = useReflections();
+  // How the open walk was reached: only invited walks move the weekly timer
+  // (KTD15), and only they start on the opening card (KTD17).
+  const [reflectionOpened, setReflectionOpened] = useState<Reflection['opened']>('on-demand');
+  // The walk starts on its opening card (Begin / Later / Skip this week) only
+  // from the new-tab link, which has no room for those choices itself.
+  const [reflectionShowsOpening, setReflectionShowsOpening] = useState(false);
+  // One short fading line after a reflection action ("Okay, tomorrow.").
+  const [ack, setAck] = useState<{ id: number; text: string } | null>(null);
+  const say = useCallback((text: string) => setAck((prev) => ({ id: (prev?.id ?? 0) + 1, text })), []);
+  // Derived at render, never stored (KTD11), against the session's start
+  // time: a reload (every new tab is one) picks up a new day. Snooze, skip
+  // and completion all write timestamps after it, so each hides the
+  // invitation at once.
+  const [renderNow] = useState(() => new Date());
+  const inviteDue = inviteStatus(entries, reflections, inviteState, renderNow) === 'due';
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
   // The field's definition tooltip (word-definition-tooltips): tethered
@@ -1072,6 +1094,38 @@ export default function App() {
     return setNotes(entryId, withLookingBackNote(entry, walkId, text, new Date(), uuidv4));
   }, [entries, setNotes]);
 
+  const openReflection = useCallback((opened: Reflection['opened'], showOpening = false) => {
+    setReflectionOpened(opened);
+    setReflectionShowsOpening(showOpening);
+    navigateTo('reflection');
+  }, [navigateTo]);
+  const handleReflectionComplete = useCallback((reflection: Reflection) => {
+    completeReflection(reflection);
+    goBack();
+    say('Your week is saved.');
+  }, [completeReflection, goBack, say]);
+  const handleInviteLater = useCallback((fromWalk: boolean) => {
+    snooze();
+    if (fromWalk) goBack();
+    say('Okay, tomorrow.');
+  }, [snooze, goBack, say]);
+  const handleInviteSkipWeek = useCallback((fromWalk: boolean) => {
+    skipWeek();
+    if (fromWalk) goBack();
+    say('Okay, next week.');
+  }, [skipWeek, goBack, say]);
+  const drawerInvite = useMemo(
+    () => inviteDue && entrySource
+      ? {
+          surface: entrySource,
+          onReflect: () => openReflection('invite', entrySource === 'new-tab'),
+          onLater: () => handleInviteLater(false),
+          onSkipWeek: () => handleInviteSkipWeek(false),
+        }
+      : null,
+    [inviteDue, entrySource, openReflection, handleInviteLater, handleInviteSkipWeek],
+  );
+
   const handleRecognizeSaved = useCallback((entryId: string, pinId: string, emotionId: string) => {
     const entry = entries.find((e) => e.id === entryId);
     if (!entry) return;
@@ -1368,6 +1422,7 @@ export default function App() {
                 justSavedEntryId={justSavedEntryId}
                 onRecognizeSaved={handleRecognizeSaved}
                 onSetAtTimeNote={handleSetAtTimeNote}
+                invite={drawerInvite}
                 onDepart={handleDepart}
                 onDepartureDrag={handleDepartureDrag}
                 onLandingSave={handleLandingSave}
@@ -1479,6 +1534,9 @@ export default function App() {
             <DiaryHistory
               entries={entries}
               onBack={goBack}
+              onLookBack={canLookBack(entries) ? () => openReflection('on-demand') : undefined}
+              reflections={reflections}
+              onRenameWeek={renameWeek}
               onSetAtTimeNote={handleSetAtTimeNote}
               onSetLookingBackNote={handleSetLookingBackNote}
             />
@@ -1513,7 +1571,30 @@ export default function App() {
             />
           </motion.div>
         )}
+
+        {view === 'reflection' && (
+          <motion.div
+            key="reflection"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          >
+            <WeeklyReflection
+              entries={entries}
+              opened={reflectionOpened}
+              showOpening={reflectionShowsOpening}
+              onSetLookingBackNote={handleSetLookingBackNote}
+              onComplete={handleReflectionComplete}
+              onLater={() => handleInviteLater(true)}
+              onSkipWeek={() => handleInviteSkipWeek(true)}
+              onClose={goBack}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
+
+      <QuietAck ack={ack} />
     </div>
   );
 }

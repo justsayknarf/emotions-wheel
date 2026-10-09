@@ -5,6 +5,7 @@ import { DepartureFloat } from './DepartureFloat';
 import { SavedCheckInSummary } from './SavedCheckInSummary';
 import { isDepartureEligible } from '../../data/departure';
 import { atTimeNote } from '../../data/journal';
+import { ReflectionInviteCard, type InviteActions } from '../Reflection/ReflectionInvite';
 import { useRevealTuning } from '../../config/revealTuning';
 import { RhythmStrip } from '../EmotionMirror/RhythmStrip';
 import { formatRelative } from '../../utils/formatDate';
@@ -121,6 +122,12 @@ interface Props {
   // (blank clears it). Returns whether the write landed. See
   // docs/plans/2026-10-09-001-feat-weekly-reflection-journal-plan.md, U3.
   onSetAtTimeNote?: (entryId: string, text: string) => boolean;
+  // The weekly reflection's invitation, set only while it is due
+  // (docs/plans/2026-10-09-001-feat-weekly-reflection-journal-plan.md, U5,
+  // KTD12). On a web rail/sheet it shows as a card at the top of the list
+  // and, on a collapsed mobile sheet, as the peek handle's line. On a
+  // new-tab session it is the single link under DepartureFloat's sliders.
+  invite?: (InviteActions & { surface: 'web' | 'new-tab' }) | null;
   // U2: mints a new draft pin departing from the previous check-in's anchor
   // (its newest pin) — fired by the pre-mint DepartureFloat landing's own
   // sliders when the draft is empty. Never touches the anchor itself
@@ -234,6 +241,7 @@ export function EmotionDrawer({
   justSavedEntryId,
   onRecognizeSaved,
   onSetAtTimeNote,
+  invite = null,
   onDepart,
   onDepartureDrag,
   cardFocusProgress = 0,
@@ -359,6 +367,7 @@ export function EmotionDrawer({
   // drag-shrink/history-hiding behavior — it shares 'rail's content
   // decisions instead (isPanelLayout above).
   const isDraftSheet = isSheet && !isReopened;
+  const hasInvite = invite !== null;
   // R7-R10: while a slider drag is active on the sheet's ordinary draft-cards
   // path, hide everything but the actively-dragged card so more of the
   // field shows through. Derived at render, not stored state —
@@ -411,7 +420,9 @@ export function EmotionDrawer({
     // continuously during a slider drag or word pick, and retriggering
     // this measurement for each one would double-animate the same visual
     // change CoordinateCard already animates internally.
-  }, [isSheet, isReopened, sheetBodyVisible, dragShrinkActive, pins.length, scrollRef]);
+    // `hasInvite`: the weekly reflection's invitation card appearing or
+    // leaving (Later / Skip this week) changes the list's height too.
+  }, [isSheet, isReopened, sheetBodyVisible, dragShrinkActive, pins.length, scrollRef, hasInvite]);
   const sheetRootRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!isSheet || !onSheetTopChange || dragShrinkActive) return;
@@ -504,6 +515,9 @@ export function EmotionDrawer({
   // branch: every entry `justSavedEntryId` can ever point to is
   // single-pin under the shipped single-pin-checkin model.
   const justSaved = !isFocus && previousCheckIn?.id === justSavedEntryId && previousPins.length === 1;
+  // The web invitation card: rail/sheet only, and only while nothing is being
+  // checked in or edited, so the check-in stays the primary action (KTD12).
+  const webInvite = invite?.surface === 'web' && !isFocus && !canSave && !isReopened ? invite : null;
   // On the sheet, a peek-style handle is showing (and already carries the
   // time) whenever the draft is empty and nothing is being edited — both the
   // peeked state and the manually-expanded-with-empty-draft state render
@@ -719,6 +733,7 @@ export function EmotionDrawer({
         onAdjustDraft={onAdjustDraft}
         onDiscard={onClear}
         onSave={onLandingSave ?? onDone}
+        onLookBack={invite?.surface === 'new-tab' ? invite.onReflect : undefined}
       />
     );
   }
@@ -984,6 +999,7 @@ export function EmotionDrawer({
           as the draft cards, so leaving it up would keep the sheet too tall
           to reveal much of the field, and would bury a just-dropped pin's
           card below it. */}
+      {webInvite && <ReflectionInviteCard {...webInvite} />}
       {!hideHistory && returningSummary}
       {isReopened ? (
         // Editing in place: the check-in that was the previous check-in's
@@ -1392,7 +1408,11 @@ export function EmotionDrawer({
   // only place "Today's check-in" needs saying, since the sheet variant
   // never renders the panel-layout-only groupHeaderStyle text above.
   const peekMicroLabel = canSave ? 'Draft' : justSaved ? "Today's check-in" : 'Last check-in';
-  const peekDetailLabel = canSave ? null : timeLabel;
+  // A due weekly reflection takes over the collapsed handle's one line
+  // (it has no room for a second), and the tap that expands the sheet
+  // reveals the invitation card at the top of the list.
+  const peekInvites = !!webInvite && !sheetBodyVisible;
+  const peekDetailLabel = canSave ? null : peekInvites ? 'Your week is ready to look back on' : timeLabel;
   const peekAriaSubject = canSave ? 'draft' : justSaved ? "today's check-in" : 'last check-in';
   const handleButton = !isReopened && (
     <button
@@ -1401,7 +1421,7 @@ export function EmotionDrawer({
       onClick={onToggle}
       disabled={dragShrinkActive}
       aria-expanded={sheetBodyVisible}
-      aria-label={`${sheetBodyVisible ? 'Collapse' : 'Expand'} ${peekAriaSubject}`}
+      aria-label={`${sheetBodyVisible ? 'Collapse' : 'Expand'} ${peekAriaSubject}${peekInvites ? '; your week is ready to look back on' : ''}`}
       style={{
         display: 'flex',
         flexDirection: 'column',

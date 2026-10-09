@@ -20,9 +20,11 @@ export function useReflections() {
     setReflections(readReflections());
   }, []);
 
-  const renameWeek = useCallback((reflectionId: string, name: string) => {
-    setWeekNameInStore(reflectionId, name);
+  // Returns whether the write landed, for the History editor.
+  const renameWeek = useCallback((reflectionId: string, name: string): boolean => {
+    const ok = setWeekNameInStore(reflectionId, name);
     setReflections(readReflections());
+    return ok;
   }, []);
 
   // "Later": hidden until the next local midnight.
