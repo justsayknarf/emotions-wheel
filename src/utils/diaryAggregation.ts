@@ -66,10 +66,10 @@ export function sessionsForDay(entries: DiaryEntry[], date: Date): DiaryEntry[] 
   return entries.filter(e => dateKey(new Date(e.timestamp)) === target);
 }
 
-/** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. */
-export function last7Days(): Date[] {
+/** Array of 7 Date objects: [today−6, …, today]. Index 6 is today. `now` pins the clock for tests. */
+export function last7Days(now: Date = new Date()): Date[] {
   const days: Date[] = [];
-  const today = new Date();
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
