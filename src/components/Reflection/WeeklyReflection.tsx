@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { DrawnConstellation } from '../Constellation/DrawnConstellation';
+import { SkyReplay } from '../Constellation/SkyReplay';
+import { useRevealTuning } from '../../config/revealTuning';
 import { useSidePanelLayout } from '../../hooks/useSidePanelLayout';
 import { reflectionWindow, pickMoments, momentPoint } from '../../data/reflection';
 import { momentPrompt } from '../../data/reflectionPrompts';
@@ -44,6 +46,9 @@ const AXIS_LABEL: CSSProperties = {
 
 export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBackNote, onComplete, onLater, onSkipWeek, onClose }: Props) {
   const sideBySide = useSidePanelLayout();
+  // The same replay History's constellation replay uses: the night sky when
+  // the sky field is on, the flat plane otherwise.
+  const sky = useRevealTuning().skyField;
 
   // Frozen when the walk opens, so a check-in saved meanwhile (another tab)
   // can't reshuffle the moments under the user.
@@ -206,21 +211,27 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
         onClick={phase === 'replaying' ? () => setJump(true) : undefined}
         style={{ position: 'relative', flex: sideBySide ? 1 : '0 0 52%', minHeight: 0 }}
       >
-        <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>Positive</div>
-        <div style={{ ...AXIS_LABEL, bottom: 12, left: '50%', transform: 'translateX(-50%)' }}>Negative</div>
-        <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>Calm</div>
-        <div style={{ ...AXIS_LABEL, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>Activated</div>
-        {showSky && (
-          <DrawnConstellation
-            entries={walk.week}
-            highlightEntryId={current?.id ?? null}
-            showControls={false}
-            jumpToEnd={jump}
+        {/* Axis names fit the flat plane only: in the sky the gaze moves. */}
+        {!sky && (
+          <>
+          <div style={{ ...AXIS_LABEL, top: 16, left: '50%', transform: 'translateX(-50%)' }}>Positive</div>
+          <div style={{ ...AXIS_LABEL, bottom: 12, left: '50%', transform: 'translateX(-50%)' }}>Negative</div>
+          <div style={{ ...AXIS_LABEL, left: 16, top: '50%', transform: 'translateY(-50%) rotate(-90deg)' }}>Calm</div>
+          <div style={{ ...AXIS_LABEL, right: 16, top: '50%', transform: 'translateY(-50%) rotate(90deg)' }}>Activated</div>
+          </>
+        )}
+        {showSky && (() => {
+          const replay = {
+            entries: walk.week,
+            highlightEntryId: current?.id ?? null,
+            showControls: false,
+            jumpToEnd: jump,
             // Only the first ending opens moment one: a timeline rebuilt later
             // (a reduced-motion flip) must not pull the user back mid-walk.
-            onReplayEnd={() => { if (phase === 'replaying') goToMoment(0); }}
-          />
-        )}
+            onReplayEnd: () => { if (phase === 'replaying') goToMoment(0); },
+          };
+          return sky ? <SkyReplay {...replay} /> : <DrawnConstellation {...replay} />;
+        })()}
       </div>
 
       {/* The card: beside the sky on desktop, below it on mobile. */}

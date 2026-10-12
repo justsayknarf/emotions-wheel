@@ -21,8 +21,24 @@ import type { DiaryEntry } from '../../types';
 
 interface Props {
   entries: DiaryEntry[];    // recent window, chronological (oldest first)
-  onPointClick: (entry: DiaryEntry) => void;
+  // Omitted in the weekly reflection walk: the sky is then something to look
+  // at, not to tap, and offers no check-in buttons.
+  onPointClick?: (entry: DiaryEntry) => void;
+  // The weekly reflection walk drives the same tour through these (the same
+  // four props DrawnConstellation takes); each defaults to the replay's own
+  // behavior. docs/plans/2026-10-09-001-feat-weekly-reflection-journal-plan.md
+  /** After the tour, the gaze glides to this check-in and holds it lit. */
+  highlightEntryId?: string | null;
+  /** The scrubber and play/pause. Hidden in the walk. */
+  showControls?: boolean;
+  /** Fires once when the tour finishes, is skipped, or resolves for reduced motion. */
+  onReplayEnd?: () => void;
+  /** Flipping to true jumps the tour to its end (tap to skip). */
+  jumpToEnd?: boolean;
 }
+
+// How long the gaze takes to glide to a newly highlighted check-in.
+const HIGHLIGHT_GLIDE_MS = 900;
 
 // Pause before the tour starts, so the overlay's own fade-in settles first.
 const START_DELAY_MS = 400;
@@ -63,7 +79,19 @@ interface Point {
 // included, is a pure function of it (skyReplay.ts), so the scrubber seeks
 // exactly. Reduced motion shows the end of the tour; the scrubber can still
 // seek it.
-export function SkyReplay({ entries, onPointClick }: Props) {
+export function SkyReplay({
+  entries,
+  onPointClick,
+  highlightEntryId = null,
+  showControls = true,
+  onReplayEnd,
+  jumpToEnd = false,
+}: Props) {
+  // Read through a ref so a new callback identity never rebuilds the timeline.
+  const onReplayEndRef = useRef(onReplayEnd);
+  useEffect(() => {
+    onReplayEndRef.current = onReplayEnd;
+  }, [onReplayEnd]);
   const tuning = useRevealTuning();
   const params = useMemo(() => cameraParamsFrom(tuning), [tuning]);
   const reducedMotion = !!useReducedMotion();
@@ -101,6 +129,12 @@ export function SkyReplay({ entries, onPointClick }: Props) {
     (self, reduced) => {
       if (plan.total === 0) return;
       const clock = { t: 0 };
+      let endFired = false;
+      const fireEnd = () => {
+        if (endFired) return;
+        endFired = true;
+        onReplayEndRef.current?.();
+      };
       const tl = createTimeline({
         autoplay: false,
         onUpdate: (tm) => {
@@ -108,7 +142,10 @@ export function SkyReplay({ entries, onPointClick }: Props) {
           setT(tm.progress * plan.total);
         },
         onPause: () => setPlaying(false),
-        onComplete: () => setPlaying(false),
+        onComplete: () => {
+          setPlaying(false);
+          fireEnd();
+        },
       });
       tl.add(clock, { t: [0, plan.total], duration: plan.total, ease: 'linear' }, 0);
 
@@ -116,6 +153,13 @@ export function SkyReplay({ entries, onPointClick }: Props) {
         tl.pause();
         tl.seek(tl.duration);
       };
+      const start = { timer: undefined as number | undefined };
+      self.add('skip', () => {
+        window.clearTimeout(start.timer);
+        toEnd();
+        setPlaying(false);
+        fireEnd();
+      });
       self.add('toggle', () => {
         if (!tl.paused) {
           tl.pause();
@@ -136,17 +180,22 @@ export function SkyReplay({ entries, onPointClick }: Props) {
 
       if (reduced) {
         toEnd();
+        fireEnd();
         return;
       }
       tl.seek(0);
-      const start = window.setTimeout(() => {
+      start.timer = window.setTimeout(() => {
         tl.play();
         setPlaying(true);
       }, START_DELAY_MS);
-      return () => window.clearTimeout(start);
+      return () => window.clearTimeout(start.timer);
     },
     [plan],
   );
+
+  useEffect(() => {
+    if (jumpToEnd) scope.current?.methods.skip();
+  }, [jumpToEnd, scope]);
 
   // The stage's size, for the projection and the canvas.
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -158,7 +207,31 @@ export function SkyReplay({ entries, onPointClick }: Props) {
     return () => obs.disconnect();
   }, [root]);
 
-  const look = skyReplayLook(plan, t);
+  // The walk's current moment: once set, the gaze glides from wherever it is
+  // to that check-in and holds there, its constellation lit.
+  const hi = highlightEntryId ? points.findIndex((p) => p.entry.id === highlightEntryId) : -1;
+  const [heldLook, setHeldLook] = useState<FieldCoord | null>(null);
+  const shownLook = useRef<FieldCoord>({ x: 0, y: 0 });
+  useEffect(() => {
+    if (hi < 0) return;
+    const from = shownLook.current;
+    const to = plan.looks[hi];
+    if (!to) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = reducedMotion ? 1 : easeOut3(Math.min(1, (now - t0) / HIGHLIGHT_GLIDE_MS));
+      setHeldLook({ x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k });
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [hi, plan, reducedMotion]);
+
+  const look = hi >= 0 && heldLook ? heldLook : skyReplayLook(plan, t);
+  useLayoutEffect(() => {
+    shownLook.current = look;
+  });
   const proj = useMemo(
     () => skyProjection({ look: { x: look.x, y: look.y }, fovDeg: params.fovRest, width: size.width, height: size.height }),
     [look.x, look.y, params.fovRest, size.width, size.height],
@@ -179,7 +252,7 @@ export function SkyReplay({ entries, onPointClick }: Props) {
   // Every emotion is a star; a lit constellation's words turn the recorded
   // teal, as tagged words do on the field. Keyed on which check-ins are lit
   // so a frame of playback doesn't rebuild the list.
-  const litKey = points.map((_, i) => (skyReplayGlow(plan, i, t) > 0 ? '1' : '0')).join('');
+  const litKey = points.map((_, i) => (i === hi || skyReplayGlow(plan, i, t) > 0 ? '1' : '0')).join('');
   const stars = useMemo<SkyStar[]>(() => {
     const lit = new Set<string>();
     points.forEach((p, i) => {
@@ -205,8 +278,8 @@ export function SkyReplay({ entries, onPointClick }: Props) {
     const base: Partial<Record<ThemeChannel, string>> = {};
     const rgba: Rgba = (ch, a) => `${(base[ch] ??= themeRgba(ch, 1).slice(0, -2))}${a})`;
     const font = getComputedStyle(cv).fontFamily;
-    drawTour(ctx, { proj, plan, points, dayLabels, t, rgba, blur: blurrer(ctx, dpr, rgba), font });
-  }, [proj, plan, points, dayLabels, t, size]);
+    drawTour(ctx, { proj, plan, points, dayLabels, t, hi, rgba, blur: blurrer(ctx, dpr, rgba), font });
+  }, [proj, plan, points, dayLabels, t, hi, size]);
 
   // Tapping near a landed check-in opens it.
   const hitAt = (e: React.PointerEvent | React.MouseEvent): DiaryEntry | null => {
@@ -241,14 +314,14 @@ export function SkyReplay({ entries, onPointClick }: Props) {
       <canvas
         ref={canvasRef}
         aria-hidden
-        onClick={(e) => { const hit = hitAt(e); if (hit) onPointClick(hit); }}
-        onPointerMove={(e) => { e.currentTarget.style.cursor = hitAt(e) ? 'pointer' : 'default'; }}
+        onClick={onPointClick ? (e) => { const hit = hitAt(e); if (hit) onPointClick(hit); } : undefined}
+        onPointerMove={onPointClick ? (e) => { e.currentTarget.style.cursor = hitAt(e) ? 'pointer' : 'default'; } : undefined}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}
       />
 
       {/* The canvas can't be tabbed to: the same check-ins as buttons for
           keyboard and screen-reader users, in time order. */}
-      <div style={VISUALLY_HIDDEN}>
+      {onPointClick && <div style={VISUALLY_HIDDEN}>
         {points.map((p, i) => (
           <button
             key={p.entry.id}
@@ -258,15 +331,17 @@ export function SkyReplay({ entries, onPointClick }: Props) {
             {`Check-in ${i + 1}${dayLabels[i] ? `, ${dayLabels[i]!.toLowerCase()}` : ''}${p.words.length ? `: ${p.words.map((w) => w.label).join(', ')}` : ''}${i === last ? ' (latest)' : ''}`}
           </button>
         ))}
-      </div>
+      </div>}
 
-      <ReplayControls
-        playing={playing}
-        ended={ended}
-        scrubRef={scrubRef}
-        onToggle={() => scope.current?.methods.toggle()}
-        onSeek={(progress) => scope.current?.methods.seek(progress)}
-      />
+      {showControls && (
+        <ReplayControls
+          playing={playing}
+          ended={ended}
+          scrubRef={scrubRef}
+          onToggle={() => scope.current?.methods.toggle()}
+          onSeek={(progress) => scope.current?.methods.seek(progress)}
+        />
+      )}
     </div>
   );
 }
@@ -279,12 +354,14 @@ function drawTour(
     points: Point[];
     dayLabels: (string | null)[];
     t: number;
+    /** The walk's held check-in, drawn lit with a gold ring; -1 for none. */
+    hi: number;
     rgba: Rgba;
     blur: (fn: () => void) => void;
     font: string;
   },
 ) {
-  const { proj, plan, points, dayLabels, t, rgba, blur, font } = o;
+  const { proj, plan, points, dayLabels, t, hi, rgba, blur, font } = o;
   const last = points.length - 1;
 
   // The chain between check-ins: the replay's comet rides each hop in with
@@ -302,8 +379,8 @@ function drawTour(
   // constellation in the sky. The light (lines, halos) pulses with
   // skyReplayGlow; the words and star cores hold steady on presence.
   points.forEach((p, i) => {
-    const g = skyReplayGlow(plan, i, t);
-    const on = skyReplayPresence(plan, i, t);
+    const g = i === hi ? 1 : skyReplayGlow(plan, i, t);
+    const on = i === hi ? 1 : skyReplayPresence(plan, i, t);
     if (on <= 0) return;
     const chain: FieldCoord[] = [p.pin, ...p.words];
     const pinPx = proj.toPx(p.pin);
@@ -385,6 +462,21 @@ function drawTour(
       if ('letterSpacing' in ctx) (ctx as { letterSpacing: string }).letterSpacing = '0px';
     }
   });
+
+  // The walk's current moment: a soft gold ring around its star.
+  if (hi >= 0 && points[hi]) {
+    const q = proj.toPx(points[hi].pin);
+    if (q.visible) {
+      blur(() => {
+        ctx.strokeStyle = rgba('gold', 0.6);
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(q.x, q.y, 16, 0, Math.PI * 2); ctx.stroke();
+      });
+      ctx.strokeStyle = rgba('gold', 0.85);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(q.x, q.y, 16, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
 }
 
 // The departure comet's look riding a path: the streak and its glow over
