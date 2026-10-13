@@ -143,7 +143,10 @@ export function MomentCard({ index, total, when, prompt, thenNote, draft, onDraf
       </p>
 
       <NoteField value={draft} onChange={onDraft} label="Looking back" placeholder="A line is plenty." />
-      <JournalNotice />
+      {/* Keyed by moment: the card stays mounted across moments, and the
+          notice reads its seen flag on mount, so a note saved on one moment
+          hides it from the next. */}
+      <JournalNotice key={index} />
       {failed && (
         <p role="alert" style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--ui-text-2)' }}>
           Couldn't save that note.
@@ -165,9 +168,11 @@ interface ClosingProps {
   onWeekName: (value: string) => void;
   onBack: (() => void) | null;
   onDone: () => void;
+  /** The last Done couldn't save the reflection; the walk stays open to try again. */
+  failed: boolean;
 }
 
-export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack, onDone }: ClosingProps) {
+export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack, onDone, failed }: ClosingProps) {
   const heading = useHeadingFocus('closing');
   return (
     <div>
@@ -200,6 +205,11 @@ export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack
           fontSize: 14,
         }}
       />
+      {failed && (
+        <p role="alert" style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--ui-text-2)' }}>
+          Couldn't save this week.
+        </p>
+      )}
       <Actions>
         {onBack && <WalkButton onClick={onBack}>Back</WalkButton>}
         <WalkButton primary onClick={onDone}>Done</WalkButton>

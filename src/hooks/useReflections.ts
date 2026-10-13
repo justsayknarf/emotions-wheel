@@ -15,9 +15,11 @@ export function useReflections() {
   const [reflections, setReflections] = useState<Reflection[]>(() => readReflections());
   const [inviteState, setInviteState] = useState<ReflectionInviteState>(() => readInviteState());
 
-  const complete = useCallback((reflection: Reflection) => {
-    appendReflection(reflection);
+  // Returns whether the write landed, so the walk can stay open to retry.
+  const complete = useCallback((reflection: Reflection): boolean => {
+    const ok = appendReflection(reflection);
     setReflections(readReflections());
+    return ok;
   }, []);
 
   // Returns whether the write landed, for the History editor.

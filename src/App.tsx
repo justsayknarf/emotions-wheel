@@ -1104,10 +1104,12 @@ export default function App() {
     setReflectionShowsOpening(showOpening);
     navigateTo('reflection');
   }, [navigateTo]);
-  const handleReflectionComplete = useCallback((reflection: Reflection) => {
-    completeReflection(reflection);
+  // Returns whether the reflection saved; on failure the walk stays open.
+  const handleReflectionComplete = useCallback((reflection: Reflection): boolean => {
+    if (!completeReflection(reflection)) return false;
     goBack();
     say('Your week is saved.');
+    return true;
   }, [completeReflection, goBack, say]);
   const handleInviteLater = useCallback((fromWalk: boolean) => {
     snooze();

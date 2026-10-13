@@ -28,7 +28,8 @@ interface Props {
   /** Start on the opening card (Begin / Later / Skip this week). */
   showOpening: boolean;
   onSetLookingBackNote: (entryId: string, walkId: string, text: string) => boolean;
-  onComplete: (reflection: Reflection) => void;
+  /** Record the reflection; false when it couldn't be saved. */
+  onComplete: (reflection: Reflection) => boolean;
   onLater: () => void;
   onSkipWeek: () => void;
   onClose: () => void;
@@ -70,17 +71,20 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   // once. The view fades out over a few hundred ms after the first, and a
   // second press in that window would record the reflection twice and step
   // history back twice, out of the app.
+  // A handler that returns false didn't leave (its save failed), so the
+  // latch opens again.
   const leaving = useRef(false);
-  const once = <A extends unknown[]>(fn: (...args: A) => void) => (...args: A) => {
+  const once = <A extends unknown[]>(fn: (...args: A) => boolean | void) => (...args: A) => {
     if (leaving.current) return;
     leaving.current = true;
-    fn(...args);
+    if (fn(...args) === false) leaving.current = false;
   };
   const close = once(onClose);
   const [index, setIndex] = useState(0);
   const [jump, setJump] = useState(false);
   const [draft, setDraft] = useState('');
   const [failed, setFailed] = useState(false);
+  const [doneFailed, setDoneFailed] = useState(false);
   const [openLine, setOpenLine] = useState('');
   const [weekName, setWeekName] = useState('');
 
@@ -114,6 +118,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
     setIndex(i);
     setDraft(savedNote(i));
     setFailed(false);
+    setDoneFailed(false);
     setPhase('moment');
   };
 
@@ -138,10 +143,12 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
     goToMoment(index - 1);
   };
 
+  // A save that fails keeps the walk open on the closing card, with what was
+  // typed, and Done can try again.
   const done = once(() => {
     const name = weekName.trim();
     const line = openLine.trim();
-    onComplete({
+    const saved = onComplete({
       id: walk.id,
       completedAt: new Date().toISOString(),
       windowEndKey: dateKey(walk.startedAt),
@@ -150,6 +157,8 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
       ...(line ? { openLine: line } : {}),
       ...(name ? { weekName: name } : {}),
     });
+    setDoneFailed(!saved);
+    return saved;
   });
 
   const current = phase === 'moment' ? moments[index] : null;
@@ -187,6 +196,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
         onWeekName={setWeekName}
         onBack={() => goToMoment(moments.length - 1)}
         onDone={done}
+        failed={doneFailed}
       />
     );
   }
