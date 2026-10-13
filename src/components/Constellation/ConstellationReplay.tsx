@@ -1,15 +1,24 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { recentWindow } from '../../utils/recentEntries';
-import { SessionDetailCard } from '../DiaryHistory/SessionDetailCard';
+import { SessionDetailCard, type NoteWrites } from '../DiaryHistory/SessionDetailCard';
 import { DrawnConstellation } from './DrawnConstellation';
 import { SkyReplay } from './SkyReplay';
 import { useRevealTuning } from '../../config/revealTuning';
 import type { DiaryEntry } from '../../types';
 
-interface Props {
+interface Props extends NoteWrites {
   entries: DiaryEntry[];
   onDismiss: () => void;
+}
+
+// What the replay draws from each entry: its time, pins and named words. A
+// journal note changes none of these, so saving one from the detail card
+// leaves this key, and therefore the running replay, untouched.
+function replayKey(entries: DiaryEntry[]): string {
+  return entries
+    .map((e) => `${e.id}@${e.timestamp}:${e.pins.map((p) => `${p.id},${p.x},${p.y},${p.recognizedWords.join('|')}`).join(';')}`)
+    .join('/');
 }
 
 const AXIS_LABEL: React.CSSProperties = {
@@ -27,11 +36,18 @@ const AXIS_LABEL: React.CSSProperties = {
 // its detail; dismissing returns to the mirror. With the night-sky field on
 // (skyField), the replay tours the same sky instead (SkyReplay); otherwise it
 // draws on the flat plane (DrawnConstellation).
-export function ConstellationReplay({ entries, onDismiss }: Props) {
+export function ConstellationReplay({ entries, onDismiss, onSetAtTimeNote, onSetLookingBackNote }: Props) {
   // Memoized so its identity is stable across re-renders (e.g. opening a
   // detail card) — the replay timeline keys on this and must not restart.
-  const windowed = useMemo(() => recentWindow(entries), [entries]);
-  const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
+  // Keyed on what the replay draws rather than the array's identity, since
+  // every diary write (a note included) produces a new array.
+  const key = replayKey(entries);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` captures everything recentWindow's output depends on
+  const windowed = useMemo(() => recentWindow(entries), [key]);
+  // Held by id and resolved at render, so a saved note shows at once.
+  const [openEntryId, setOpenEntryId] = useState<string | null>(null);
+  const openEntry = openEntryId === null ? null : entries.find((e) => e.id === openEntryId) ?? null;
+  const openById = (e: DiaryEntry) => setOpenEntryId(e.id);
   const sky = useRevealTuning().skyField;
 
   return (
@@ -57,8 +73,8 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
         style={{ position: 'absolute', inset: 0 }}
       >
         {sky
-          ? <SkyReplay entries={windowed} onPointClick={setOpenEntry} />
-          : <DrawnConstellation entries={windowed} onPointClick={setOpenEntry} />}
+          ? <SkyReplay entries={windowed} onPointClick={openById} />
+          : <DrawnConstellation entries={windowed} onPointClick={openById} />}
       </motion.div>
 
       {/* Header */}
@@ -85,7 +101,12 @@ export function ConstellationReplay({ entries, onDismiss }: Props) {
         </span>
       </div>
 
-      <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
+      <SessionDetailCard
+        entry={openEntry}
+        onDismiss={() => setOpenEntryId(null)}
+        onSetAtTimeNote={onSetAtTimeNote}
+        onSetLookingBackNote={onSetLookingBackNote}
+      />
     </div>
   );
 }

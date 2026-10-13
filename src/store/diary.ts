@@ -1,9 +1,8 @@
-import type { DiaryEntry } from '../types';
+import type { DiaryEntry, JournalNote } from '../types';
 import { updateEntryInList } from '../data/checkIn';
+import { pruneEntries, withEntryNotes } from '../data/journal';
 
 const DIARY_KEY = 'emotion-selector-diary';
-const MAX_ENTRIES = 500;
-const PRUNE_COUNT = 50;
 
 export function readDiary(): DiaryEntry[] {
   try {
@@ -21,13 +20,11 @@ export function readDiary(): DiaryEntry[] {
   }
 }
 
+// At the size cap, the oldest un-noted entries make room (pruneEntries in
+// src/data/journal.ts); a check-in with a journal note is never pruned.
 export function appendEntry(entry: DiaryEntry): void {
-  const entries = readDiary();
-  const next = [...entries, entry];
-  const pruned = entries.length >= MAX_ENTRIES
-    ? next.slice(PRUNE_COUNT)    // remove oldest PRUNE_COUNT, then append
-    : next;
-  localStorage.setItem(DIARY_KEY, JSON.stringify(pruned));
+  const entries = pruneEntries(readDiary());
+  localStorage.setItem(DIARY_KEY, JSON.stringify([...entries, entry]));
 }
 
 // Replace an existing entry in place by id, preserving array order and the
@@ -42,6 +39,22 @@ export function updateEntry(entry: DiaryEntry): void {
     localStorage.setItem(DIARY_KEY, JSON.stringify(next));
   } catch {
     // localStorage unavailable or corrupt — degrade quietly, matching readDiary.
+  }
+}
+
+// Write one entry's journal notes. `update` receives the entry as stored
+// right now, not the caller's React snapshot, so a note saved in another tab
+// since this one last read the diary is built on rather than overwritten.
+// Unlike updateEntry, reports whether the write landed, so the note editor
+// can say so instead of failing silently.
+export function setEntryNotes(entryId: string, update: (entry: DiaryEntry) => JournalNote[]): boolean {
+  try {
+    const next = withEntryNotes(readDiary(), entryId, update);
+    if (!next) return false;
+    localStorage.setItem(DIARY_KEY, JSON.stringify(next));
+    return true;
+  } catch {
+    return false;
   }
 }
 

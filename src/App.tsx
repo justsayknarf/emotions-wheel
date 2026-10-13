@@ -22,12 +22,17 @@ import { nextCue } from './data/groundingCues';
 import { ConstellationReplay } from './components/Constellation/ConstellationReplay';
 import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
+import { withAtTimeNote, withLookingBackNote } from './data/journal';
+import { useReflections } from './hooks/useReflections';
+import { inviteStatus, canLookBack } from './data/reflection';
+import { WeeklyReflection } from './components/Reflection/WeeklyReflection';
+import { QuietAck } from './components/Reflection/QuietAck';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
 import { useViewHistory } from './hooks/useViewHistory';
 import { DefinitionTooltipContext, useDefinitionTooltip } from './hooks/useDefinitionTooltip';
 import { nearestWordId } from './components/EmotionField/definitionPlacement';
 import { VISIBILITY_RADIUS } from './hooks/useProximity';
-import type { AppView, DiaryEntry, PinEntry } from './types';
+import type { AppView, DiaryEntry, PinEntry, Reflection } from './types';
 
 const ONBOARDED_KEY = 'emotion-selector-onboarded';
 
@@ -158,7 +163,40 @@ export default function App() {
   const [axisPulseOn, setAxisPulseOn] = useState(true);
   const [axisPulseNonce] = useState(0);
 
-  const { entries, record, updateEntry } = useDiary();
+  const { entries, record, updateEntry, setNotes } = useDiary();
+  // The weekly reflection (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U4/U5).
+  const { reflections, inviteState, complete: completeReflection, renameWeek, snooze, skipWeek } = useReflections();
+  // How the open walk was reached: only invited walks move the weekly timer
+  // (KTD15), and only they start on the opening card (KTD17).
+  const [reflectionOpened, setReflectionOpened] = useState<Reflection['opened']>('on-demand');
+  // The walk starts on its opening card (Begin / Later / Skip this week) only
+  // from the new-tab link, which has no room for those choices itself.
+  const [reflectionShowsOpening, setReflectionShowsOpening] = useState(false);
+  // One short fading line after a reflection action ("Okay, tomorrow.").
+  const [ack, setAck] = useState<{ id: number; text: string } | null>(null);
+  const say = useCallback((text: string) => setAck((prev) => ({ id: (prev?.id ?? 0) + 1, text })), []);
+  // Derived, never stored (KTD11). `clock` is the "now" it is judged
+  // against: refreshed when the tab regains focus and every few minutes, so
+  // a long-lived tab still sees the week turn over and a Later snooze lapse
+  // at midnight. Memoized because App re-renders on every drag move.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => setClock(Date.now());
+    const onVisible = () => { if (document.visibilityState === 'visible') tick(); };
+    const interval = window.setInterval(tick, 5 * 60 * 1000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', tick);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+  const inviteDue = useMemo(
+    () => inviteStatus(entries, reflections, inviteState, new Date(clock)) === 'due',
+    [entries, reflections, inviteState, clock],
+  );
   const { showHint, hasInteracted, markInteracted } = useOnboarding();
   const sideBySide = useSidePanelLayout();
   // The field's definition tooltip (word-definition-tooltips): tethered
@@ -1043,6 +1081,58 @@ export default function App() {
     setExpandedPinIds(new Set([pinId]));
   }, [entries, pins]);
 
+  // The private journal (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U3): note writes against an already-saved entry, outside
+  // the draft entirely, like handleRecognizeSaved below. Each note is built on
+  // the entry as stored at write time (setEntryNotes), never on this tab's
+  // possibly stale `entries`, so another tab's note isn't overwritten.
+  // Returns whether the write landed, so the editor can say when it didn't.
+  const handleSetAtTimeNote = useCallback(
+    (entryId: string, text: string): boolean =>
+      setNotes(entryId, (stored) => withAtTimeNote(stored, text, new Date(), uuidv4)),
+    [setNotes],
+  );
+
+  const handleSetLookingBackNote = useCallback(
+    (entryId: string, walkId: string, text: string): boolean =>
+      setNotes(entryId, (stored) => withLookingBackNote(stored, walkId, text, new Date(), uuidv4)),
+    [setNotes],
+  );
+
+  const openReflection = useCallback((opened: Reflection['opened'], showOpening = false) => {
+    setReflectionOpened(opened);
+    setReflectionShowsOpening(showOpening);
+    navigateTo('reflection');
+  }, [navigateTo]);
+  // Returns whether the reflection saved; on failure the walk stays open.
+  const handleReflectionComplete = useCallback((reflection: Reflection): boolean => {
+    if (!completeReflection(reflection)) return false;
+    goBack();
+    say('Your week is saved.');
+    return true;
+  }, [completeReflection, goBack, say]);
+  const handleInviteLater = useCallback((fromWalk: boolean) => {
+    snooze();
+    if (fromWalk) goBack();
+    say('Okay, tomorrow.');
+  }, [snooze, goBack, say]);
+  const handleInviteSkipWeek = useCallback((fromWalk: boolean) => {
+    skipWeek();
+    if (fromWalk) goBack();
+    say('Okay, next week.');
+  }, [skipWeek, goBack, say]);
+  const drawerInvite = useMemo(
+    () => inviteDue && entrySource
+      ? {
+          surface: entrySource,
+          onReflect: () => openReflection('invite', entrySource === 'new-tab'),
+          onLater: () => handleInviteLater(false),
+          onSkipWeek: () => handleInviteSkipWeek(false),
+        }
+      : null,
+    [inviteDue, entrySource, openReflection, handleInviteLater, handleInviteSkipWeek],
+  );
+
   // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
   // U3: accepting a suggestion on the confirmation card (SavedCheckInSummary)
   // recognizes a word against a pin that's already saved, outside the
@@ -1348,6 +1438,8 @@ export default function App() {
                 onReopen={handleReopen}
                 justSavedEntryId={justSavedEntryId}
                 onRecognizeSaved={handleRecognizeSaved}
+                onSetAtTimeNote={handleSetAtTimeNote}
+                invite={drawerInvite}
                 onDepart={handleDepart}
                 onDepartureDrag={handleDepartureDrag}
                 onLandingSave={handleLandingSave}
@@ -1459,6 +1551,11 @@ export default function App() {
             <DiaryHistory
               entries={entries}
               onBack={goBack}
+              onLookBack={canLookBack(entries) ? () => openReflection('on-demand') : undefined}
+              reflections={reflections}
+              onRenameWeek={renameWeek}
+              onSetAtTimeNote={handleSetAtTimeNote}
+              onSetLookingBackNote={handleSetLookingBackNote}
             />
           </motion.div>
         )}
@@ -1486,10 +1583,35 @@ export default function App() {
             <ConstellationReplay
               entries={entries}
               onDismiss={goBack}
+              onSetAtTimeNote={handleSetAtTimeNote}
+              onSetLookingBackNote={handleSetLookingBackNote}
+            />
+          </motion.div>
+        )}
+
+        {view === 'reflection' && (
+          <motion.div
+            key="reflection"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, zIndex: 20 }}
+          >
+            <WeeklyReflection
+              entries={entries}
+              opened={reflectionOpened}
+              showOpening={reflectionShowsOpening}
+              onSetLookingBackNote={handleSetLookingBackNote}
+              onComplete={handleReflectionComplete}
+              onLater={() => handleInviteLater(true)}
+              onSkipWeek={() => handleInviteSkipWeek(true)}
+              onClose={goBack}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      <QuietAck ack={ack} />
     </div>
   );
 }

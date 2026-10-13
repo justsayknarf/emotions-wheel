@@ -44,6 +44,12 @@ export function updateEntryInList(entries: DiaryEntry[], updated: DiaryEntry): D
     sessionDurationMs: original.sessionDurationMs,
     source: original.source,
   };
+  // Journal notes are always the stored ones, like `source`: the correction
+  // path builds a fresh entry without them, and handleRecognizeSaved spreads
+  // a possibly stale snapshot. Notes are written only by withEntryNotes
+  // (src/data/journal.ts), so nothing here can drop or resurrect one.
+  if (original.notes !== undefined) next[index].notes = original.notes;
+  else delete next[index].notes;
   return next;
 }
 

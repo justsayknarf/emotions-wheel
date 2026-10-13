@@ -9,13 +9,16 @@ interface Props {
   date: Date;
   sessions: DiaryEntry[];
   onSelect: (date: Date) => void;
+  // A named weekly reflection finished on this day: a small marker so the
+  // week stays findable once it scrolls out of the chart's subtitle.
+  weekName?: string;
 }
 
 // One row per day in the week screen's daily summary list. It is the sole
 // navigation surface into a day (see plan Key Technical Decisions), so it
 // must be keyboard-operable, unlike DiaryEntryRow which is only one of
 // several paths to an entry.
-export function DailySummaryRow({ date, sessions, onSelect }: Props) {
+export function DailySummaryRow({ date, sessions, onSelect, weekName }: Props) {
   const isToday = isSameDay(date, new Date());
   // Zero-pin entries have no sessionAverage -- they don't render a dot and
   // don't count toward the cap, matching DayChart's null-filtering.
@@ -59,6 +62,15 @@ export function DailySummaryRow({ date, sessions, onSelect }: Props) {
           opacity: isEmpty ? 0.5 : 1,
         }}>
           {formatWeekdayAndDate(date)}
+          {weekName && (
+            <span
+              title={`Week named “${weekName}”`}
+              aria-label={`week named ${weekName}`}
+              style={{ color: 'var(--ui-gold-dim)', fontSize: 10, letterSpacing: 0 }}
+            >
+              ✦
+            </span>
+          )}
           {isToday && (
             <span style={{
               fontSize: 8,

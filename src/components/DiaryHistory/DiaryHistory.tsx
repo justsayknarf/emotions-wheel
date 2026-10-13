@@ -7,14 +7,25 @@ import { DailySummaryRow } from './DailySummaryRow';
 import { DayChart } from './DayChart';
 import { WeekChart } from './WeekChart';
 import { MiniCircumplex } from './MiniCircumplex';
-import { SessionDetailCard } from './SessionDetailCard';
+import { SessionDetailCard, type NoteWrites } from './SessionDetailCard';
 import { sessionsForDay, entriesInWindow, hasSpreadCoverage, last7Days, groupByDay, dateKey } from '../../utils/diaryAggregation';
 import { downloadDiaryCsv } from '../../utils/diaryCsv';
-import type { DiaryEntry } from '../../types';
+import { downloadReflectionsCsv } from '../../utils/reflectionsCsv';
+import { latestReflectionIn } from '../../data/reflection';
+import { formatWeekdayAndDate } from '../../utils/formatDate';
+import { NoteEditor } from '../Journal/NoteEditor';
+import { QUIET_BUTTON } from '../Journal/noteStyles';
+import type { DiaryEntry, Reflection } from '../../types';
 
-interface Props {
+interface Props extends NoteWrites {
   entries: DiaryEntry[];
   onBack: () => void;
+  // The weekly reflection (docs/plans/2026-10-09-001-feat-weekly-reflection-
+  // journal-plan.md, U5/U6): "Look back" on demand once there are two
+  // check-ins (R18), and named weeks above the chart (KTD16), renamable there.
+  onLookBack?: () => void;
+  reflections?: Reflection[];
+  onRenameWeek?: (reflectionId: string, name: string) => boolean;
 }
 
 // Shared shape for the two "go back one level" text buttons (outer header,
@@ -41,9 +52,12 @@ function screenMotionProps(offsetX: number) {
   };
 }
 
-export function DiaryHistory({ entries, onBack }: Props) {
+export function DiaryHistory({ entries, onBack, onSetAtTimeNote, onSetLookingBackNote, onLookBack, reflections = [], onRenameWeek }: Props) {
   const [dayDetailFor, setDayDetailFor] = useState<Date | null>(null);
-  const [openEntry, setOpenEntry] = useState<DiaryEntry | null>(null);
+  // Held by id and resolved from `entries` at render, so a note saved in the
+  // open card shows at once instead of the card keeping a pre-edit snapshot.
+  const [openEntryId, setOpenEntryId] = useState<string | null>(null);
+  const openEntry = openEntryId === null ? null : entries.find((e) => e.id === openEntryId) ?? null;
   const swipeCloseRef = useRef<{ x: number; y: number } | null>(null);
 
   // Gated on dayDetailFor: while day-detail is open, this pops back to the
@@ -158,7 +172,13 @@ export function DiaryHistory({ entries, onBack }: Props) {
         <AnimatePresence mode="wait" initial={false}>
           {dayDetailFor === null ? (
             <motion.div key="week" {...screenMotionProps(-12)}>
-              <WeekScreen entries={entries} onSelectDay={setDayDetailFor} />
+              <WeekScreen
+                entries={entries}
+                onSelectDay={setDayDetailFor}
+                onLookBack={onLookBack}
+                reflections={reflections}
+                onRenameWeek={onRenameWeek}
+              />
             </motion.div>
           ) : (
             <motion.div key="day" {...screenMotionProps(12)}>
@@ -169,7 +189,8 @@ export function DiaryHistory({ entries, onBack }: Props) {
                 onNext={() => shiftDate(1)}
                 onBackToWeek={() => setDayDetailFor(null)}
                 onBack={onBack}
-                onOpenEntry={setOpenEntry}
+                onOpenEntry={(e) => setOpenEntryId(e.id)}
+                weekName={latestReflectionIn(reflections, [dayDetailFor])?.weekName}
               />
             </motion.div>
           )}
@@ -182,7 +203,12 @@ export function DiaryHistory({ entries, onBack }: Props) {
           Local state layered on top of whichever content (week screen or day-detail)
           is currently rendered; dismissing it lands back on that same content, no
           new wiring needed. */}
-      <SessionDetailCard entry={openEntry} onDismiss={() => setOpenEntry(null)} />
+      <SessionDetailCard
+        entry={openEntry}
+        onDismiss={() => setOpenEntryId(null)}
+        onSetAtTimeNote={onSetAtTimeNote}
+        onSetLookingBackNote={onSetLookingBackNote}
+      />
     </div>
   );
 }
@@ -192,9 +218,12 @@ export function DiaryHistory({ entries, onBack }: Props) {
 interface WeekScreenProps {
   entries: DiaryEntry[];
   onSelectDay: (date: Date) => void;
+  onLookBack?: () => void;
+  reflections: Reflection[];
+  onRenameWeek?: (reflectionId: string, name: string) => boolean;
 }
 
-function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
+function WeekScreen({ entries, onSelectDay, onLookBack, reflections, onRenameWeek }: WeekScreenProps) {
   const { days, windowEntries, showInvitation, byDay } = useMemo(() => {
     const days = last7Days();
     const windowEntries = entriesInWindow(entries, days);
@@ -208,13 +237,38 @@ function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
     };
   }, [entries]);
 
+  const named = latestReflectionIn(reflections, days);
+
   return (
     <div style={{ padding: '12px 0' }}>
+      {named && (
+        <div style={{ padding: '4px 20px 10px' }}>
+          {onRenameWeek ? (
+            <NoteEditor
+              key={named.id}
+              note={named.weekName ?? ''}
+              onSave={(text) => onRenameWeek(named.id, text)}
+              label="Name this week"
+              addLabel="+ Name this week"
+              caption={`Week ending ${formatWeekdayAndDate(new Date(named.completedAt))}`}
+            />
+          ) : named.weekName ? (
+            <span style={{ fontSize: 13, color: 'var(--ui-text-1)' }}>{named.weekName}</span>
+          ) : null}
+        </div>
+      )}
       <WeekChart entries={windowEntries} />
       {showInvitation && (
         <p style={{ margin: '8px 16px 0', fontSize: 11, color: 'var(--ui-text-3)', fontWeight: 300 }}>
           Patterns get clearer with more check-ins.
         </p>
+      )}
+      {onLookBack && (
+        <div style={{ padding: '6px 20px 0' }}>
+          <button type="button" onClick={onLookBack} style={{ ...QUIET_BUTTON, fontSize: 12, color: 'var(--ui-text-2)' }}>
+            Look back on this week
+          </button>
+        </div>
       )}
       <div style={{ padding: '4px 20px 0' }}>
         {[...days].reverse().map(day => (
@@ -223,9 +277,19 @@ function WeekScreen({ entries, onSelectDay }: WeekScreenProps) {
             date={day}
             sessions={byDay.get(dateKey(day)) ?? []}
             onSelect={onSelectDay}
+            weekName={latestReflectionIn(reflections, [day])?.weekName}
           />
         ))}
       </div>
+      {/* Reflections export as their own file (KTD13); the header's Export
+          CSV carries check-ins and their notes. */}
+      {reflections.length > 0 && (
+        <div style={{ padding: '14px 20px 0' }}>
+          <button type="button" onClick={() => downloadReflectionsCsv(reflections)} style={QUIET_BUTTON}>
+            Export reflections (CSV)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -240,9 +304,11 @@ interface DayDetailProps {
   onBackToWeek: () => void;
   onBack: () => void;
   onOpenEntry: (entry: DiaryEntry) => void;
+  /** A named weekly reflection finished on this day (KTD16). */
+  weekName?: string;
 }
 
-function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpenEntry }: DayDetailProps) {
+function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpenEntry, weekName }: DayDetailProps) {
   const spreadPins = useMemo(() => sessions.flatMap(e => e.pins), [sessions]);
 
   return (
@@ -257,6 +323,11 @@ function DayDetail({ date, sessions, onPrev, onNext, onBackToWeek, onBack, onOpe
       </button>
 
       <DayTabHeader date={date} onPrev={onPrev} onNext={onNext} />
+      {weekName && (
+        <p style={{ margin: '0 20px 8px', fontSize: 11, color: 'var(--ui-text-3)', textAlign: 'center' }}>
+          ✦ You named this week “{weekName}”
+        </p>
+      )}
 
       <DayChart sessions={sessions} onDotTap={onOpenEntry} />
 

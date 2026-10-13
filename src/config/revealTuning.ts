@@ -89,8 +89,8 @@ export interface RevealTuning {
   fieldRecedeDuration: number;
   /**
    * Night-sky field (docs/plans/2026-09-28-001-feat-night-sky-field-plan.md).
-   * Off by default until it has been lived with; ?field=sky / ?field=flat on
-   * any app URL persists a choice (src/main.tsx).
+   * The default field. Settings, or ?field=flat / ?field=sky on any app URL,
+   * persists a choice (src/main.tsx).
    */
   skyField: boolean;
   /** Degrees across the larger stage dimension at rest / with a draft pin. */
@@ -149,7 +149,7 @@ export const DEFAULT_TUNING: RevealTuning = {
   fieldRecedeBlur: 6,
   fieldRecedeDuration: 0.5,
   // Night-sky field — values feel-tested in the 2026-09-28 mock.
-  skyField: false,
+  skyField: true,
   skyFovRest: 84,
   skyFovLean: 64,
   skyPanMaxDeg: 25,
