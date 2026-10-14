@@ -17,7 +17,12 @@ import {
   HOP_MAX_MS,
   MAX_SKY_SPAN_MS,
   PULSE_FLOOR,
+  skyReplayArrived,
+  skyReplayCursor,
+  skyOverview,
+  OVERVIEW_FOV_MAX,
 } from '../src/components/Constellation/skyTour';
+import { skyProjection } from '../src/utils/skyProjection';
 
 let failures = 0;
 function check(name: string, ok: boolean, detail: string) {
@@ -129,6 +134,44 @@ for (const n of [30, 120, 500]) {
   check(`n=${n} tour fits the span`, p.total <= MAX_SKY_SPAN_MS + 1e-6 && p.scale <= 1, `total ${p.total.toFixed(0)}ms, scale ${p.scale.toFixed(3)}`);
   const ordered = stops.every((_, i) => p.land[i] >= p.glideStart[i] && (i === 0 || p.land[i] > p.land[i - 1]));
   check(`n=${n} landings stay in order`, ordered, `last land ${p.land[n - 1].toFixed(0)}ms`);
+}
+
+// The reflection walk follows the tour: arrivals and the week strip's cursor.
+{
+  const p = skyReplayPlan(week, LOOK_MAX);
+  check('nothing has arrived at the start', skyReplayArrived(p, 0) === -1, String(skyReplayArrived(p, 0)));
+  check('the first check-in arrives as its constellation starts to show', skyReplayArrived(p, p.revealAt[0]) === 0, '');
+  check('a landed check-in has not arrived until its reveal', skyReplayArrived(p, p.land[2]) === 1, String(skyReplayArrived(p, p.land[2])));
+  check('the last check-in arrives', skyReplayArrived(p, p.total) === week.length - 1, '');
+  const rest = skyReplayCursor(p, p.revealEnd[1]);
+  check('cursor rests on the check-in in view', rest.from === 1 && rest.to === 1 && rest.along === 1, JSON.stringify(rest));
+  const mid = skyReplayCursor(p, p.glideStart[2] + p.glideMs[2] / 2);
+  check('cursor halfway along a glide, on the camera ease', mid.from === 1 && mid.to === 2 && near(mid.along, 0.5), JSON.stringify(mid));
+  const start = skyReplayCursor(p, 0);
+  check('cursor starts on the first check-in', start.from === 0 && start.to === 0 && start.along === 1, JSON.stringify(start));
+  check('an empty tour has a resting cursor at 0', skyReplayCursor(skyReplayPlan([], LOOK_MAX), 0).to === 0, '');
+}
+
+// The walk's opening view: every check-in of the week in frame.
+{
+  const size = { width: 900, height: 800 };
+  const margin = { x: 40, top: 60, bottom: 90 };
+  // A typical week: spread over the sky, but not to opposite horizons.
+  const pins = [{ x: 0.62, y: -0.48 }, { x: 0.1, y: 0.05 }, { x: -0.55, y: 0.6 }, { x: -0.4, y: -0.35 }, { x: 0.5, y: 0.7 }];
+  const o = skyOverview(pins, LOOK_MAX, 84, size, margin);
+  const proj = skyProjection({ look: o.look, fovDeg: o.fov, width: size.width, height: size.height });
+  const inside = pins.every((p) => { const q = proj.toPx(p); return q.visible && q.x >= margin.x && q.x <= size.width - margin.x && q.y >= margin.top && q.y <= size.height - margin.bottom; });
+  check('the opening view keeps every check-in in frame', inside && o.fov >= 84 && o.fov <= OVERVIEW_FOV_MAX, `fov ${o.fov.toFixed(1)}`);
+  check('the opening view looks at the middle of the week', near(o.look.x, (0.62 + 0.1 - 0.55 - 0.4 + 0.5) / 5) && near(o.look.y, (-0.48 + 0.05 + 0.6 - 0.35 + 0.7) / 5), JSON.stringify(o.look));
+  const tight = skyOverview(pins, LOOK_MAX, 84, size, margin);
+  const narrower = skyProjection({ look: tight.look, fovDeg: Math.max(84, tight.fov - 2), width: size.width, height: size.height });
+  const stillFits = tight.fov > 84 && pins.every((p) => { const q = narrower.toPx(p); return q.visible && q.x >= margin.x && q.x <= size.width - margin.x && q.y >= margin.top && q.y <= size.height - margin.bottom; });
+  check('the opening view is no wider than it needs to be', !stillFits, `fov ${tight.fov.toFixed(1)}`);
+  const one = skyOverview([{ x: 0.3, y: 0.2 }], LOOK_MAX, 84, size, margin);
+  check('a single check-in opens at rest, looking at it', one.fov === 84 && near(one.look.x, 0.3) && near(one.look.y, 0.2), JSON.stringify(one));
+  const spread = skyOverview([{ x: -1, y: -1 }, { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }], LOOK_MAX, 84, size, margin);
+  check('a week too spread out to fit gets the widest view', spread.fov <= OVERVIEW_FOV_MAX, `fov ${spread.fov.toFixed(1)}`);
+  check('no stage yet: rest', skyOverview(pins, LOOK_MAX, 84, { width: 0, height: 0 }, margin).fov === 84, '');
 }
 
 if (failures > 0) {

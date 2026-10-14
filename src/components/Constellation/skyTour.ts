@@ -1,4 +1,5 @@
-import type { FieldCoord } from '../../utils/skyProjection';
+import { skyProjection, type FieldCoord } from '../../utils/skyProjection';
+import type { TourCursor } from '../../data/reflection';
 import { clampLook } from '../../utils/skyCamera';
 import { easeInOut2, easeOut2, segmentDraw, type SegmentDraw } from '../../utils/comet';
 import { TAIL_MS } from './replaySchedule';
@@ -175,4 +176,63 @@ export function skyReplayGlow(plan: SkyReplayPlan, i: number, t: number): number
   if (presence <= 0) return 0;
   const wave = t <= plan.revealEnd[i] ? 1 : 0.5 + 0.5 * Math.cos((2 * Math.PI * (t - plan.revealEnd[i])) / plan.pulseMs);
   return presence * (PULSE_FLOOR + (1 - PULSE_FLOOR) * wave);
+}
+
+/**
+ * The last check-in to have arrived by `t`: its constellation has started to
+ * show (revealAt). -1 before the first. The reflection walk names this one in
+ * its header.
+ */
+export function skyReplayArrived(plan: SkyReplayPlan, t: number): number {
+  let i = -1;
+  while (i + 1 < plan.revealAt.length && t >= plan.revealAt[i + 1]) i++;
+  return i;
+}
+
+/**
+ * Where the tour is at `t`, for the walk's week strip: resting on the check-in
+ * in view, or partway along the glide into it on the camera's own ease.
+ */
+export function skyReplayCursor(plan: SkyReplayPlan, t: number): TourCursor {
+  const i = skyReplayFocus(plan, t);
+  if (i <= 0 || t >= plan.land[i]) return { from: Math.max(0, i), to: Math.max(0, i), along: 1 };
+  const k = Math.max(0, Math.min(1, (t - plan.glideStart[i]) / plan.glideMs[i]));
+  return { from: i - 1, to: i, along: easeInOut2(k) };
+}
+
+/** Widest the walk's opening view of the whole week may go, in degrees. */
+export const OVERVIEW_FOV_MAX = 120;
+
+/**
+ * The reflection walk's opening view of the whole week: the gaze at the
+ * middle of its check-ins, with the narrowest field of view (from `fovMin` up
+ * to OVERVIEW_FOV_MAX) that keeps every one inside the stage, `margin` px in
+ * from its edges. A week too spread out to fit gets the widest view.
+ */
+export function skyOverview(
+  pins: FieldCoord[],
+  lookMax: number,
+  fovMin: number,
+  size: { width: number; height: number },
+  margin: { x: number; top: number; bottom: number },
+): { look: FieldCoord; fov: number } {
+  const n = pins.length;
+  const mid = n === 0 ? { x: 0, y: 0 } : { x: pins.reduce((s, p) => s + p.x, 0) / n, y: pins.reduce((s, p) => s + p.y, 0) / n };
+  const look = clampLook(mid, lookMax);
+  if (n === 0 || size.width <= 0 || size.height <= 0) return { look, fov: fovMin };
+  const fits = (fov: number) => {
+    const proj = skyProjection({ look, fovDeg: fov, width: size.width, height: size.height });
+    return pins.every((p) => {
+      const q = proj.toPx(p);
+      return q.visible && q.x >= margin.x && q.x <= size.width - margin.x && q.y >= margin.top && q.y <= size.height - margin.bottom;
+    });
+  };
+  if (fits(fovMin)) return { look, fov: fovMin };
+  if (!fits(OVERVIEW_FOV_MAX)) return { look, fov: OVERVIEW_FOV_MAX };
+  let lo = fovMin, hi = OVERVIEW_FOV_MAX;
+  for (let k = 0; k < 14; k++) {
+    const m = (lo + hi) / 2;
+    if (fits(m)) hi = m; else lo = m;
+  }
+  return { look, fov: hi };
 }

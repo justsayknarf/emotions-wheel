@@ -26,7 +26,8 @@ const HEADING: CSSProperties = {
   outline: 'none',
 };
 
-// 44px tall, quiet: a filled primary and a text secondary.
+// 44px tall, quiet: a filled primary and a text secondary. The primary has a
+// floor on its width, so Skip, Next and Done are the same size.
 function WalkButton({ children, onClick, primary = false }: { children: ReactNode; onClick: () => void; primary?: boolean }) {
   return (
     <button
@@ -34,6 +35,7 @@ function WalkButton({ children, onClick, primary = false }: { children: ReactNod
       onClick={onClick}
       style={{
         minHeight: 44,
+        minWidth: primary ? 88 : undefined,
         padding: '0 18px',
         borderRadius: 10,
         border: primary ? '1px solid rgb(var(--ui-gold-rgb) / 0.45)' : '1px solid transparent',
@@ -52,6 +54,27 @@ function WalkButton({ children, onClick, primary = false }: { children: ReactNod
 
 function Actions({ children }: { children: ReactNode }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>{children}</div>;
+}
+
+// A moment or closing card fills the card panel, so its StepActions can sit
+// at the panel's foot.
+const STEP_CARD: CSSProperties = { display: 'flex', flexDirection: 'column', flex: '1 0 auto' };
+
+// The walk's step row: a quieter action on the left when there is one, the
+// forward action pinned to the right, and the row pinned to the foot of the
+// card panel. Next / Skip / Done never move from card to card, however long
+// a prompt runs and whether or not the left action is showing.
+function StepRow({ left, children }: { left: ReactNode; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 'auto', paddingTop: 18 }}>
+      {left ?? <span aria-hidden="true" />}
+      {children}
+    </div>
+  );
+}
+
+function StepActions({ onBack, children }: { onBack: (() => void) | null; children: ReactNode }) {
+  return <StepRow left={onBack ? <WalkButton onClick={onBack}>Back</WalkButton> : null}>{children}</StepRow>;
 }
 
 // Move focus to the card's heading whenever `focusKey` changes, so keyboard
@@ -85,24 +108,35 @@ export function OpeningCard({ onBegin, onLater, onSkipWeek }: { onBegin: () => v
   );
 }
 
-export function ReplayingCard({ onSkip }: { onSkip: () => void }) {
+export function ReplayingCard({ stop, total, hint, onNext, onSkip }: {
+  /** The check-in in view, or -1 before the first arrives. */
+  stop: number;
+  total: number;
+  hint: string;
+  onNext: () => void;
+  onSkip: () => void;
+}) {
+  const heading = useHeadingFocus('replaying');
   return (
-    <div style={{ animation: 'reflection-hint-in 0.6s ease 1s both' }}>
-      <button
-        type="button"
-        onClick={onSkip}
-        style={{
-          minHeight: 44,
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          fontSize: 12,
-          color: 'var(--ui-text-3)',
-          cursor: 'pointer',
-        }}
+    <div style={STEP_CARD}>
+      <span style={CAPTION} aria-live="polite">{stop >= 0 ? `Your week · ${stop + 1} of ${total}` : 'Your week'}</span>
+      <h2 ref={heading} tabIndex={-1} style={HEADING}>
+        Step through your week, or let it play.
+      </h2>
+      <p style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ui-text-3)' }}>{hint}</p>
+      <StepRow
+        left={
+          <button
+            type="button"
+            onClick={onSkip}
+            style={{ minHeight: 44, background: 'none', border: 'none', padding: 0, fontSize: 12, color: 'var(--ui-text-3)', cursor: 'pointer' }}
+          >
+            Skip to the moments
+          </button>
+        }
       >
-        Tap the sky to skip ahead
-      </button>
+        <WalkButton primary onClick={onNext}>Next</WalkButton>
+      </StepRow>
     </div>
   );
 }
@@ -123,7 +157,7 @@ interface MomentProps {
 export function MomentCard({ index, total, when, prompt, thenNote, draft, onDraft, onBack, onForward, failed }: MomentProps) {
   const heading = useHeadingFocus(index);
   return (
-    <div>
+    <div style={STEP_CARD}>
       <span style={CAPTION}>{`${index + 1} of ${total}`}</span>
       <h2 ref={heading} tabIndex={-1} style={{ ...HEADING, fontSize: 13, fontFamily: 'inherit', color: 'var(--ui-text-2)', letterSpacing: '0.02em' }}>
         {when}
@@ -153,10 +187,9 @@ export function MomentCard({ index, total, when, prompt, thenNote, draft, onDraf
         </p>
       )}
 
-      <Actions>
-        {onBack && <WalkButton onClick={onBack}>Back</WalkButton>}
+      <StepActions onBack={onBack}>
         <WalkButton primary onClick={onForward}>{draft.trim() ? 'Next' : 'Skip'}</WalkButton>
-      </Actions>
+      </StepActions>
     </div>
   );
 }
@@ -175,7 +208,7 @@ interface ClosingProps {
 export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack, onDone, failed }: ClosingProps) {
   const heading = useHeadingFocus('closing');
   return (
-    <div>
+    <div style={STEP_CARD}>
       <span style={CAPTION}>The whole week</span>
       <h2 ref={heading} tabIndex={-1} style={HEADING}>
         Anything you noticed?
@@ -183,8 +216,10 @@ export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack
       <div style={{ marginTop: 14 }}>
         <NoteField value={openLine} onChange={onOpenLine} label="What stood out" placeholder="Optional." />
       </div>
-      <label style={{ ...CAPTION, marginTop: 16, marginBottom: 6 }} htmlFor="reflection-week-name">
-        Name this week
+      {/* A question of its own, as large as "Anything you noticed?": a small
+          caption read as a label and left people unsure what the field was for. */}
+      <label style={{ ...HEADING, display: 'block', margin: '26px 0 10px' }} htmlFor="reflection-week-name">
+        What would you call this week?
       </label>
       <input
         id="reflection-week-name"
@@ -210,10 +245,9 @@ export function ClosingCard({ openLine, onOpenLine, weekName, onWeekName, onBack
           Couldn't save this week.
         </p>
       )}
-      <Actions>
-        {onBack && <WalkButton onClick={onBack}>Back</WalkButton>}
+      <StepActions onBack={onBack}>
         <WalkButton primary onClick={onDone}>Done</WalkButton>
-      </Actions>
+      </StepActions>
     </div>
   );
 }

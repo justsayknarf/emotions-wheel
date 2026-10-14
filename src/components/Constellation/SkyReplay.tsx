@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { createTimeline } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
@@ -6,18 +6,19 @@ import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { themeRgba, type ThemeChannel } from '../../config/themeColor';
 import { emotions } from '../../data/emotions';
 import { skyProjection, type FieldCoord, type FieldProjection } from '../../utils/skyProjection';
-import { easeOut2, easeOut3 } from '../../utils/comet';
+import { easeInOut2, easeOut2, easeOut3 } from '../../utils/comet';
 import { SkyBackdrop, type SkyDeparture, type SkyStar } from '../EmotionField/SkyBackdrop';
 import { SkyAurora, type SkyAuroraInputs } from '../EmotionField/SkyAurora';
 import { canUseWebGL } from '../EmotionField/skyShader';
 import { arcPath, blurrer, drawHead, pathEnds, pointAt, streakGradient, strokeRange, type Px, type Rgba } from '../EmotionField/skyCanvas';
 import { VISUALLY_HIDDEN } from '../visuallyHidden';
 import { replayDayLabels, STAR_MS, LABEL_DELAY_MS, LABEL_MS, RING_DELAY_MS, RING_MS } from './replaySchedule';
-import { skyReplayPlan, skyReplayFocus, skyReplayLook, skyReplayGlow, skyReplayPresence, chainDraw, type SkyReplayPlan } from './skyTour';
+import { skyReplayPlan, skyReplayFocus, skyReplayLook, skyReplayGlow, skyReplayPresence, skyReplayArrived, skyReplayCursor, skyOverview, chainDraw, hopMs, type SkyReplayPlan } from './skyTour';
 import { QUIET_LINE_OPACITY, QUIET_LINE_WIDTH, STREAK_CORE_WIDTH, STREAK_GLOW_OPACITY, STREAK_GLOW_WIDTH } from './cometStyle';
 import { ReplayControls } from './ReplayControls';
 import { useReplayScrub } from './useReplayScrub';
 import type { DiaryEntry } from '../../types';
+import type { TourCursor } from '../../data/reflection';
 
 interface Props {
   entries: DiaryEntry[];    // recent window, chronological (oldest first)
@@ -35,10 +36,39 @@ interface Props {
   onReplayEnd?: () => void;
   /** Flipping to true jumps the tour to its end (tap to skip). */
   jumpToEnd?: boolean;
+  // The walk's replay screen (title, header, week strip, Next) adds these.
+  /** Wait this long before the tour starts: the walk's title card. */
+  startDelayMs?: number;
+  /**
+   * Open on the whole week: faint, joined by a dotted path, with the gaze
+   * wide enough to take in every check-in until the tour glides in.
+   */
+  preview?: boolean;
+  /** The small day label beside each check-in. The walk names the day in its header instead. */
+  showDayLabels?: boolean;
+  /** Move to this check-in now (Next, or the week strip); a new object asks again. */
+  goTo?: { stop: number } | null;
+  /** A check-in's index as it arrives on the tour (its constellation starts to show). */
+  onStop?: (stop: number) => void;
+  /** Where the tour is between check-ins, written every frame for the week strip. */
+  cursor?: RefObject<TourCursor | null>;
 }
 
 // How long the gaze takes to glide to a newly highlighted check-in.
 const HIGHLIGHT_GLIDE_MS = 900;
+// The walk's Next: the gaze flies to the next check-in at this share of the
+// tour's own glide, kept between these bounds, so stepping feels quick.
+const FLIGHT_SHARE = 0.35;
+const FLIGHT_MIN_MS = 280;
+const FLIGHT_MAX_MS = 700;
+// The faint whole week the walk opens on.
+const PREVIEW_LINE_ALPHA = 0.4;
+const PREVIEW_PIN_ALPHA = 0.55;
+const PREVIEW_RING_R = 6;
+// The opening view keeps every check-in this far in from the stage's edges
+// (the bottom clears the walk's week strip), and glides in to the first over this long.
+const OVERVIEW_MARGIN = { x: 40, top: 64, bottom: 96 };
+const OPENING_GLIDE_MS = 1100;
 
 // Pause before the tour starts, so the overlay's own fade-in settles first.
 const START_DELAY_MS = 400;
@@ -86,12 +116,26 @@ export function SkyReplay({
   showControls = true,
   onReplayEnd,
   jumpToEnd = false,
+  startDelayMs = START_DELAY_MS,
+  preview = false,
+  showDayLabels = true,
+  goTo = null,
+  onStop,
+  cursor,
 }: Props) {
-  // Read through a ref so a new callback identity never rebuilds the timeline.
+  // Read through refs so a new callback identity never rebuilds the timeline.
   const onReplayEndRef = useRef(onReplayEnd);
+  const onStopRef = useRef(onStop);
+  const cursorRef = useRef(cursor);
+  const startDelayRef = useRef(startDelayMs);
   useEffect(() => {
     onReplayEndRef.current = onReplayEnd;
-  }, [onReplayEnd]);
+    onStopRef.current = onStop;
+    cursorRef.current = cursor;
+    startDelayRef.current = startDelayMs;
+  }, [onReplayEnd, onStop, cursor, startDelayMs]);
+  // The last check-in to arrive, so onStop fires once per arrival.
+  const arrivedRef = useRef(-1);
   const tuning = useRevealTuning();
   const params = useMemo(() => cameraParamsFrom(tuning), [tuning]);
   const reducedMotion = !!useReducedMotion();
@@ -125,6 +169,12 @@ export function SkyReplay({
   const [playing, setPlaying] = useState(false);
   const { scrubRef, ended, syncScrub } = useReplayScrub();
 
+  // The walk opens on the whole week (see `overview`); the timeline's start
+  // delay ending sets `begun`, and the gaze glides in before the tour plays.
+  const [opening, setOpening] = useState(() => preview && !reducedMotion);
+  const [begun, setBegun] = useState(false);
+  const holdForOpening = useRef(opening);
+
   const { root, scope } = useAnimeScope<HTMLDivElement>(
     (self, reduced) => {
       if (plan.total === 0) return;
@@ -135,11 +185,23 @@ export function SkyReplay({
         endFired = true;
         onReplayEndRef.current?.();
       };
+      // The walk follows the tour: which check-in has arrived, and where the
+      // gaze is between two of them.
+      const track = (at: number) => {
+        const arrived = skyReplayArrived(plan, at);
+        if (arrived !== arrivedRef.current) {
+          arrivedRef.current = arrived;
+          if (arrived >= 0) onStopRef.current?.(arrived);
+        }
+        const c = cursorRef.current;
+        if (c) c.current = skyReplayCursor(plan, at);
+      };
       const tl = createTimeline({
         autoplay: false,
         onUpdate: (tm) => {
           syncScrub(tm.progress);
           setT(tm.progress * plan.total);
+          track(tm.progress * plan.total);
         },
         onPause: () => setPlaying(false),
         onComplete: () => {
@@ -177,6 +239,17 @@ export function SkyReplay({
         tl.pause();
         tl.seek(progress * tl.duration);
       });
+      // The walk's Next: hold the tour while the gaze flies, then play on.
+      self.add('pause', () => {
+        window.clearTimeout(start.timer);
+        tl.pause();
+      });
+      self.add('playFrom', (ms: number) => {
+        window.clearTimeout(start.timer);
+        tl.seek(Math.min(ms, tl.duration));
+        tl.play();
+        setPlaying(true);
+      });
 
       if (reduced) {
         toEnd();
@@ -185,9 +258,14 @@ export function SkyReplay({
       }
       tl.seek(0);
       start.timer = window.setTimeout(() => {
+        // Opening on the whole week, the glide in comes first (see `begun`).
+        if (holdForOpening.current) {
+          setBegun(true);
+          return;
+        }
         tl.play();
         setPlaying(true);
-      }, START_DELAY_MS);
+      }, startDelayRef.current);
       return () => window.clearTimeout(start.timer);
     },
     [plan],
@@ -228,13 +306,93 @@ export function SkyReplay({
     return () => cancelAnimationFrame(raf);
   }, [hi, plan, reducedMotion]);
 
-  const look = hi >= 0 && heldLook ? heldLook : skyReplayLook(plan, t);
+  // The walk's camera moves that the tour's playhead doesn't cover: the
+  // opening view of the whole week, the glide from it into the tour, and
+  // Next's quick flights. While one runs it overrides the tour's camera.
+  const [move, setMove] = useState<{ look: FieldCoord; fov: number } | null>(null);
+  const shownFov = useRef(params.fovRest);
+  const moveRaf = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(moveRaf.current), []);
+  const glide = useCallback(
+    (to: { look: FieldCoord; fov: number }, ms: number, onFrame: (k: number) => void, done: () => void) => {
+      cancelAnimationFrame(moveRaf.current);
+      const from = { look: shownLook.current, fov: shownFov.current };
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const k = ms <= 0 ? 1 : Math.min(1, (now - t0) / ms);
+        const e = easeInOut2(k);
+        onFrame(e);
+        if (k < 1) {
+          setMove({
+            look: { x: from.look.x + (to.look.x - from.look.x) * e, y: from.look.y + (to.look.y - from.look.y) * e },
+            fov: from.fov + (to.fov - from.fov) * e,
+          });
+          moveRaf.current = requestAnimationFrame(step);
+        } else {
+          setMove(null);
+          done();
+        }
+      };
+      moveRaf.current = requestAnimationFrame(step);
+    },
+    [],
+  );
+
+  // The walk opens on the whole week: while its title shows, the gaze takes
+  // in every check-in, then glides in to the first as the tour begins.
+  const overview = useMemo(
+    () => (preview && points.length > 1 ? skyOverview(points.map((p) => p.pin), params.lookMax, params.fovRest, size, OVERVIEW_MARGIN) : null),
+    [preview, points, params.lookMax, params.fovRest, size],
+  );
+  // Glide in once, whatever else changes afterwards.
+  const glidedIn = useRef(false);
+  useEffect(() => {
+    if (!begun || glidedIn.current) return;
+    glidedIn.current = true;
+    if (!opening || !overview || plan.looks.length === 0) {
+      scope.current?.methods.playFrom(0);
+      return;
+    }
+    glide({ look: plan.looks[0], fov: params.fovRest }, OPENING_GLIDE_MS, () => {}, () => {
+      setOpening(false);
+      scope.current?.methods.playFrom(0);
+    });
+  }, [begun, opening, overview, plan, glide, scope, params.fovRest]);
+
+  // The walk's Next (or a tap on its week strip): the gaze flies to that
+  // check-in at a quick pace, then the tour plays on from its arrival.
+  useEffect(() => {
+    if (!goTo || plan.total === 0) return;
+    const i = Math.max(0, Math.min(goTo.stop, plan.looks.length - 1));
+    scope.current?.methods.pause();
+    const fromStop = Math.max(0, arrivedRef.current);
+    const to = plan.looks[i];
+    const dur = reducedMotion ? 0 : Math.max(FLIGHT_MIN_MS, Math.min(FLIGHT_MAX_MS, hopMs(shownLook.current, to) * FLIGHT_SHARE));
+    glide(
+      { look: to, fov: params.fovRest },
+      dur,
+      (e) => {
+        const c = cursorRef.current;
+        if (c) c.current = { from: fromStop, to: i, along: e };
+      },
+      () => {
+        setOpening(false);
+        scope.current?.methods.playFrom(plan.revealAt[i]);
+      },
+    );
+  }, [goTo, plan, reducedMotion, scope, glide, params.fovRest]);
+
+  const resting = opening && !begun && overview ? overview : null;
+  const held = hi >= 0 && heldLook !== null;
+  const look = held ? heldLook : move?.look ?? resting?.look ?? skyReplayLook(plan, t);
+  const fov = held ? params.fovRest : move?.fov ?? resting?.fov ?? params.fovRest;
   useLayoutEffect(() => {
     shownLook.current = look;
+    shownFov.current = fov;
   });
   const proj = useMemo(
-    () => skyProjection({ look: { x: look.x, y: look.y }, fovDeg: params.fovRest, width: size.width, height: size.height }),
-    [look.x, look.y, params.fovRest, size.width, size.height],
+    () => skyProjection({ look: { x: look.x, y: look.y }, fovDeg: fov, width: size.width, height: size.height }),
+    [look.x, look.y, fov, size.width, size.height],
   );
 
   // The WebGL sky beneath, as the field draws it; without WebGL the 2D
@@ -278,8 +436,8 @@ export function SkyReplay({
     const base: Partial<Record<ThemeChannel, string>> = {};
     const rgba: Rgba = (ch, a) => `${(base[ch] ??= themeRgba(ch, 1).slice(0, -2))}${a})`;
     const font = getComputedStyle(cv).fontFamily;
-    drawTour(ctx, { proj, plan, points, dayLabels, t, hi, rgba, blur: blurrer(ctx, dpr, rgba), font });
-  }, [proj, plan, points, dayLabels, t, hi, size]);
+    drawTour(ctx, { proj, plan, points, dayLabels: showDayLabels ? dayLabels : [], t, hi, preview, rgba, blur: blurrer(ctx, dpr, rgba), font });
+  }, [proj, plan, points, dayLabels, showDayLabels, t, hi, preview, size]);
 
   // Tapping near a landed check-in opens it.
   const hitAt = (e: React.PointerEvent | React.MouseEvent): DiaryEntry | null => {
@@ -356,13 +514,36 @@ function drawTour(
     t: number;
     /** The walk's held check-in, drawn lit with a gold ring; -1 for none. */
     hi: number;
+    /** The whole week drawn faintly beneath the tour. */
+    preview: boolean;
     rgba: Rgba;
     blur: (fn: () => void) => void;
     font: string;
   },
 ) {
-  const { proj, plan, points, dayLabels, t, hi, rgba, blur, font } = o;
+  const { proj, plan, points, dayLabels, t, hi, preview, rgba, blur, font } = o;
   const last = points.length - 1;
+
+  // The walk opens on the whole week, faint: every check-in and a dotted path
+  // through them in time order, so each star that lights belongs to a shape
+  // already in view.
+  if (preview) {
+    ctx.setLineDash([2, 6]);
+    for (let i = 1; i < points.length; i++) {
+      strokeRange(ctx, arcPath(proj, points[i - 1].pin, points[i].pin), 0, 1, rgba('recorded', PREVIEW_LINE_ALPHA), 1);
+    }
+    ctx.setLineDash([]);
+    // A small ring marks each one as a check-in, not one more star.
+    for (const p of points) {
+      const q = proj.toPx(p.pin);
+      if (!q.visible) continue;
+      ctx.fillStyle = rgba('recorded', PREVIEW_PIN_ALPHA);
+      ctx.beginPath(); ctx.arc(q.x, q.y, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = rgba('recorded', PREVIEW_PIN_ALPHA * 0.8);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(q.x, q.y, PREVIEW_RING_R, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
 
   // The chain between check-ins: the replay's comet rides each hop in with
   // the gaze, leaving the quiet line behind.

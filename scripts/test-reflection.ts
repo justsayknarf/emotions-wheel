@@ -13,6 +13,10 @@ import {
   momentPoint,
   latestReflectionIn,
   withWeekName,
+  weekRangeLabel,
+  stopHeading,
+  weekFraction,
+  stripPlayhead,
 } from '../src/data/reflection';
 import { PROMPT_TEMPLATES, momentPrompt, positionPhrase, dayPhrase } from '../src/data/reflectionPrompts';
 import type { DiaryEntry, PinEntry, Reflection } from '../src/types';
@@ -212,6 +216,32 @@ check('position: just inside the band is the middle', positionPhrase(0.19, 0.19)
     JSON.stringify(latestReflectionIn(cleared, days)),
   );
   check('rename trims and replaces', withWeekName([newer], 'newer', '  the turning one ')[0].weekName === 'the turning one', '');
+}
+
+// --- the walk's replay: title, header, week strip ---
+{
+  check('title range within one month', weekRangeLabel(NOW) === 'Oct 3 – 9', weekRangeLabel(NOW));
+  const early = new Date(2026, 9, 3, 12);
+  check('title range across two months', weekRangeLabel(early) === 'Sep 27 – Oct 3', weekRangeLabel(early));
+
+  const today = stopHeading(daysAgo(0, 8).toISOString(), NOW);
+  check('header names today', today.day === 'Today' && today.detail === '8:00 AM · Oct 9', JSON.stringify(today));
+  check('header names yesterday', stopHeading(daysAgo(1, 20).toISOString(), NOW).day === 'Yesterday', stopHeading(daysAgo(1, 20).toISOString(), NOW).day);
+  const sat = stopHeading(new Date(2026, 9, 3, 19, 0).toISOString(), NOW);
+  check('header names an earlier day by weekday, with time and date', sat.day === 'Saturday' && sat.detail === '7:00 PM · Oct 3', JSON.stringify(sat));
+
+  const startOfWindow = new Date(2026, 9, 3, 0, 0).toISOString();
+  check('strip: the window opens at 0', weekFraction(startOfWindow, NOW) === 0, String(weekFraction(startOfWindow, NOW)));
+  const midWeek = weekFraction(new Date(2026, 9, 6, 12, 0).toISOString(), NOW);
+  check('strip: noon on the fourth day sits at 3.5 / 7', Math.abs(midWeek - 3.5 / 7) < 1e-9, String(midWeek));
+  check('strip: before the window clamps to 0', weekFraction(daysAgo(9).toISOString(), NOW) === 0, '');
+  check('strip: a check-in later today stays below 1', weekFraction(daysAgo(0, 23).toISOString(), NOW) < 1, '');
+
+  const fr = [0.1, 0.4, 0.9];
+  check('playhead rests on a check-in', stripPlayhead(fr, { from: 1, to: 1, along: 1 }) === 0.4, '');
+  check('playhead halfway along a glide', Math.abs(stripPlayhead(fr, { from: 1, to: 2, along: 0.5 }) - 0.65) < 1e-9, String(stripPlayhead(fr, { from: 1, to: 2, along: 0.5 })));
+  check('playhead jumping back runs backwards', Math.abs(stripPlayhead(fr, { from: 2, to: 0, along: 0.25 }) - 0.7) < 1e-9, String(stripPlayhead(fr, { from: 2, to: 0, along: 0.25 })));
+  check('playhead with no check-ins is 0', stripPlayhead([], { from: 0, to: 0, along: 1 }) === 0, '');
 }
 
 if (failures > 0) {
