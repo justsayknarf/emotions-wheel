@@ -500,9 +500,13 @@ export function SkyReplay({
   }, [begun, opening, overview, frames, glide, scope]);
 
   // The walk's Next (or a tap on its week strip): the gaze flies to that
-  // check-in at a quick pace, then the tour plays on from its arrival.
+  // check-in at a quick pace, then the tour plays on from its arrival. Each
+  // request flies once: a re-framing (a resize) must not replay it, least of
+  // all after Skip, when it would restart the tour under the moments.
+  const flownTo = useRef<{ stop: number } | null>(null);
   useEffect(() => {
-    if (!goTo || plan.total === 0) return;
+    if (!goTo || goTo === flownTo.current || plan.total === 0) return;
+    flownTo.current = goTo;
     const i = Math.max(0, Math.min(goTo.stop, frames.length - 1));
     const to = frames[i];
     if (!to) return;
