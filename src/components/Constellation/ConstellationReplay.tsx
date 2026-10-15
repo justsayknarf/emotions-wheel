@@ -7,6 +7,8 @@ import { SkyReplay } from './SkyReplay';
 import { useRevealTuning } from '../../config/revealTuning';
 import type { DiaryEntry } from '../../types';
 
+const REPLAY_INSET = { top: 64, bottom: 80 };
+
 interface Props extends NoteWrites {
   entries: DiaryEntry[];
   onDismiss: () => void;
@@ -73,7 +75,9 @@ export function ConstellationReplay({ entries, onDismiss, onSetAtTimeNote, onSet
         style={{ position: 'absolute', inset: 0 }}
       >
         {sky
-          ? <SkyReplay entries={windowed} onPointClick={openById} />
+          // Each check-in is framed clear of the Back button above and the
+          // scrubber below.
+          ? <SkyReplay entries={windowed} onPointClick={openById} frameInset={REPLAY_INSET} />
           : <DrawnConstellation entries={windowed} onPointClick={openById} />}
       </motion.div>
 

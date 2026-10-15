@@ -37,11 +37,12 @@ interface Props {
   onClose: () => void;
 }
 
-// The replay opens on a title over the whole week, faint, for this long. The
-// tour starts a little before it ends, so the gaze glides in to the first
-// check-in as the title fades.
+// The replay opens on a title over the whole week, faint, for this long,
+// each check-in pulsing once with its day label. The tour starts once the
+// pulses are done, a little before the title ends, so the gaze glides in to
+// the first check-in as the title fades.
 const TITLE_MS = 1800;
-const OPENING_HOLD_MS = 1300;
+const OPENING_HOLD_MS = 1500;
 
 // Text over the sky stays readable against the aurora and the stars.
 const SKY_TEXT_SHADOW = '0 2px 14px rgb(var(--ui-bg-rgb) / 0.95)';
@@ -313,6 +314,8 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
             startDelayMs: titleOn ? OPENING_HOLD_MS : undefined,
             preview: true,
             showDayLabels: false,
+            // Frame each check-in clear of the header above and, on desktop, the week strip below.
+            frameInset: { top: 76, bottom: sideBySide ? 92 : 16 },
             goTo,
             onStop,
             cursor: tourCursor,

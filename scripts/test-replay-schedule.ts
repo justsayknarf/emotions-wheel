@@ -15,6 +15,10 @@ import {
   LABEL_DELAY_MS,
   replayArrived,
   replayCursor,
+  previewPulseAt,
+  PREVIEW_PULSE_DELAY_MS,
+  PREVIEW_PULSE_STAGGER_MS,
+  PREVIEW_PULSE_SPREAD_MS,
 } from '../src/components/Constellation/replaySchedule';
 
 let failures = 0;
@@ -76,6 +80,16 @@ for (const n of [15, 40, 200, 500]) {
   check('cursor rests on the star that arrived', rest.from === 1 && rest.to === 1 && rest.along === 1, JSON.stringify(rest));
   const one = replayCursor(replaySchedule(1), 1, 0);
   check('a single star rests at 0', one.from === 0 && one.to === 0, JSON.stringify(one));
+}
+
+// The walk's week view: one pulse per check-in, in time order, never spread too long.
+{
+  check('the first pulse waits only the opening delay', previewPulseAt(0, 8) === PREVIEW_PULSE_DELAY_MS, String(previewPulseAt(0, 8)));
+  check('a short week pulses at the full stagger', previewPulseAt(2, 3) === PREVIEW_PULSE_DELAY_MS + 2 * PREVIEW_PULSE_STAGGER_MS, String(previewPulseAt(2, 3)));
+  const spread = previewPulseAt(19, 20) - previewPulseAt(0, 20);
+  check('a long week compresses its pulses into the spread', Math.abs(spread - PREVIEW_PULSE_SPREAD_MS) < 1e-9, `${spread.toFixed(1)}ms`);
+  check('pulses run in time order', [0, 1, 2, 3].every((i) => previewPulseAt(i + 1, 5) > previewPulseAt(i, 5)), '');
+  check('a single check-in pulses after the delay', previewPulseAt(0, 1) === PREVIEW_PULSE_DELAY_MS, '');
 }
 
 if (failures > 0) {

@@ -99,3 +99,17 @@ export function replayCursor(s: ReplaySchedule, count: number, time: number): To
   }
   return { from: at, to: at, along: 1 };
 }
+
+// The reflection walk's week view: each check-in pulses once, in time order,
+// with its day label arriving alongside. The pulses spread over at most
+// PREVIEW_PULSE_SPREAD_MS however many check-ins there are.
+export const PREVIEW_PULSE_DELAY_MS = 200;
+export const PREVIEW_PULSE_STAGGER_MS = 110;
+export const PREVIEW_PULSE_SPREAD_MS = 500;
+export const PREVIEW_PULSE_MS = 800;
+
+/** When check-in i of n starts its week-view pulse, ms after the view opens. */
+export function previewPulseAt(i: number, count: number): number {
+  const stagger = count > 1 ? Math.min(PREVIEW_PULSE_STAGGER_MS, PREVIEW_PULSE_SPREAD_MS / (count - 1)) : 0;
+  return PREVIEW_PULSE_DELAY_MS + i * stagger;
+}

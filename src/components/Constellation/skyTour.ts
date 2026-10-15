@@ -200,39 +200,103 @@ export function skyReplayCursor(plan: SkyReplayPlan, t: number): TourCursor {
   return { from: i - 1, to: i, along: easeInOut2(k) };
 }
 
+/** A camera framing: where the gaze rests and how wide it sees, in degrees. */
+export interface CameraFrame {
+  look: FieldCoord;
+  fov: number;
+}
+
+/** The stage a framing is for, and how much of its top and bottom overlays cover. */
+export interface FrameStage {
+  width: number;
+  height: number;
+  top: number;
+  bottom: number;
+}
+
+/** The band of the stage the gaze centres on: the stage less its covered top and bottom. */
+export function frameBand(stage: FrameStage): { top: number; height: number } {
+  return { top: stage.top, height: Math.max(1, stage.height - stage.top - stage.bottom) };
+}
+
 /** Widest the walk's opening view of the whole week may go, in degrees. */
 export const OVERVIEW_FOV_MAX = 120;
 
 /**
- * The reflection walk's opening view of the whole week: the gaze at the
- * middle of its check-ins, with the narrowest field of view (from `fovMin` up
- * to OVERVIEW_FOV_MAX) that keeps every one inside the stage, `margin` px in
- * from its edges. A week too spread out to fit gets the widest view.
+ * A view that frames `points`: the middle of their on-screen extent centred
+ * in the stage's band, and the narrowest field of view in `fov.min..max` at
+ * which that extent fills no more than `fill` of the band's width and height.
+ * One point (a check-in without tags) rests on it at `fov.single`. Used for
+ * each check-in's constellation (its pin and tagged words) and for the walk's
+ * opening view of the whole week.
  */
-export function skyOverview(
-  pins: FieldCoord[],
+export function frameConstellation(
+  points: FieldCoord[],
   lookMax: number,
-  fovMin: number,
-  size: { width: number; height: number },
-  margin: { x: number; top: number; bottom: number },
-): { look: FieldCoord; fov: number } {
-  const n = pins.length;
-  const mid = n === 0 ? { x: 0, y: 0 } : { x: pins.reduce((s, p) => s + p.x, 0) / n, y: pins.reduce((s, p) => s + p.y, 0) / n };
-  const look = clampLook(mid, lookMax);
-  if (n === 0 || size.width <= 0 || size.height <= 0) return { look, fov: fovMin };
-  const fits = (fov: number) => {
-    const proj = skyProjection({ look, fovDeg: fov, width: size.width, height: size.height });
-    return pins.every((p) => {
+  fov: { min: number; max: number; single: number },
+  stage: FrameStage,
+  fill: number,
+): CameraFrame {
+  const n = points.length;
+  if (n === 0) return { look: { x: 0, y: 0 }, fov: fov.single };
+  const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
+  let look = clampLook({ x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 }, lookMax);
+  if (n === 1 || stage.width <= 0 || stage.height <= 0) return { look, fov: fov.single };
+
+  const band = frameBand(stage);
+  const box = (lk: FieldCoord, f: number) => {
+    const proj = skyProjection({ look: lk, fovDeg: f, width: stage.width, height: stage.height, viewport: band });
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of points) {
       const q = proj.toPx(p);
-      return q.visible && q.x >= margin.x && q.x <= size.width - margin.x && q.y >= margin.top && q.y <= size.height - margin.bottom;
-    });
+      if (!q.visible) return null;
+      x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x);
+      y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+    }
+    return { x0, x1, y0, y1, proj };
   };
-  if (fits(fovMin)) return { look, fov: fovMin };
-  if (!fits(OVERVIEW_FOV_MAX)) return { look, fov: OVERVIEW_FOV_MAX };
-  let lo = fovMin, hi = OVERVIEW_FOV_MAX;
-  for (let k = 0; k < 14; k++) {
-    const m = (lo + hi) / 2;
-    if (fits(m)) hi = m; else lo = m;
+  const fits = (lk: FieldCoord, f: number) => {
+    const b = box(lk, f);
+    return b !== null && b.x1 - b.x0 <= fill * stage.width && b.y1 - b.y0 <= fill * band.height;
+  };
+  // Move the gaze to the middle of the points' on-screen extent.
+  const centre = (lk: FieldCoord, f: number) => {
+    const b = box(lk, f);
+    const c = b ? b.proj.fromPx((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2) : null;
+    return c ? clampLook(c, lookMax) : lk;
+  };
+  const size = (lk: FieldCoord) => {
+    if (fits(lk, fov.min)) return fov.min;
+    if (!fits(lk, fov.max)) return fov.max;
+    let lo = fov.min, hi = fov.max;
+    for (let k = 0; k < 14; k++) {
+      const m = (lo + hi) / 2;
+      if (fits(lk, m)) hi = m; else lo = m;
+    }
+    return hi;
+  };
+  // Centring and sizing settle each other; a few rounds is plenty, even at
+  // the wide views where the projection bends most.
+  look = centre(look, fov.single);
+  let f = size(look);
+  for (let round = 0; round < 3; round++) {
+    for (let k = 0; k < 3; k++) look = centre(look, f);
+    f = size(look);
   }
-  return { look, fov: hi };
+  for (let k = 0; k < 3; k++) look = centre(look, f);
+  return { look, fov: f };
+}
+
+/**
+ * The tour's camera at `t` when each check-in has its own framing: resting on
+ * the check-in in view, or partway along the glide between two framings, look
+ * and field of view together, on the same ease as skyReplayLook.
+ */
+export function skyReplayCamera(plan: SkyReplayPlan, frames: CameraFrame[], t: number): CameraFrame | null {
+  if (frames.length === 0) return null;
+  const i = Math.min(skyReplayFocus(plan, t), frames.length - 1);
+  if (i <= 0 || t >= plan.land[i]) return frames[Math.max(0, i)];
+  const a = frames[i - 1], b = frames[i];
+  const k = easeInOut2(Math.max(0, Math.min(1, (t - plan.glideStart[i]) / plan.glideMs[i])));
+  return { look: { x: a.look.x + (b.look.x - a.look.x) * k, y: a.look.y + (b.look.y - a.look.y) * k }, fov: a.fov + (b.fov - a.fov) * k };
 }

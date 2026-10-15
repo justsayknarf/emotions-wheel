@@ -11,10 +11,9 @@ import type { DiaryEntry } from '../../types';
 // playhead rests on the one being looked at.
 //
 // Not a chart (DESIGN.md: no axes, no grids): no baseline or ticks, just the
-// days, the dots and the same faint dotted path the sky draws through the
-// week. Colors follow the Two Hues Rule: the check-in in view is gold, the
-// ones already passed are the recorded teal, the ones still to come are
-// hollow teal rings.
+// days, the dots and a faint dotted line through the week. Colors follow the
+// Two Hues Rule: the check-in in view is gold, the ones already passed are the
+// recorded teal, the ones still to come are hollow teal rings.
 
 interface Props {
   /** The replay's check-ins, oldest first. */
@@ -89,7 +88,7 @@ export function WeekStrip({ entries, now, arrived, cursor, held, onPick }: Props
           </div>
         ))}
 
-        {/* The week's path, dotted as on the sky. */}
+        {/* A faint dotted line through the week. */}
         {fractions.length > 1 && (
           <svg style={{ position: 'absolute', left: 0, top: 26, width: '100%', height: 8, overflow: 'visible' }}>
             <line

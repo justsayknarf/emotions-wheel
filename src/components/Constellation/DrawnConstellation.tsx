@@ -16,6 +16,7 @@ import {
   RING_MS,
   replayArrived,
   replayCursor,
+  previewPulseAt,
 } from './replaySchedule';
 import {
   TAIL_MS,
@@ -240,6 +241,10 @@ export function DrawnConstellation({
             duration: RING_MS,
             ease: 'out(3)',
           }, at + RING_DELAY_MS);
+        // The week view's label for this check-in fades as its star lands.
+        if (preview && dayLabels[i]) {
+          tl.add(`[data-preview-day="${i}"]`, { opacity: [1, 0], duration: 600, ease: 'out(2)' }, at);
+        }
         if (dayLabels[i] && showDayLabels) {
           tl.add(`[data-day="${i}"]`, { opacity: [0, 1], duration: LABEL_MS, ease: 'out(2)' }, at + LABEL_DELAY_MS);
         }
@@ -314,7 +319,7 @@ export function DrawnConstellation({
       }, startDelayRef.current);
       return () => window.clearTimeout(start.timer);
     },
-    [points, dayLabels, showDayLabels],
+    [points, dayLabels, showDayLabels, preview],
   );
 
   useEffect(() => {
@@ -335,27 +340,50 @@ export function DrawnConstellation({
 
   return (
     <div ref={root} style={{ position: 'absolute', inset: 0 }}>
-      {/* The walk opens on the whole week, faint: every check-in and a dotted
-          path through them in time order. */}
+      {/* The walk opens on the whole week, faint: every check-in marked with a
+          small ring, pulsing once in time order with its day label arriving
+          alongside. A label fades as its star lands (the timeline above). */}
       {preview && (
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} aria-hidden="true">
-          {points.slice(1).map((p, k) => (
-            <line
-              key={p.entry.id}
-              x1={`${points[k].lx}%`}
-              y1={`${points[k].ly}%`}
-              x2={`${p.lx}%`}
-              y2={`${p.ly}%`}
-              style={{ stroke: 'rgb(var(--ui-recorded-rgb) / 0.4)', strokeWidth: 1, strokeDasharray: '2 6' }}
-            />
-          ))}
-          {points.map((p) => (
-            <g key={p.entry.id}>
-              <circle cx={`${p.lx}%`} cy={`${p.ly}%`} r={2} style={{ fill: 'rgb(var(--ui-recorded-rgb) / 0.55)' }} />
-              <circle cx={`${p.lx}%`} cy={`${p.ly}%`} r={6} style={{ fill: 'none', stroke: 'rgb(var(--ui-recorded-rgb) / 0.45)', strokeWidth: 1 }} />
-            </g>
-          ))}
-        </svg>
+        <>
+          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} aria-hidden="true">
+            {points.map((p, i) => (
+              <g key={p.entry.id}>
+                <circle cx={`${p.lx}%`} cy={`${p.ly}%`} r={2} style={{ fill: 'rgb(var(--ui-recorded-rgb) / 0.55)' }} />
+                <circle cx={`${p.lx}%`} cy={`${p.ly}%`} r={6} style={{ fill: 'none', stroke: 'rgb(var(--ui-recorded-rgb) / 0.45)', strokeWidth: 1 }} />
+                <circle
+                  className="replay-preview-pulse"
+                  cx={`${p.lx}%`}
+                  cy={`${p.ly}%`}
+                  r={6}
+                  style={{ animationDelay: `${previewPulseAt(i, n)}ms` }}
+                />
+              </g>
+            ))}
+          </svg>
+          {points.map((p, i) =>
+            dayLabels[i] ? (
+              <span
+                key={p.entry.id}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  left: `${p.lx}%`,
+                  top: `${p.ly}%`,
+                  transform: 'translate(-50%, calc(-100% - 11px))',
+                  pointerEvents: 'none',
+                  animation: `reflection-hint-in 0.3s ease ${previewPulseAt(i, n)}ms both`,
+                }}
+              >
+                <span
+                  data-preview-day={i}
+                  style={{ display: 'block', fontSize: 9, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgb(var(--ui-text-rgb) / 0.75)', whiteSpace: 'nowrap' }}
+                >
+                  {dayLabels[i]}
+                </span>
+              </span>
+            ) : null,
+          )}
+        </>
       )}
 
       {/* Lines between consecutive check-ins, with the departure comet's

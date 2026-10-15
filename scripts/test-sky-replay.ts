@@ -19,8 +19,11 @@ import {
   PULSE_FLOOR,
   skyReplayArrived,
   skyReplayCursor,
-  skyOverview,
+  frameConstellation,
+  frameBand,
+  skyReplayCamera,
   OVERVIEW_FOV_MAX,
+  type FrameStage,
 } from '../src/components/Constellation/skyTour';
 import { skyProjection } from '../src/utils/skyProjection';
 
@@ -152,26 +155,54 @@ for (const n of [30, 120, 500]) {
   check('an empty tour has a resting cursor at 0', skyReplayCursor(skyReplayPlan([], LOOK_MAX), 0).to === 0, '');
 }
 
-// The walk's opening view: every check-in of the week in frame.
+// Framing: a constellation (or the whole week) centred in view and sized to fill.
 {
-  const size = { width: 900, height: 800 };
-  const margin = { x: 40, top: 60, bottom: 90 };
-  // A typical week: spread over the sky, but not to opposite horizons.
-  const pins = [{ x: 0.62, y: -0.48 }, { x: 0.1, y: 0.05 }, { x: -0.55, y: 0.6 }, { x: -0.4, y: -0.35 }, { x: 0.5, y: 0.7 }];
-  const o = skyOverview(pins, LOOK_MAX, 84, size, margin);
-  const proj = skyProjection({ look: o.look, fovDeg: o.fov, width: size.width, height: size.height });
-  const inside = pins.every((p) => { const q = proj.toPx(p); return q.visible && q.x >= margin.x && q.x <= size.width - margin.x && q.y >= margin.top && q.y <= size.height - margin.bottom; });
-  check('the opening view keeps every check-in in frame', inside && o.fov >= 84 && o.fov <= OVERVIEW_FOV_MAX, `fov ${o.fov.toFixed(1)}`);
-  check('the opening view looks at the middle of the week', near(o.look.x, (0.62 + 0.1 - 0.55 - 0.4 + 0.5) / 5) && near(o.look.y, (-0.48 + 0.05 + 0.6 - 0.35 + 0.7) / 5), JSON.stringify(o.look));
-  const tight = skyOverview(pins, LOOK_MAX, 84, size, margin);
-  const narrower = skyProjection({ look: tight.look, fovDeg: Math.max(84, tight.fov - 2), width: size.width, height: size.height });
-  const stillFits = tight.fov > 84 && pins.every((p) => { const q = narrower.toPx(p); return q.visible && q.x >= margin.x && q.x <= size.width - margin.x && q.y >= margin.top && q.y <= size.height - margin.bottom; });
-  check('the opening view is no wider than it needs to be', !stillFits, `fov ${tight.fov.toFixed(1)}`);
-  const one = skyOverview([{ x: 0.3, y: 0.2 }], LOOK_MAX, 84, size, margin);
-  check('a single check-in opens at rest, looking at it', one.fov === 84 && near(one.look.x, 0.3) && near(one.look.y, 0.2), JSON.stringify(one));
-  const spread = skyOverview([{ x: -1, y: -1 }, { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }], LOOK_MAX, 84, size, margin);
-  check('a week too spread out to fit gets the widest view', spread.fov <= OVERVIEW_FOV_MAX, `fov ${spread.fov.toFixed(1)}`);
-  check('no stage yet: rest', skyOverview(pins, LOOK_MAX, 84, { width: 0, height: 0 }, margin).fov === 84, '');
+  const desktop: FrameStage = { width: 880, height: 800, top: 76, bottom: 92 };
+  const phone: FrameStage = { width: 375, height: 422, top: 76, bottom: 16 };
+  // A check-in whose tagged words all sit to one side of its pin.
+  const lopsided = [{ x: 0.62, y: -0.48 }, { x: 0.86, y: -0.3 }, { x: 0.74, y: -0.74 }];
+  const stopFov = { min: 56, max: 100, single: 84 };
+  const measure = (pts: typeof lopsided, f: ReturnType<typeof frameConstellation>, st: FrameStage) => {
+    const band = frameBand(st);
+    const proj = skyProjection({ look: f.look, fovDeg: f.fov, width: st.width, height: st.height, viewport: band });
+    const q = pts.map((p) => proj.toPx(p));
+    const x0 = Math.min(...q.map((p) => p.x)), x1 = Math.max(...q.map((p) => p.x));
+    const y0 = Math.min(...q.map((p) => p.y)), y1 = Math.max(...q.map((p) => p.y));
+    return { cx: (x0 + x1) / 2 - st.width / 2, cy: (y0 + y1) / 2 - (band.top + band.height / 2), w: (x1 - x0) / st.width, h: (y1 - y0) / band.height, visible: q.every((p) => p.visible) };
+  };
+  for (const [name, st] of [['desktop', desktop], ['phone', phone]] as const) {
+    const f = frameConstellation(lopsided, LOOK_MAX, stopFov, st, 0.5);
+    const m = measure(lopsided, f, st);
+    check(`${name}: a lopsided constellation is centred in the band`, m.visible && Math.abs(m.cx) < 3 && Math.abs(m.cy) < 3, `offset ${m.cx.toFixed(1)}, ${m.cy.toFixed(1)}px at fov ${f.fov.toFixed(1)}`);
+    check(`${name}: it fills at most half the band, and close to it unless at a fov bound`, m.w <= 0.501 && m.h <= 0.501 && (Math.max(m.w, m.h) > 0.45 || f.fov === stopFov.min || f.fov === stopFov.max), `w ${m.w.toFixed(2)} h ${m.h.toFixed(2)} fov ${f.fov.toFixed(1)}`);
+  }
+  const small = frameConstellation([{ x: 0.1, y: 0.1 }, { x: 0.18, y: 0.14 }], LOOK_MAX, stopFov, desktop, 0.5);
+  const large = frameConstellation([{ x: -0.3, y: 0.1 }, { x: 0.4, y: 0.5 }], LOOK_MAX, stopFov, desktop, 0.5);
+  check('a wider constellation gets a wider view', large.fov > small.fov, `${small.fov.toFixed(1)} → ${large.fov.toFixed(1)}`);
+  check('a tight constellation stops at the closest zoom', small.fov === stopFov.min, `${small.fov.toFixed(1)}`);
+  const one = frameConstellation([{ x: 0.3, y: 0.2 }], LOOK_MAX, stopFov, desktop, 0.5);
+  check('a check-in without tags rests on its pin at the usual view', one.fov === 84 && near(one.look.x, 0.3) && near(one.look.y, 0.2), JSON.stringify(one));
+  check('no stage yet: the usual view', frameConstellation(lopsided, LOOK_MAX, stopFov, { width: 0, height: 0, top: 0, bottom: 0 }, 0.5).fov === 84, '');
+
+  // The whole week, for the walk's opening view.
+  const week5 = [{ x: 0.62, y: -0.48 }, { x: 0.1, y: 0.05 }, { x: -0.55, y: 0.6 }, { x: -0.4, y: -0.35 }, { x: 0.5, y: 0.7 }];
+  const weekFov = { min: 84, max: OVERVIEW_FOV_MAX, single: 84 };
+  for (const [name, st] of [['desktop', desktop], ['phone', phone]] as const) {
+    const o = frameConstellation(week5, LOOK_MAX, weekFov, st, 0.84);
+    const m = measure(week5, o, st);
+    check(`${name}: the opening view shows the whole week, centred`, m.visible && m.w <= 0.841 && m.h <= 0.841 && Math.abs(m.cx) < 4 && Math.abs(m.cy) < 4, `fov ${o.fov.toFixed(1)} w ${m.w.toFixed(2)} h ${m.h.toFixed(2)} offset ${m.cx.toFixed(1)}, ${m.cy.toFixed(1)}`);
+  }
+  const spread = frameConstellation([{ x: -1, y: -1 }, { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }], LOOK_MAX, weekFov, desktop, 0.84);
+  check('a week too spread out to fit gets the widest view', spread.fov === OVERVIEW_FOV_MAX, `fov ${spread.fov.toFixed(1)}`);
+
+  // The tour moves between framings, look and zoom together.
+  const p = skyReplayPlan(week, LOOK_MAX);
+  const frames = week.map((w, i) => ({ look: w.pin, fov: 70 + i * 5 }));
+  const rest = skyReplayCamera(p, frames, p.revealEnd[1]);
+  check('the camera rests on a check-in\'s framing', rest !== null && rest.fov === 75 && near(rest.look.x, week[1].pin.x), JSON.stringify(rest));
+  const mid = skyReplayCamera(p, frames, p.glideStart[2] + p.glideMs[2] / 2);
+  check('halfway along a glide, look and zoom are halfway', mid !== null && near(mid.fov, 77.5) && near(mid.look.x, (week[1].pin.x + week[2].pin.x) / 2), JSON.stringify(mid));
+  check('no framings: no camera', skyReplayCamera(p, [], 0) === null, '');
 }
 
 if (failures > 0) {
