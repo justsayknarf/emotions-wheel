@@ -10,6 +10,7 @@ import {
   inviteStatus,
   laterUntil,
   canLookBack,
+  lookBackPrompt,
   momentPoint,
   latestReflectionIn,
   withWeekName,
@@ -162,6 +163,18 @@ const reflection = (completedAt: Date, opened: Reflection['opened']): Reflection
 // --- canLookBack ---
 check('AE7: 1 check-in → no look back', !canLookBack([entry('a', daysAgo(1), [pin(0, 0)])]), '');
 check('AE7: 2 check-ins → look back', canLookBack([entry('a', daysAgo(1), [pin(0, 0)]), entry('b', daysAgo(0), [pin(0, 0)])]), '');
+
+// --- lookBackPrompt (the field's always-visible "Look back") ---
+{
+  const one = [entry('a', daysAgo(1), [pin(0, 0)])];
+  const two = [...one, entry('b', daysAgo(0), [pin(0, 0)])];
+  check('field look back: hidden with no check-ins', lookBackPrompt([], false, false) === 'hidden', lookBackPrompt([], false, false));
+  check('field look back: hidden with one check-in, as History', lookBackPrompt(one, false, false) === 'hidden', lookBackPrompt(one, false, false));
+  check('field look back: quiet once there are two', lookBackPrompt(two, false, false) === 'quiet', lookBackPrompt(two, false, false));
+  check('field look back: warmer while the invitation is due', lookBackPrompt(two, true, false) === 'due', lookBackPrompt(two, true, false));
+  check('field look back: out of the way while checking in', lookBackPrompt(two, false, true) === 'hidden', lookBackPrompt(two, false, true));
+  check('field look back: checking in wins over a due invitation', lookBackPrompt(two, true, true) === 'hidden', lookBackPrompt(two, true, true));
+}
 
 // --- prompts ---
 {
