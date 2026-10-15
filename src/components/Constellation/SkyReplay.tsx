@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { createTimeline } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
@@ -6,18 +6,34 @@ import { useRevealTuning, cameraParamsFrom } from '../../config/revealTuning';
 import { themeRgba, type ThemeChannel } from '../../config/themeColor';
 import { emotions } from '../../data/emotions';
 import { skyProjection, type FieldCoord, type FieldProjection } from '../../utils/skyProjection';
-import { easeOut2, easeOut3 } from '../../utils/comet';
+import { easeInOut2, easeOut2, easeOut3 } from '../../utils/comet';
 import { SkyBackdrop, type SkyDeparture, type SkyStar } from '../EmotionField/SkyBackdrop';
 import { SkyAurora, type SkyAuroraInputs } from '../EmotionField/SkyAurora';
 import { canUseWebGL } from '../EmotionField/skyShader';
 import { arcPath, blurrer, drawHead, pathEnds, pointAt, streakGradient, strokeRange, type Px, type Rgba } from '../EmotionField/skyCanvas';
 import { VISUALLY_HIDDEN } from '../visuallyHidden';
-import { replayDayLabels, STAR_MS, LABEL_DELAY_MS, LABEL_MS, RING_DELAY_MS, RING_MS } from './replaySchedule';
-import { skyReplayPlan, skyReplayFocus, skyReplayLook, skyReplayGlow, skyReplayPresence, chainDraw, type SkyReplayPlan } from './skyTour';
+import { replayDayLabels, previewPulseAt, PREVIEW_PULSE_MS, STAR_MS, LABEL_DELAY_MS, LABEL_MS, RING_DELAY_MS, RING_MS } from './replaySchedule';
+import {
+  skyReplayPlan,
+  skyReplayFocus,
+  skyReplayGlow,
+  skyReplayPresence,
+  skyReplayArrived,
+  skyReplayCursor,
+  skyReplayCamera,
+  frameConstellation,
+  frameBand,
+  chainDraw,
+  hopMs,
+  OVERVIEW_FOV_MAX,
+  type CameraFrame,
+  type SkyReplayPlan,
+} from './skyTour';
 import { QUIET_LINE_OPACITY, QUIET_LINE_WIDTH, STREAK_CORE_WIDTH, STREAK_GLOW_OPACITY, STREAK_GLOW_WIDTH } from './cometStyle';
 import { ReplayControls } from './ReplayControls';
 import { useReplayScrub } from './useReplayScrub';
 import type { DiaryEntry } from '../../types';
+import type { TourCursor } from '../../data/reflection';
 
 interface Props {
   entries: DiaryEntry[];    // recent window, chronological (oldest first)
@@ -35,10 +51,60 @@ interface Props {
   onReplayEnd?: () => void;
   /** Flipping to true jumps the tour to its end (tap to skip). */
   jumpToEnd?: boolean;
+  // The walk's replay screen (title, header, week strip, Next) adds these.
+  /** Wait this long before the tour starts: the walk's title card. */
+  startDelayMs?: number;
+  /**
+   * Open on the whole week: faint, joined by a dotted path, with the gaze
+   * wide enough to take in every check-in until the tour glides in.
+   */
+  preview?: boolean;
+  /** The small day label beside each check-in. The walk names the day in its header instead. */
+  showDayLabels?: boolean;
+  /**
+   * How much of the stage's top and bottom other things cover (the walk's
+   * header and week strip): each check-in is framed in the band between.
+   */
+  frameInset?: { top: number; bottom: number };
+  /** Move to this check-in now (Next, or the week strip); a new object asks again. */
+  goTo?: { stop: number } | null;
+  /** A check-in's index as it arrives on the tour (its constellation starts to show). */
+  onStop?: (stop: number) => void;
+  /** Where the tour is between check-ins, written every frame for the week strip. */
+  cursor?: RefObject<TourCursor | null>;
 }
 
-// How long the gaze takes to glide to a newly highlighted check-in.
-const HIGHLIGHT_GLIDE_MS = 900;
+// The gaze's glide to the walk's held check-in (from the replay's last day
+// to the first moment, and between moments): the tour's own pace for that
+// distance, kept between these bounds, eased in and out.
+const HIGHLIGHT_GLIDE_MIN_MS = 900;
+const HIGHLIGHT_GLIDE_MAX_MS = 1800;
+// The walk's Next: the gaze flies to the next check-in at this share of the
+// tour's own glide, kept between these bounds, so stepping feels quick.
+const FLIGHT_SHARE = 0.35;
+const FLIGHT_MIN_MS = 280;
+const FLIGHT_MAX_MS = 700;
+// The faint whole week the walk opens on.
+const PREVIEW_PIN_ALPHA = 0.55;
+const PREVIEW_RING_R = 6;
+// In the week view each check-in pulses once, in time order (previewPulseAt),
+// and its day label arrives with the pulse; the label fades as the tour
+// reaches that check-in, since the walk's header names the day by then.
+const PULSE_RING_GROW = 14;
+const PREVIEW_LABEL_ALPHA = 0.75;
+const PREVIEW_LABEL_FADE_MS = 600;
+/** Px over which a week-view label fades as it nears the band's top or bottom edge. */
+const PREVIEW_LABEL_EDGE = 16;
+// Each check-in is framed so its constellation (pin and tagged words) sits
+// centred and fills about half the view, zooming between these bounds; one
+// without tags rests at the usual view. The walk's opening view frames the
+// whole week the same way, filling more of it.
+const STOP_FILL = 0.5;
+const STOP_FOV_MIN = 56;
+const STOP_FOV_MAX = 100;
+const OVERVIEW_FILL = 0.84;
+const OPENING_GLIDE_MS = 1100;
+const NO_INSET = { top: 0, bottom: 0 };
 
 // Pause before the tour starts, so the overlay's own fade-in settles first.
 const START_DELAY_MS = 400;
@@ -57,6 +123,38 @@ const LIT_GLOW_ALPHA = 0.45;
 const LIT_HALO_R = 16;
 const LIT_HALO_ALPHA = 0.55;
 const PIN_HALO_R = 22;
+
+// The walk's held check-in changing (the replay's end to the first moment,
+// moment to moment, the last moment to the closing card): over the glide,
+// the constellation lit before fades out in the first half, and the held one
+// (with its gold ring) fades in from a third of the way, arriving with the
+// camera. Once the review has begun, the tour's own light stays off.
+interface HeldMix {
+  from: number;
+  to: number;
+  /** 0..1 through the change. */
+  p: number;
+  /** The change from the replay into the review: the tour's light fades out during it. */
+  first: boolean;
+}
+const NO_MIX: HeldMix = { from: -1, to: -1, p: 1, first: false };
+function heldLight(mix: HeldMix) {
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+  const outK = 1 - easeOut2(clamp01(mix.p / 0.5));
+  const inK = easeOut2(clamp01((mix.p - 0.35) / 0.65));
+  const reviewing = mix.first || mix.from >= 0 || mix.to >= 0;
+  // The tour's light: full during the replay, fading as the review begins,
+  // and off for the rest of the walk.
+  const tourK = !reviewing ? 1 : mix.first ? outK : 0;
+  return {
+    inK,
+    outK,
+    /** How much of the tour's own light check-in i keeps; the held one keeps all it had. */
+    keep: (i: number) => (i === mix.to ? 1 : tourK),
+    /** How lit check-in i is as the held one, arriving or leaving. */
+    held: (i: number) => (i === mix.to ? inK : i === mix.from ? outK : 0),
+  };
+}
 
 const NO_DEPARTURE: SkyDeparture = { play: 0, from: null, to: null, travel: 0, trail: 0, hold: 0, fadeOut: 0, strength: 0 };
 const emotionById = new Map(emotions.map((e) => [e.id, e]));
@@ -86,12 +184,27 @@ export function SkyReplay({
   showControls = true,
   onReplayEnd,
   jumpToEnd = false,
+  startDelayMs = START_DELAY_MS,
+  preview = false,
+  showDayLabels = true,
+  frameInset = NO_INSET,
+  goTo = null,
+  onStop,
+  cursor,
 }: Props) {
-  // Read through a ref so a new callback identity never rebuilds the timeline.
+  // Read through refs so a new callback identity never rebuilds the timeline.
   const onReplayEndRef = useRef(onReplayEnd);
+  const onStopRef = useRef(onStop);
+  const cursorRef = useRef(cursor);
+  const startDelayRef = useRef(startDelayMs);
   useEffect(() => {
     onReplayEndRef.current = onReplayEnd;
-  }, [onReplayEnd]);
+    onStopRef.current = onStop;
+    cursorRef.current = cursor;
+    startDelayRef.current = startDelayMs;
+  }, [onReplayEnd, onStop, cursor, startDelayMs]);
+  // The last check-in to arrive, so onStop fires once per arrival.
+  const arrivedRef = useRef(-1);
   const tuning = useRevealTuning();
   const params = useMemo(() => cameraParamsFrom(tuning), [tuning]);
   const reducedMotion = !!useReducedMotion();
@@ -125,6 +238,28 @@ export function SkyReplay({
   const [playing, setPlaying] = useState(false);
   const { scrubRef, ended, syncScrub } = useReplayScrub();
 
+  // The camera as last shown, and the walk's held view (see `hi`). Skipping
+  // to the end of the tour mustn't jump the camera to the last check-in: it
+  // holds where it is until the glide to the held check-in takes over.
+  // A glide in flight (the opening, or Next) is cancelled too: its finish
+  // would otherwise restart the tour behind the walk's moments.
+  const [heldCam, setHeldCam] = useState<CameraFrame | null>(null);
+  const [move, setMove] = useState<CameraFrame | null>(null);
+  const moveRaf = useRef(0);
+  const shownLook = useRef<FieldCoord>({ x: 0, y: 0 });
+  const shownFov = useRef(params.fovRest);
+  const holdCamera = useCallback(() => {
+    cancelAnimationFrame(moveRaf.current);
+    setMove(null);
+    setHeldCam({ look: shownLook.current, fov: shownFov.current });
+  }, []);
+
+  // The walk opens on the whole week (see `overview`); the timeline's start
+  // delay ending sets `begun`, and the gaze glides in before the tour plays.
+  const [opening, setOpening] = useState(() => preview && !reducedMotion);
+  const [begun, setBegun] = useState(false);
+  const holdForOpening = useRef(opening);
+
   const { root, scope } = useAnimeScope<HTMLDivElement>(
     (self, reduced) => {
       if (plan.total === 0) return;
@@ -135,11 +270,23 @@ export function SkyReplay({
         endFired = true;
         onReplayEndRef.current?.();
       };
+      // The walk follows the tour: which check-in has arrived, and where the
+      // gaze is between two of them.
+      const track = (at: number) => {
+        const arrived = skyReplayArrived(plan, at);
+        if (arrived !== arrivedRef.current) {
+          arrivedRef.current = arrived;
+          if (arrived >= 0) onStopRef.current?.(arrived);
+        }
+        const c = cursorRef.current;
+        if (c) c.current = skyReplayCursor(plan, at);
+      };
       const tl = createTimeline({
         autoplay: false,
         onUpdate: (tm) => {
           syncScrub(tm.progress);
           setT(tm.progress * plan.total);
+          track(tm.progress * plan.total);
         },
         onPause: () => setPlaying(false),
         onComplete: () => {
@@ -156,6 +303,7 @@ export function SkyReplay({
       const start = { timer: undefined as number | undefined };
       self.add('skip', () => {
         window.clearTimeout(start.timer);
+        holdCamera();
         toEnd();
         setPlaying(false);
         fireEnd();
@@ -177,6 +325,17 @@ export function SkyReplay({
         tl.pause();
         tl.seek(progress * tl.duration);
       });
+      // The walk's Next: hold the tour while the gaze flies, then play on.
+      self.add('pause', () => {
+        window.clearTimeout(start.timer);
+        tl.pause();
+      });
+      self.add('playFrom', (ms: number) => {
+        window.clearTimeout(start.timer);
+        tl.seek(Math.min(ms, tl.duration));
+        tl.play();
+        setPlaying(true);
+      });
 
       if (reduced) {
         toEnd();
@@ -185,9 +344,14 @@ export function SkyReplay({
       }
       tl.seek(0);
       start.timer = window.setTimeout(() => {
+        // Opening on the whole week, the glide in comes first (see `begun`).
+        if (holdForOpening.current) {
+          setBegun(true);
+          return;
+        }
         tl.play();
         setPlaying(true);
-      }, START_DELAY_MS);
+      }, startDelayRef.current);
       return () => window.clearTimeout(start.timer);
     },
     [plan],
@@ -210,31 +374,172 @@ export function SkyReplay({
   // The walk's current moment: once set, the gaze glides from wherever it is
   // to that check-in and holds there, its constellation lit.
   const hi = highlightEntryId ? points.findIndex((p) => p.entry.id === highlightEntryId) : -1;
-  const [heldLook, setHeldLook] = useState<FieldCoord | null>(null);
-  const shownLook = useRef<FieldCoord>({ x: 0, y: 0 });
+  // Each check-in's framing: its constellation centred in the band the
+  // walk's header and strip leave, zoomed to fill about half of it.
+  const { top: insetTop, bottom: insetBottom } = frameInset;
+  const stage = useMemo(
+    () => ({ width: size.width, height: size.height, top: insetTop, bottom: insetBottom }),
+    [size.width, size.height, insetTop, insetBottom],
+  );
+  const frames = useMemo<CameraFrame[]>(
+    () =>
+      points.map((p) =>
+        frameConstellation([p.pin, ...p.words], params.lookMax, { min: STOP_FOV_MIN, max: STOP_FOV_MAX, single: params.fovRest }, stage, STOP_FILL),
+      ),
+    [points, params.lookMax, params.fovRest, stage],
+  );
+
+  // The held check-in changing: the gaze glides there (or, leaving for the
+  // closing card, holds where it is) while the lights cross over (heldLight).
+  const [mix, setMix] = useState<HeldMix>(NO_MIX);
+  const lastHi = useRef(-1);
+  const reviewed = useRef(false);
   useEffect(() => {
-    if (hi < 0) return;
-    const from = shownLook.current;
-    const to = plan.looks[hi];
-    if (!to) return;
+    const prev = lastHi.current;
+    lastHi.current = hi;
+    const changed = prev !== hi;
+    const first = changed && hi >= 0 && !reviewed.current;
+    if (hi >= 0) reviewed.current = true;
+    const to = hi >= 0 ? frames[hi] ?? null : null;
+    if (!changed && !to) return;
+    const from = { look: shownLook.current, fov: shownFov.current };
+    const ms = reducedMotion
+      ? 0
+      : to
+        ? Math.max(HIGHLIGHT_GLIDE_MIN_MS, Math.min(HIGHLIGHT_GLIDE_MAX_MS, hopMs(from.look, to.look)))
+        : HIGHLIGHT_GLIDE_MIN_MS;
     let raf = 0;
     const t0 = performance.now();
     const step = (now: number) => {
-      const k = reducedMotion ? 1 : easeOut3(Math.min(1, (now - t0) / HIGHLIGHT_GLIDE_MS));
-      setHeldLook({ x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k });
-      if (k < 1) raf = requestAnimationFrame(step);
+      const p = ms === 0 ? 1 : Math.min(1, (now - t0) / ms);
+      if (to) {
+        const k = easeInOut2(p);
+        setHeldCam({
+          look: { x: from.look.x + (to.look.x - from.look.x) * k, y: from.look.y + (to.look.y - from.look.y) * k },
+          fov: from.fov + (to.fov - from.fov) * k,
+        });
+      }
+      // A re-framing (a resize) re-glides without restarting the lights, but
+      // still lets an interrupted cross-over finish.
+      if (changed) setMix({ from: prev, to: hi, p, first });
+      else if (p >= 1) setMix((m) => (m.p < 1 ? { ...m, p: 1 } : m));
+      if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [hi, plan, reducedMotion]);
+  }, [hi, frames, reducedMotion]);
 
-  const look = hi >= 0 && heldLook ? heldLook : skyReplayLook(plan, t);
+  // The walk's camera moves that the tour's playhead doesn't cover: the
+  // opening view of the whole week, the glide from it into the tour, and
+  // Next's quick flights. While one runs it overrides the tour's camera.
+  useEffect(() => () => cancelAnimationFrame(moveRaf.current), []);
+  const glide = useCallback(
+    (to: CameraFrame, ms: number, onFrame: (k: number) => void, done: () => void) => {
+      cancelAnimationFrame(moveRaf.current);
+      const from = { look: shownLook.current, fov: shownFov.current };
+      const t0 = performance.now();
+      const step = (now: number) => {
+        const k = ms <= 0 ? 1 : Math.min(1, (now - t0) / ms);
+        const e = easeInOut2(k);
+        onFrame(e);
+        if (k < 1) {
+          setMove({
+            look: { x: from.look.x + (to.look.x - from.look.x) * e, y: from.look.y + (to.look.y - from.look.y) * e },
+            fov: from.fov + (to.fov - from.fov) * e,
+          });
+          moveRaf.current = requestAnimationFrame(step);
+        } else {
+          setMove(null);
+          done();
+        }
+      };
+      moveRaf.current = requestAnimationFrame(step);
+    },
+    [],
+  );
+
+  // The walk opens on the whole week: while its title shows, the gaze takes
+  // in every check-in, then glides in to the first as the tour begins.
+  const overview = useMemo(
+    () =>
+      preview && points.length > 1
+        ? frameConstellation(points.map((p) => p.pin), params.lookMax, { min: params.fovRest, max: OVERVIEW_FOV_MAX, single: params.fovRest }, stage, OVERVIEW_FILL)
+        : null,
+    [preview, points, params.lookMax, params.fovRest, stage],
+  );
+  // The week view's one pulse: a clock that runs only while it plays, since
+  // nothing else redraws the canvas while the view holds still.
+  const hasOverview = overview !== null;
+  const [pulseAt, setPulseAt] = useState(-1);
+  useEffect(() => {
+    if (!opening || !hasOverview || reducedMotion) return;
+    const end = previewPulseAt(points.length - 1, points.length) + PREVIEW_PULSE_MS;
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const e = now - t0;
+      setPulseAt(Math.min(e, end));
+      if (e < end) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [opening, hasOverview, reducedMotion, points.length]);
+
+  // Glide in once, whatever else changes afterwards. The opening view stays
+  // on screen until the glide takes over (the glide starts from it), and a
+  // week with no opening view still passes through here, at no length, so
+  // `opening` only ever ends inside an animation frame.
+  const glidedIn = useRef(false);
+  useEffect(() => {
+    if (!begun || glidedIn.current || frames.length === 0) return;
+    glidedIn.current = true;
+    glide(frames[0], opening && overview ? OPENING_GLIDE_MS : 0, () => {}, () => {
+      setOpening(false);
+      scope.current?.methods.playFrom(0);
+    });
+  }, [begun, opening, overview, frames, glide, scope]);
+
+  // The walk's Next (or a tap on its week strip): the gaze flies to that
+  // check-in at a quick pace, then the tour plays on from its arrival. Each
+  // request flies once: a re-framing (a resize) must not replay it, least of
+  // all after Skip, when it would restart the tour under the moments.
+  const flownTo = useRef<{ stop: number } | null>(null);
+  useEffect(() => {
+    if (!goTo || goTo === flownTo.current || plan.total === 0) return;
+    flownTo.current = goTo;
+    const i = Math.max(0, Math.min(goTo.stop, frames.length - 1));
+    const to = frames[i];
+    if (!to) return;
+    scope.current?.methods.pause();
+    const fromStop = Math.max(0, arrivedRef.current);
+    const dur = reducedMotion ? 0 : Math.max(FLIGHT_MIN_MS, Math.min(FLIGHT_MAX_MS, hopMs(shownLook.current, to.look) * FLIGHT_SHARE));
+    glide(
+      to,
+      dur,
+      (e) => {
+        const c = cursorRef.current;
+        if (c) c.current = { from: fromStop, to: i, along: e };
+      },
+      () => {
+        setOpening(false);
+        scope.current?.methods.playFrom(plan.revealAt[i]);
+      },
+    );
+  }, [goTo, plan, frames, reducedMotion, scope, glide]);
+
+  const resting = opening && overview ? overview : null;
+  const tourCam = skyReplayCamera(plan, frames, t);
+  const cam: CameraFrame =
+    heldCam ?? move ?? resting ?? tourCam ?? { look: { x: 0, y: 0 }, fov: params.fovRest };
+  const look = cam.look;
+  const fov = cam.fov;
   useLayoutEffect(() => {
     shownLook.current = look;
+    shownFov.current = fov;
   });
   const proj = useMemo(
-    () => skyProjection({ look: { x: look.x, y: look.y }, fovDeg: params.fovRest, width: size.width, height: size.height }),
-    [look.x, look.y, params.fovRest, size.width, size.height],
+    () => skyProjection({ look: { x: look.x, y: look.y }, fovDeg: fov, width: size.width, height: size.height, viewport: frameBand(stage) }),
+    [look.x, look.y, fov, size.width, size.height, stage],
   );
 
   // The WebGL sky beneath, as the field draws it; without WebGL the 2D
@@ -252,7 +557,8 @@ export function SkyReplay({
   // Every emotion is a star; a lit constellation's words turn the recorded
   // teal, as tagged words do on the field. Keyed on which check-ins are lit
   // so a frame of playback doesn't rebuild the list.
-  const litKey = points.map((_, i) => (i === hi || skyReplayGlow(plan, i, t) > 0 ? '1' : '0')).join('');
+  const light = heldLight(mix);
+  const litKey = points.map((_, i) => (light.held(i) > 0.3 || skyReplayGlow(plan, i, t) * light.keep(i) > 0 ? '1' : '0')).join('');
   const stars = useMemo<SkyStar[]>(() => {
     const lit = new Set<string>();
     points.forEach((p, i) => {
@@ -278,8 +584,8 @@ export function SkyReplay({
     const base: Partial<Record<ThemeChannel, string>> = {};
     const rgba: Rgba = (ch, a) => `${(base[ch] ??= themeRgba(ch, 1).slice(0, -2))}${a})`;
     const font = getComputedStyle(cv).fontFamily;
-    drawTour(ctx, { proj, plan, points, dayLabels, t, hi, rgba, blur: blurrer(ctx, dpr, rgba), font });
-  }, [proj, plan, points, dayLabels, t, hi, size]);
+    drawTour(ctx, { proj, plan, points, dayLabels, showDayLabels, t, mix, preview, pulseAt, band: frameBand(stage), rgba, blur: blurrer(ctx, dpr, rgba), font });
+  }, [proj, plan, points, dayLabels, showDayLabels, t, mix, preview, pulseAt, stage, size]);
 
   // Tapping near a landed check-in opens it.
   const hitAt = (e: React.PointerEvent | React.MouseEvent): DiaryEntry | null => {
@@ -353,16 +659,73 @@ function drawTour(
     plan: SkyReplayPlan;
     points: Point[];
     dayLabels: (string | null)[];
+    /** The small day label beside each landed star. */
+    showDayLabels: boolean;
     t: number;
-    /** The walk's held check-in, drawn lit with a gold ring; -1 for none. */
-    hi: number;
+    /** The walk's held check-in and the one before it, crossing over (heldLight). */
+    mix: HeldMix;
+    /** The whole week drawn faintly beneath the tour, labelled by day. */
+    preview: boolean;
+    /** Time into the week view's pulse, ms; -1 when it isn't playing (no pulse, labels shown). */
+    pulseAt: number;
+    /** The band the stage's overlays leave clear; week-view labels fade out at its edges. */
+    band: { top: number; height: number };
     rgba: Rgba;
     blur: (fn: () => void) => void;
     font: string;
   },
 ) {
-  const { proj, plan, points, dayLabels, t, hi, rgba, blur, font } = o;
+  const { proj, plan, points, dayLabels, showDayLabels, t, mix, preview, pulseAt, band, rgba, blur, font } = o;
+  const light = heldLight(mix);
   const last = points.length - 1;
+
+  // The walk opens on the whole week, faint: every check-in marked with a
+  // small ring (a check-in, not one more star), each pulsing once in time
+  // order with its day label arriving alongside. A label fades as the tour
+  // reaches its check-in.
+  if (preview) {
+    points.forEach((p, i) => {
+      const q = proj.toPx(p.pin);
+      if (!q.visible) return;
+      let swell = 0, ring = -1, labelIn = 1;
+      if (pulseAt >= 0) {
+        const u = (pulseAt - previewPulseAt(i, points.length)) / PREVIEW_PULSE_MS;
+        labelIn = Math.max(0, Math.min(1, u * 2.5));
+        if (u > 0 && u < 1) {
+          swell = Math.sin(Math.PI * u);
+          ring = easeOut3(u);
+        }
+      }
+      ctx.fillStyle = rgba('recorded', Math.min(1, PREVIEW_PIN_ALPHA * (1 + swell)));
+      ctx.beginPath(); ctx.arc(q.x, q.y, 2 + 1.2 * swell, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = rgba('recorded', PREVIEW_PIN_ALPHA * 0.8);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(q.x, q.y, PREVIEW_RING_R, 0, Math.PI * 2); ctx.stroke();
+      if (ring >= 0) {
+        ctx.strokeStyle = rgba('recorded', 0.6 * (1 - ring));
+        ctx.beginPath(); ctx.arc(q.x, q.y, PREVIEW_RING_R + PULSE_RING_GROW * ring, 0, Math.PI * 2); ctx.stroke();
+      }
+      const label = dayLabels[i];
+      if (!label) return;
+      const reviewed = t > plan.land[i] ? Math.min(1, (t - plan.land[i]) / PREVIEW_LABEL_FADE_MS) : 0;
+      // Clear of the walk's header and strip, so a day still to come can't
+      // read as part of the header naming the day in view.
+      const labelY = q.y - PREVIEW_RING_R - 5;
+      const clear = Math.min(
+        Math.max(0, Math.min(1, (labelY - 10 - band.top) / PREVIEW_LABEL_EDGE)),
+        Math.max(0, Math.min(1, (band.top + band.height - q.y) / PREVIEW_LABEL_EDGE)),
+      );
+      const a = PREVIEW_LABEL_ALPHA * labelIn * (1 - reviewed) * clear;
+      if (a <= 0.01) return;
+      ctx.font = `500 9px ${font}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      if ('letterSpacing' in ctx) (ctx as { letterSpacing: string }).letterSpacing = '0.12em';
+      ctx.fillStyle = rgba('text', a);
+      ctx.fillText(label, q.x, q.y - PREVIEW_RING_R - 5);
+      if ('letterSpacing' in ctx) (ctx as { letterSpacing: string }).letterSpacing = '0px';
+    });
+  }
 
   // The chain between check-ins: the replay's comet rides each hop in with
   // the gaze, leaving the quiet line behind.
@@ -379,8 +742,8 @@ function drawTour(
   // constellation in the sky. The light (lines, halos) pulses with
   // skyReplayGlow; the words and star cores hold steady on presence.
   points.forEach((p, i) => {
-    const g = i === hi ? 1 : skyReplayGlow(plan, i, t);
-    const on = i === hi ? 1 : skyReplayPresence(plan, i, t);
+    const g = Math.max(skyReplayGlow(plan, i, t) * light.keep(i), light.held(i));
+    const on = Math.max(skyReplayPresence(plan, i, t) * light.keep(i), light.held(i));
     if (on <= 0) return;
     const chain: FieldCoord[] = [p.pin, ...p.words];
     const pinPx = proj.toPx(p.pin);
@@ -450,7 +813,7 @@ function drawTour(
       ctx.beginPath(); ctx.arc(q.x, q.y, RING_R * (RING_FROM + (1 - RING_FROM) * e), 0, Math.PI * 2); ctx.stroke();
     }
 
-    const label = dayLabels[i];
+    const label = showDayLabels ? dayLabels[i] : null;
     const lu = (t - at - LABEL_DELAY_MS) / LABEL_MS;
     if (label && lu > 0) {
       ctx.font = `500 8px ${font}`;
@@ -463,19 +826,20 @@ function drawTour(
     }
   });
 
-  // The walk's current moment: a soft gold ring around its star.
-  if (hi >= 0 && points[hi]) {
-    const q = proj.toPx(points[hi].pin);
-    if (q.visible) {
-      blur(() => {
-        ctx.strokeStyle = rgba('gold', 0.6);
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(q.x, q.y, 16, 0, Math.PI * 2); ctx.stroke();
-      });
-      ctx.strokeStyle = rgba('gold', 0.85);
-      ctx.lineWidth = 1;
+  // The walk's current moment: a soft gold ring around its star, fading in
+  // with its constellation (and out with the one it replaces).
+  for (const [i, a] of [[mix.to, light.inK], [mix.from, light.outK]] as const) {
+    if (i < 0 || !points[i] || a <= 0.01) continue;
+    const q = proj.toPx(points[i].pin);
+    if (!q.visible) continue;
+    blur(() => {
+      ctx.strokeStyle = rgba('gold', 0.6 * a);
+      ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(q.x, q.y, 16, 0, Math.PI * 2); ctx.stroke();
-    }
+    });
+    ctx.strokeStyle = rgba('gold', 0.85 * a);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(q.x, q.y, 16, 0, Math.PI * 2); ctx.stroke();
   }
 }
 

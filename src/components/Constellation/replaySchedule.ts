@@ -1,4 +1,5 @@
 import { relativeDayLabel } from '../../data/departure';
+import type { TourCursor } from '../../data/reflection';
 
 // Pure timing + labelling for the constellation replay ("a week, drawn in").
 // No DOM, no storage, so scripts/test-replay-schedule.ts can run it under Node.
@@ -73,4 +74,42 @@ export function replayDayLabels(timestamps: string[], now: Date): (string | null
     prev = label;
     return label;
   });
+}
+
+/**
+ * The last star to have arrived by `time` (its landing has begun, past the
+ * day label's delay), -1 before the first. The reflection walk names this
+ * one in its header.
+ */
+export function replayArrived(s: ReplaySchedule, count: number, time: number): number {
+  let i = -1;
+  while (i + 1 < count && time >= s.starAt(i + 1) + LABEL_DELAY_MS) i++;
+  return i;
+}
+
+/**
+ * Where the drawing is at `time`, for the walk's week strip: on the last star
+ * to arrive, or partway along the line drawing into the next one.
+ */
+export function replayCursor(s: ReplaySchedule, count: number, time: number): TourCursor {
+  const at = Math.max(0, replayArrived(s, count, time));
+  const next = at + 1;
+  if (next < count && s.lineMs > 0 && time >= s.lineAt(next)) {
+    return { from: at, to: next, along: Math.min(1, (time - s.lineAt(next)) / s.lineMs) };
+  }
+  return { from: at, to: at, along: 1 };
+}
+
+// The reflection walk's week view: each check-in pulses once, in time order,
+// with its day label arriving alongside. The pulses spread over at most
+// PREVIEW_PULSE_SPREAD_MS however many check-ins there are.
+export const PREVIEW_PULSE_DELAY_MS = 200;
+export const PREVIEW_PULSE_STAGGER_MS = 110;
+export const PREVIEW_PULSE_SPREAD_MS = 500;
+export const PREVIEW_PULSE_MS = 800;
+
+/** When check-in i of n starts its week-view pulse, ms after the view opens. */
+export function previewPulseAt(i: number, count: number): number {
+  const stagger = count > 1 ? Math.min(PREVIEW_PULSE_STAGGER_MS, PREVIEW_PULSE_SPREAD_MS / (count - 1)) : 0;
+  return PREVIEW_PULSE_DELAY_MS + i * stagger;
 }

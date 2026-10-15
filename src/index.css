@@ -81,6 +81,27 @@ html, body, #root {
 }
 
 /* Weekly reflection walk: the "tap the sky to skip" hint fades in after a beat. */
+/* The reflection walk's week view on the flat plane: each check-in pulses
+   once (DrawnConstellation, animation-delay per check-in). Fill forwards, not
+   both: during its delay a ring keeps its own opacity 0 rather than the first
+   keyframe's, so the rings appear one by one. */
+@keyframes replay-preview-pulse {
+  from { transform: scale(1); opacity: 0.6; }
+  to { transform: scale(3.3); opacity: 0; }
+}
+.replay-preview-pulse {
+  fill: none;
+  stroke: rgb(var(--ui-recorded-rgb));
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: replay-preview-pulse 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .replay-preview-pulse { animation: none; }
+}
 @keyframes reflection-hint-in {
   from { opacity: 0; }
   to { opacity: 1; }

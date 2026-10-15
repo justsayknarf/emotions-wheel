@@ -12,6 +12,13 @@ import {
   LINE_MS,
   STAR_MS,
   MAX_SPAN_MS,
+  LABEL_DELAY_MS,
+  replayArrived,
+  replayCursor,
+  previewPulseAt,
+  PREVIEW_PULSE_DELAY_MS,
+  PREVIEW_PULSE_STAGGER_MS,
+  PREVIEW_PULSE_SPREAD_MS,
 } from '../src/components/Constellation/replaySchedule';
 
 let failures = 0;
@@ -59,6 +66,30 @@ for (const n of [15, 40, 200, 500]) {
   const want = ['1 WK', null, null, 'SUN', null, 'TUE', 'YESTERDAY', 'TODAY', null];
   check('labels collapse same-label runs', JSON.stringify(labels) === JSON.stringify(want), JSON.stringify(labels));
   check('labels line up with timestamps', labels.length === ts.length, `${labels.length} / ${ts.length}`);
+}
+
+// The reflection walk follows the drawing: arrivals and the week strip's cursor.
+{
+  const s = replaySchedule(4);
+  check('nothing has arrived at the start', replayArrived(s, 4, 0) === -1, String(replayArrived(s, 4, 0)));
+  check('a star arrives just after it starts landing', replayArrived(s, 4, s.starAt(2) + LABEL_DELAY_MS) === 2, '');
+  check('the last star arrives by the end', replayArrived(s, 4, s.total) === 3, '');
+  const mid = replayCursor(s, 4, s.lineAt(2) + s.lineMs / 2);
+  check('cursor halfway along the line into the next star', mid.from === 1 && mid.to === 2 && Math.abs(mid.along - 0.5) < 1e-9, JSON.stringify(mid));
+  const rest = replayCursor(s, 4, s.starAt(1) + LABEL_DELAY_MS + 1);
+  check('cursor rests on the star that arrived', rest.from === 1 && rest.to === 1 && rest.along === 1, JSON.stringify(rest));
+  const one = replayCursor(replaySchedule(1), 1, 0);
+  check('a single star rests at 0', one.from === 0 && one.to === 0, JSON.stringify(one));
+}
+
+// The walk's week view: one pulse per check-in, in time order, never spread too long.
+{
+  check('the first pulse waits only the opening delay', previewPulseAt(0, 8) === PREVIEW_PULSE_DELAY_MS, String(previewPulseAt(0, 8)));
+  check('a short week pulses at the full stagger', previewPulseAt(2, 3) === PREVIEW_PULSE_DELAY_MS + 2 * PREVIEW_PULSE_STAGGER_MS, String(previewPulseAt(2, 3)));
+  const spread = previewPulseAt(19, 20) - previewPulseAt(0, 20);
+  check('a long week compresses its pulses into the spread', Math.abs(spread - PREVIEW_PULSE_SPREAD_MS) < 1e-9, `${spread.toFixed(1)}ms`);
+  check('pulses run in time order', [0, 1, 2, 3].every((i) => previewPulseAt(i + 1, 5) > previewPulseAt(i, 5)), '');
+  check('a single check-in pulses after the delay', previewPulseAt(0, 1) === PREVIEW_PULSE_DELAY_MS, '');
 }
 
 if (failures > 0) {

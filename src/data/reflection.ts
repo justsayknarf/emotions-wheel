@@ -1,5 +1,6 @@
 import type { DiaryEntry, Reflection, ReflectionInviteState } from '../types';
 import { dateKey, entriesInWindow, last7Days } from '../utils/diaryAggregation';
+import { dayPhrase } from './reflectionPrompts';
 
 // Pure logic for the weekly reflection: which check-ins a walk covers, which
 // moments it pauses on, and whether the invitation is due. No storage, so
@@ -144,4 +145,61 @@ export function withWeekName(reflections: Reflection[], reflectionId: string, na
     delete next.weekName;
     return trimmed ? { ...next, weekName: trimmed } : next;
   });
+}
+
+// ---- The walk's replay: its title, the header over the sky, the week strip ----
+
+/**
+ * The replay's title for the week ending on `now` (History's last-7-days
+ * window): "Oct 7 – 13", or "Sep 27 – Oct 3" when it spans two months.
+ */
+export function weekRangeLabel(now: Date): string {
+  const days = last7Days(now);
+  const first = days[0], last = days[days.length - 1];
+  const month = (d: Date) => d.toLocaleDateString('en-US', { month: 'short' });
+  return month(first) === month(last)
+    ? `${month(first)} ${first.getDate()} – ${last.getDate()}`
+    : `${month(first)} ${first.getDate()} – ${month(last)} ${last.getDate()}`;
+}
+
+/**
+ * The header over the sky for the check-in in view: the day ("Today",
+ * "Yesterday", or the weekday) and "7:00 PM · Oct 7".
+ */
+export function stopHeading(timestamp: string, now: Date): { day: string; detail: string } {
+  const then = new Date(timestamp);
+  const phrase = dayPhrase(timestamp, now);
+  const time = then.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const date = then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return { day: phrase.charAt(0).toUpperCase() + phrase.slice(1), detail: `${time} · ${date}` };
+}
+
+/**
+ * Where a check-in sits along the week strip: 0 at the window's first
+ * midnight, 1 at the end of today.
+ */
+export function weekFraction(timestamp: string, now: Date): number {
+  const start = last7Days(now)[0].getTime();
+  const end = new Date(now);
+  end.setHours(24, 0, 0, 0);
+  const k = (Date.parse(timestamp) - start) / (end.getTime() - start);
+  return Math.max(0, Math.min(1, k));
+}
+
+/**
+ * Where the replay's tour is: gliding from check-in `from` to `to`, `along`
+ * (0..1) of the way; resting on one when from === to. Both replays write it
+ * every frame for the week strip.
+ */
+export interface TourCursor {
+  from: number;
+  to: number;
+  along: number;
+}
+
+/** The week strip's playhead for a cursor, between the two check-ins' places. */
+export function stripPlayhead(fractions: number[], c: TourCursor): number {
+  const a = fractions[c.from] ?? fractions[0] ?? 0;
+  const b = fractions[c.to] ?? a;
+  return a + (b - a) * Math.max(0, Math.min(1, c.along));
 }

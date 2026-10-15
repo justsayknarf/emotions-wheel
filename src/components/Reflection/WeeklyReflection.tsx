@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useReducedMotion } from 'framer-motion';
 import { v4 as uuidv4 } from 'uuid';
 import { DrawnConstellation } from '../Constellation/DrawnConstellation';
 import { SkyReplay } from '../Constellation/SkyReplay';
 import { useRevealTuning } from '../../config/revealTuning';
 import { useSidePanelLayout } from '../../hooks/useSidePanelLayout';
-import { reflectionWindow, pickMoments, momentPoint } from '../../data/reflection';
+import { reflectionWindow, pickMoments, momentPoint, weekRangeLabel, stopHeading, type TourCursor } from '../../data/reflection';
 import { momentPrompt } from '../../data/reflectionPrompts';
 import { atTimeNote, walkNote } from '../../data/journal';
 import { markJournalNoticeSeen } from '../../store/reflections';
 import { dateKey } from '../../utils/diaryAggregation';
 import { formatDate } from '../../utils/formatDate';
 import { OpeningCard, ReplayingCard, MomentCard, ClosingCard, EmptyWeekCard } from './ReflectionCards';
+import { WeekStrip } from './WeekStrip';
 import type { DiaryEntry, Reflection } from '../../types';
 
 // The weekly reflection walk (view === 'reflection'). docs/plans/2026-10-09-
@@ -35,6 +37,16 @@ interface Props {
   onClose: () => void;
 }
 
+// The replay opens on a title over the whole week, faint, for this long,
+// each check-in pulsing once with its day label. The tour starts once the
+// pulses are done, a little before the title ends, so the gaze glides in to
+// the first check-in as the title fades.
+const TITLE_MS = 1800;
+const OPENING_HOLD_MS = 1500;
+
+// Text over the sky stays readable against the aurora and the stars.
+const SKY_TEXT_SHADOW = '0 2px 14px rgb(var(--ui-bg-rgb) / 0.95)';
+
 const AXIS_LABEL: CSSProperties = {
   position: 'absolute',
   pointerEvents: 'none',
@@ -50,6 +62,7 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   // The same replay History's constellation replay uses: the night sky when
   // the sky field is on, the flat plane otherwise.
   const sky = useRevealTuning().skyField;
+  const reducedMotion = !!useReducedMotion();
 
   // Frozen when the walk opens, so a check-in saved meanwhile (another tab)
   // can't reshuffle the moments under the user.
@@ -60,6 +73,8 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
       id: uuidv4(),
       startedAt,
       week,
+      // The check-ins the replay draws (each has a pin), in its order.
+      placed: week.filter((e) => momentPoint(e) !== null),
       moments: pickMoments(week),
       seed: Math.floor(startedAt.getTime() / 1000),
     };
@@ -88,6 +103,24 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   const [openLine, setOpenLine] = useState('');
   const [weekName, setWeekName] = useState('');
 
+  // The replay screen: a title first, then the day and time of each check-in
+  // as it arrives, and Next to move on without waiting for the tour.
+  const [titleOn, setTitleOn] = useState(() => !showOpening && !reducedMotion);
+  const [stop, setStop] = useState(-1);
+  const [goTo, setGoTo] = useState<{ stop: number } | null>(null);
+  // The furthest check-in asked for, so two quick Nexts move two check-ins.
+  const aimed = useRef(-1);
+  const tourCursor = useRef<TourCursor | null>(null);
+  const onStop = useCallback((i: number) => {
+    setStop(i);
+    setTitleOn(false);
+  }, []);
+  useEffect(() => {
+    if (!titleOn) return;
+    const timer = window.setTimeout(() => setTitleOn(false), TITLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [titleOn]);
+
   // Escape leaves the walk, from any card.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -97,17 +130,39 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // During the replay, any key skips ahead to the first moment.
+  const { moments, placed } = walk;
+
+  // Next: on to the check-in after the one in view (or after one already on
+  // its way); past the last, to the moments.
+  const next = () => {
+    setTitleOn(false);
+    const target = Math.max(stop, aimed.current) + 1;
+    if (target >= placed.length) {
+      setJump(true);
+      return;
+    }
+    aimed.current = target;
+    setGoTo({ stop: target });
+  };
+  const pick = (i: number) => {
+    setTitleOn(false);
+    aimed.current = i;
+    setGoTo({ stop: i });
+  };
+
+  // During the replay, → or Space moves to the next check-in.
   useEffect(() => {
     if (phase !== 'replaying') return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' && e.key !== 'Tab') setJump(true);
+      if (e.key !== 'ArrowRight' && e.key !== ' ') return;
+      if (e.target instanceof Element && e.target.closest('button, input, textarea')) return;
+      e.preventDefault();
+      next();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase]);
+  });
 
-  const { moments } = walk;
   const live = (id: string) => entries.find((e) => e.id === id) ?? null;
   const savedNote = (i: number) => {
     const e = live(moments[i].id);
@@ -169,9 +224,21 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   if (moments.length === 0) {
     card = <EmptyWeekCard onClose={close} />;
   } else if (phase === 'opening') {
-    card = <OpeningCard onBegin={() => setPhase('replaying')} onLater={once(onLater)} onSkipWeek={once(onSkipWeek)} />;
+    const begin = () => {
+      setPhase('replaying');
+      setTitleOn(!reducedMotion);
+    };
+    card = <OpeningCard onBegin={begin} onLater={once(onLater)} onSkipWeek={once(onSkipWeek)} />;
   } else if (phase === 'replaying') {
-    card = <ReplayingCard onSkip={() => setJump(true)} />;
+    card = (
+      <ReplayingCard
+        stop={stop}
+        total={placed.length}
+        hint={sideBySide ? 'Tap the sky or press → for the next one.' : 'Tap the sky for the next one.'}
+        onNext={next}
+        onSkip={() => setJump(true)}
+      />
+    );
   } else if (phase === 'moment' && current && currentPoint) {
     card = (
       <MomentCard
@@ -202,6 +269,8 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
   }
 
   const showSky = moments.length > 0 && phase !== 'opening';
+  const heading = phase === 'replaying' && stop >= 0 ? stopHeading(placed[stop].timestamp, walk.startedAt) : null;
+  const showStrip = sideBySide && showSky && (phase === 'replaying' || phase === 'moment');
 
   return (
     <div
@@ -216,10 +285,13 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
         overflow: 'hidden',
       }}
     >
-      {/* The week's sky. Tapping it during the replay skips ahead. */}
+      {/* The week's sky. Tapping it during the replay moves to the next
+          check-in. Isolated so the replay's own layers (SkyReplay's canvas
+          sits at z-index 1) stay inside it and can never cover the Close
+          button above. */}
       <div
-        onClick={phase === 'replaying' ? () => setJump(true) : undefined}
-        style={{ position: 'relative', flex: sideBySide ? 1 : '0 0 52%', minHeight: 0 }}
+        onClick={phase === 'replaying' ? next : undefined}
+        style={{ position: 'relative', isolation: 'isolate', flex: sideBySide ? 1 : '0 0 52%', minHeight: 0 }}
       >
         {/* Axis names fit the flat plane only: in the sky the gaze moves. */}
         {!sky && (
@@ -239,9 +311,80 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
             // Only the first ending opens moment one: a timeline rebuilt later
             // (a reduced-motion flip) must not pull the user back mid-walk.
             onReplayEnd: () => { if (phase === 'replaying') goToMoment(0); },
+            startDelayMs: titleOn ? OPENING_HOLD_MS : undefined,
+            preview: true,
+            showDayLabels: false,
+            // Frame each check-in clear of the header above and, on desktop, the week strip below.
+            frameInset: { top: 76, bottom: sideBySide ? 92 : 16 },
+            goTo,
+            onStop,
+            cursor: tourCursor,
           };
-          return sky ? <SkyReplay {...replay} /> : <DrawnConstellation {...replay} />;
+          return sky ? <SkyReplay {...replay} entries={placed} /> : <DrawnConstellation {...replay} entries={placed} />;
         })()}
+
+        {/* The title: which week this is, over the whole of it, faint. Dates
+            and counts are Inter (DESIGN.md, the serif is for feelings). */}
+        {phase === 'replaying' && (
+          <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', opacity: titleOn ? 1 : 0, transition: 'opacity 0.6s ease' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                paddingTop: '16%',
+                textAlign: 'center',
+                animation: 'reflection-hint-in 0.6s ease both',
+              }}
+            >
+              <span style={{ fontWeight: 300, fontSize: sideBySide ? 26 : 22, letterSpacing: '0.01em', color: 'var(--ui-text-1)', textShadow: SKY_TEXT_SHADOW }}>
+                {weekRangeLabel(walk.startedAt)}
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--ui-text-2)', textShadow: SKY_TEXT_SHADOW }}>
+                {placed.length === 1 ? '1 check-in, as it happened' : `${placed.length} check-ins, as they happened`}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* The day and time of the check-in in view. */}
+        {heading && (
+          <div
+            key={stop}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              // Below the flat plane's "Positive" axis label.
+              top: sky ? 18 : 36,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 2,
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              animation: 'reflection-hint-in 0.4s ease both',
+            }}
+          >
+            <div style={{ fontWeight: 300, fontSize: sideBySide ? 20 : 17, lineHeight: 1.2, letterSpacing: '0.01em', color: 'var(--ui-text-1)', textShadow: SKY_TEXT_SHADOW }}>
+              {heading.day}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 12, letterSpacing: '0.05em', color: 'var(--ui-text-2)', fontVariantNumeric: 'tabular-nums', textShadow: SKY_TEXT_SHADOW }}>
+              {heading.detail}
+            </div>
+          </div>
+        )}
+
+        {showStrip && (
+          <WeekStrip
+            entries={placed}
+            now={walk.startedAt}
+            arrived={stop}
+            cursor={tourCursor}
+            held={phase === 'moment' && current ? placed.findIndex((e) => e.id === current.id) : null}
+            onPick={phase === 'replaying' ? pick : null}
+          />
+        )}
       </div>
 
       {/* The card: beside the sky on desktop, below it on mobile. */}
@@ -249,6 +392,8 @@ export function WeeklyReflection({ entries, opened, showOpening, onSetLookingBac
         style={{
           flex: sideBySide ? '0 0 min(400px, 40%)' : 1,
           minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
           overflowY: 'auto',
           padding: sideBySide ? '72px 32px 32px' : '20px 20px 28px',
           borderLeft: sideBySide ? '1px solid var(--ui-border)' : 'none',

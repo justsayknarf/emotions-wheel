@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { motion } from 'framer-motion';
 import { createDrawable, createTimeline, utils } from 'animejs';
 import { useAnimeScope } from '../../hooks/useAnimeScope';
@@ -14,6 +14,9 @@ import {
   WORD_MS,
   RING_DELAY_MS,
   RING_MS,
+  replayArrived,
+  replayCursor,
+  previewPulseAt,
 } from './replaySchedule';
 import {
   TAIL_MS,
@@ -30,6 +33,7 @@ import {
 import { ReplayControls } from './ReplayControls';
 import { useReplayScrub } from './useReplayScrub';
 import type { DiaryEntry } from '../../types';
+import type { TourCursor } from '../../data/reflection';
 
 interface Props {
   entries: DiaryEntry[];    // recent window, chronological (oldest first)
@@ -47,6 +51,20 @@ interface Props {
   onReplayEnd?: () => void;
   /** Flipping to true jumps the drawing to its end (tap to skip). */
   jumpToEnd?: boolean;
+  // The walk's replay screen (title, header, week strip, Next) adds these,
+  // matching SkyReplay's.
+  /** Wait this long before the first star lands: the walk's title card. */
+  startDelayMs?: number;
+  /** Show the whole week faintly from the start, joined by a dotted path. */
+  preview?: boolean;
+  /** The small day label beside each check-in. The walk names the day in its header instead. */
+  showDayLabels?: boolean;
+  /** Move to this check-in now (Next, or the week strip); a new object asks again. */
+  goTo?: { stop: number } | null;
+  /** A check-in's index as its star arrives. */
+  onStop?: (stop: number) => void;
+  /** Where the drawing is between check-ins, written every frame for the week strip. */
+  cursor?: RefObject<TourCursor | null>;
 }
 
 // Pause before the first star lands, so the overlay's own fade-in settles first.
@@ -77,12 +95,26 @@ export function DrawnConstellation({
   showControls = true,
   onReplayEnd,
   jumpToEnd = false,
+  startDelayMs = START_DELAY_MS,
+  preview = false,
+  showDayLabels = true,
+  goTo = null,
+  onStop,
+  cursor,
 }: Props) {
-  // Read through a ref so a new callback identity never rebuilds the timeline.
+  // Read through refs so a new callback identity never rebuilds the timeline.
   const onReplayEndRef = useRef(onReplayEnd);
+  const onStopRef = useRef(onStop);
+  const cursorRef = useRef(cursor);
+  const startDelayRef = useRef(startDelayMs);
   useEffect(() => {
     onReplayEndRef.current = onReplayEnd;
-  }, [onReplayEnd]);
+    onStopRef.current = onStop;
+    cursorRef.current = cursor;
+    startDelayRef.current = startDelayMs;
+  }, [onReplayEnd, onStop, cursor, startDelayMs]);
+  // The last star to arrive, so onStop fires once per arrival.
+  const arrivedRef = useRef(-1);
   const points = useMemo(
     () =>
       entries
@@ -132,9 +164,23 @@ export function DrawnConstellation({
         endFired = true;
         onReplayEndRef.current?.();
       };
+      // The walk follows the drawing: which star has arrived, and where the
+      // line is between two of them.
+      const track = (time: number) => {
+        const arrived = replayArrived(s, n, time);
+        if (arrived !== arrivedRef.current) {
+          arrivedRef.current = arrived;
+          if (arrived >= 0) onStopRef.current?.(arrived);
+        }
+        const c = cursorRef.current;
+        if (c) c.current = replayCursor(s, n, time);
+      };
       const tl = createTimeline({
         autoplay: false,
-        onUpdate: (t) => syncScrub(t.progress),
+        onUpdate: (t) => {
+          syncScrub(t.progress);
+          track(t.progress * t.duration);
+        },
         onPause: () => setPlaying(false),
         onComplete: () => {
           setPlaying(false);
@@ -195,7 +241,11 @@ export function DrawnConstellation({
             duration: RING_MS,
             ease: 'out(3)',
           }, at + RING_DELAY_MS);
-        if (dayLabels[i]) {
+        // The week view's label for this check-in fades as its star lands.
+        if (preview && dayLabels[i]) {
+          tl.add(`[data-preview-day="${i}"]`, { opacity: [1, 0], duration: 600, ease: 'out(2)' }, at);
+        }
+        if (dayLabels[i] && showDayLabels) {
           tl.add(`[data-day="${i}"]`, { opacity: [0, 1], duration: LABEL_MS, ease: 'out(2)' }, at + LABEL_DELAY_MS);
         }
         if (p.words.length > 0) {
@@ -249,6 +299,13 @@ export function DrawnConstellation({
         setPlaying(false);
         fireEnd();
       });
+      // The walk's Next: land that star now and play on from there.
+      self.add('playFrom', (ms: number) => {
+        window.clearTimeout(start.timer);
+        tl.seek(Math.min(ms, tl.duration));
+        tl.play();
+        setPlaying(true);
+      });
 
       if (reduced) {
         toEnd();
@@ -259,15 +316,22 @@ export function DrawnConstellation({
       start.timer = window.setTimeout(() => {
         tl.play();
         setPlaying(true);
-      }, START_DELAY_MS);
+      }, startDelayRef.current);
       return () => window.clearTimeout(start.timer);
     },
-    [points, dayLabels],
+    [points, dayLabels, showDayLabels, preview],
   );
 
   useEffect(() => {
     if (jumpToEnd) scope.current?.methods.skip();
   }, [jumpToEnd, scope]);
+
+  // The walk's Next (or a tap on its week strip): that star lands now.
+  useEffect(() => {
+    if (!goTo || n === 0) return;
+    const i = Math.max(0, Math.min(goTo.stop, n - 1));
+    scope.current?.methods.playFrom(replaySchedule(n).starAt(i) + LABEL_DELAY_MS);
+  }, [goTo, n, scope]);
 
   const highlighted = highlightEntryId ? points.find((p) => p.entry.id === highlightEntryId) ?? null : null;
 
@@ -276,6 +340,52 @@ export function DrawnConstellation({
 
   return (
     <div ref={root} style={{ position: 'absolute', inset: 0 }}>
+      {/* The walk opens on the whole week, faint: every check-in marked with a
+          small ring, pulsing once in time order with its day label arriving
+          alongside. A label fades as its star lands (the timeline above). */}
+      {preview && (
+        <>
+          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} aria-hidden="true">
+            {points.map((p, i) => (
+              <g key={p.entry.id}>
+                <circle cx={`${p.lx}%`} cy={`${p.ly}%`} r={2} style={{ fill: 'rgb(var(--ui-recorded-rgb) / 0.55)' }} />
+                <circle cx={`${p.lx}%`} cy={`${p.ly}%`} r={6} style={{ fill: 'none', stroke: 'rgb(var(--ui-recorded-rgb) / 0.45)', strokeWidth: 1 }} />
+                <circle
+                  className="replay-preview-pulse"
+                  cx={`${p.lx}%`}
+                  cy={`${p.ly}%`}
+                  r={6}
+                  style={{ animationDelay: `${previewPulseAt(i, n)}ms` }}
+                />
+              </g>
+            ))}
+          </svg>
+          {points.map((p, i) =>
+            dayLabels[i] ? (
+              <span
+                key={p.entry.id}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  left: `${p.lx}%`,
+                  top: `${p.ly}%`,
+                  transform: 'translate(-50%, calc(-100% - 11px))',
+                  pointerEvents: 'none',
+                  animation: `reflection-hint-in 0.3s ease ${previewPulseAt(i, n)}ms both`,
+                }}
+              >
+                <span
+                  data-preview-day={i}
+                  style={{ display: 'block', fontSize: 9, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgb(var(--ui-text-rgb) / 0.75)', whiteSpace: 'nowrap' }}
+                >
+                  {dayLabels[i]}
+                </span>
+              </span>
+            ) : null,
+          )}
+        </>
+      )}
+
       {/* Lines between consecutive check-ins, with the departure comet's
           streak riding each one in. Percentage coordinates keep them on
           their stars through any resize without re-measuring. */}
@@ -413,7 +523,7 @@ export function DrawnConstellation({
                 }}
               />
             </button>
-            {dayLabels[i] && (
+            {dayLabels[i] && showDayLabels && (
               <span
                 data-day={i}
                 style={{
