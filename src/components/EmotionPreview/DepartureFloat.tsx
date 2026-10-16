@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { AxisSlider } from './AxisSlider';
-import { ReflectionInviteLink } from '../Reflection/ReflectionInvite';
 import { sliderWeightFromTuning, useRevealTuning } from '../../config/revealTuning';
 import type { PinEntry } from '../../types';
 
@@ -89,15 +88,10 @@ interface Props {
   // user's session never keeps this component mounted past mint; see
   // EmotionDrawer's own render condition.)
   firstTime?: boolean;
-  // The weekly reflection's invitation (docs/plans/2026-10-09-001-feat-
-  // weekly-reflection-journal-plan.md, KTD12): set only while it is due on a
-  // new-tab session. A single quiet link under the sliders, before a pin
-  // exists; Later and Skip this week live on the walk's opening card.
-  onLookBack?: () => void;
 }
 
 export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function DepartureFloat(
-  { anchor, pin, onDepart, onDepartureDrag, onAdjust, onAdjustDraft, onDiscard, onSave, firstTime = false, onLookBack },
+  { anchor, pin, onDepart, onDepartureDrag, onAdjust, onAdjustDraft, onDiscard, onSave, firstTime = false },
   ref,
 ) {
   const reduced = useReducedMotion();
@@ -338,7 +332,6 @@ export const DepartureFloat = forwardRef<HTMLDivElement, Props>(function Departu
             </AnimatePresence>
           </div>
         </motion.div>
-        {onLookBack && !pin && !firstTime && <ReflectionInviteLink onReflect={onLookBack} />}
         {/* Save/Discard, appended below the caption once `pin` exists.
             This wrapper stays mounted the whole time (so its own
             ResizeObserver above never disconnects/reconnects) and animates

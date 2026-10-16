@@ -122,6 +122,17 @@ export function canLookBack(entries: DiaryEntry[]): boolean {
 }
 
 /**
+ * The always-visible "Look back" line at the foot of the field: quiet
+ * whenever History would offer a look back, warmer while the weekly
+ * invitation is due, and gone while a check-in is being made or edited, so
+ * the check-in stays the primary action (KTD12).
+ */
+export function lookBackPrompt(entries: DiaryEntry[], due: boolean, checkingIn: boolean): 'hidden' | 'quiet' | 'due' {
+  if (checkingIn || !canLookBack(entries)) return 'hidden';
+  return due ? 'due' : 'quiet';
+}
+
+/**
  * The latest reflection that finished on one of `days`, named or not (KTD16).
  * History titles the week with it, so clearing its name shows a quiet
  * "name this week" prompt rather than an older reflection's name.
