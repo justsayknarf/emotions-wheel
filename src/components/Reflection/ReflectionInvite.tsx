@@ -4,10 +4,10 @@ import { FIELD_FONT } from '../EmotionField/EmotionWord';
 
 // The weekly reflection's invitation (docs/plans/2026-10-09-001-feat-weekly-
 // reflection-journal-plan.md, U5, KTD12). Quiet by design: the check-in stays
-// the primary action on every surface it shares. 'card' sits at the top of
-// the web rail/sheet with all three choices; 'link' is the single line beside
-// the new-tab sliders, whose Later / Skip this week live on the walk's
-// opening card instead (KTD17).
+// the primary action on every surface it shares. The card sits at the top of
+// the web rail/sheet with all three choices; the field's Look back line is on
+// every surface, and on new-tab it is the only one, with Later / Skip this
+// week on the walk's opening card instead (KTD17).
 
 export interface InviteActions {
   onReflect: () => void;
@@ -52,24 +52,6 @@ export function ReflectionInviteCard({ onReflect, onLater, onSkipWeek }: InviteA
         </button>
       </div>
     </section>
-  );
-}
-
-export function ReflectionInviteLink({ onReflect }: { onReflect: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onReflect}
-      style={{
-        ...TEXT_BUTTON,
-        alignSelf: 'center',
-        color: 'var(--ui-text-3)',
-        textDecoration: 'underline dotted',
-        textUnderlineOffset: 3,
-      }}
-    >
-      Look back on your week
-    </button>
   );
 }
 

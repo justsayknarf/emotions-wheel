@@ -1123,10 +1123,10 @@ export default function App() {
     say('Okay, next week.');
   }, [skipWeek, goBack, say]);
   const drawerInvite = useMemo(
-    () => inviteDue && entrySource
+    // Web only: a new-tab session has just the field's Look back line.
+    () => inviteDue && entrySource === 'web'
       ? {
-          surface: entrySource,
-          onReflect: () => openReflection('invite', entrySource === 'new-tab'),
+          onReflect: () => openReflection('invite'),
           onLater: () => handleInviteLater(false),
           onSkipWeek: () => handleInviteSkipWeek(false),
         }
@@ -1458,6 +1458,7 @@ export default function App() {
                 onRecognizeSaved={handleRecognizeSaved}
                 onSetAtTimeNote={handleSetAtTimeNote}
                 invite={drawerInvite}
+                fieldLooksBack={lookBack === 'due'}
                 onDepart={handleDepart}
                 onDepartureDrag={handleDepartureDrag}
                 onLandingSave={handleLandingSave}
