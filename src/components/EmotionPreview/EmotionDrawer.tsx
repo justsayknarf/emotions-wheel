@@ -124,10 +124,12 @@ interface Props {
   onSetAtTimeNote?: (entryId: string, text: string) => boolean;
   // The weekly reflection's invitation, set only while it is due
   // (docs/plans/2026-10-09-001-feat-weekly-reflection-journal-plan.md, U5,
-  // KTD12). On a web rail/sheet it shows as a card at the top of the list
-  // and, on a collapsed mobile sheet, as the peek handle's line. On a
-  // new-tab session it is the single link under DepartureFloat's sliders.
-  invite?: (InviteActions & { surface: 'web' | 'new-tab' }) | null;
+  // KTD12), web sessions only. On a rail/sheet it shows as a card at the top
+  // of the list and, on a collapsed mobile sheet, as the peek handle's line
+  // unless the field's gold Look back line is already saying it
+  // (fieldLooksBack). New-tab sessions have only the field's line.
+  invite?: InviteActions | null;
+  fieldLooksBack?: boolean;
   // U2: mints a new draft pin departing from the previous check-in's anchor
   // (its newest pin) — fired by the pre-mint DepartureFloat landing's own
   // sliders when the draft is empty. Never touches the anchor itself
@@ -242,6 +244,7 @@ export function EmotionDrawer({
   onRecognizeSaved,
   onSetAtTimeNote,
   invite = null,
+  fieldLooksBack = false,
   onDepart,
   onDepartureDrag,
   cardFocusProgress = 0,
@@ -517,7 +520,7 @@ export function EmotionDrawer({
   const justSaved = !isFocus && previousCheckIn?.id === justSavedEntryId && previousPins.length === 1;
   // The web invitation card: rail/sheet only, and only while nothing is being
   // checked in or edited, so the check-in stays the primary action (KTD12).
-  const webInvite = invite?.surface === 'web' && !isFocus && !canSave && !isReopened ? invite : null;
+  const webInvite = invite && !isFocus && !canSave && !isReopened ? invite : null;
   // On the sheet, a peek-style handle is showing (and already carries the
   // time) whenever the draft is empty and nothing is being edited — both the
   // peeked state and the manually-expanded-with-empty-draft state render
@@ -733,7 +736,6 @@ export function EmotionDrawer({
         onAdjustDraft={onAdjustDraft}
         onDiscard={onClear}
         onSave={onLandingSave ?? onDone}
-        onLookBack={invite?.surface === 'new-tab' ? invite.onReflect : undefined}
       />
     );
   }
@@ -1410,8 +1412,9 @@ export function EmotionDrawer({
   const peekMicroLabel = canSave ? 'Draft' : justSaved ? "Today's check-in" : 'Last check-in';
   // A due weekly reflection takes over the collapsed handle's one line
   // (it has no room for a second), and the tap that expands the sheet
-  // reveals the invitation card at the top of the list.
-  const peekInvites = !!webInvite && !sheetBodyVisible;
+  // reveals the invitation card at the top of the list. Not while the
+  // field's gold Look back line, just above, is already saying so.
+  const peekInvites = !!webInvite && !sheetBodyVisible && !fieldLooksBack;
   const peekDetailLabel = canSave ? null : peekInvites ? 'Your week is ready to look back on' : timeLabel;
   const peekAriaSubject = canSave ? 'draft' : justSaved ? "today's check-in" : 'last check-in';
   const handleButton = !isReopened && (

@@ -24,7 +24,8 @@ import { Tether } from './components/EmotionField/Tether';
 import { useDiary } from './hooks/useDiary';
 import { withAtTimeNote, withLookingBackNote } from './data/journal';
 import { useReflections } from './hooks/useReflections';
-import { inviteStatus, canLookBack } from './data/reflection';
+import { inviteStatus, canLookBack, lookBackPrompt } from './data/reflection';
+import { LookBackPrompt } from './components/Reflection/ReflectionInvite';
 import { WeeklyReflection } from './components/Reflection/WeeklyReflection';
 import { QuietAck } from './components/Reflection/QuietAck';
 import { useSidePanelLayout } from './hooks/useSidePanelLayout';
@@ -1122,16 +1123,29 @@ export default function App() {
     say('Okay, next week.');
   }, [skipWeek, goBack, say]);
   const drawerInvite = useMemo(
-    () => inviteDue && entrySource
+    // Web only: a new-tab session has just the field's Look back line.
+    () => inviteDue && entrySource === 'web'
       ? {
-          surface: entrySource,
-          onReflect: () => openReflection('invite', entrySource === 'new-tab'),
+          onReflect: () => openReflection('invite'),
           onLater: () => handleInviteLater(false),
           onSkipWeek: () => handleInviteSkipWeek(false),
         }
       : null,
     [inviteDue, entrySource, openReflection, handleInviteLater, handleInviteSkipWeek],
   );
+  // The field's always-visible "Look back": out of the way while a check-in
+  // is being made (a pin, a slider touched before one exists, a drag) or
+  // reopened. While the invitation is due it is that invitation, so the walk
+  // it opens moves the weekly timer, as the card's own Look back does.
+  const lookBack = lookBackPrompt(
+    entries,
+    inviteDue,
+    view !== 'field' || pins.length > 0 || draftId !== null || departureDraftCoord !== null || adjustDraft !== null,
+  );
+  const handleLookBack = useCallback(() => {
+    if (inviteDue) openReflection('invite', entrySource === 'new-tab');
+    else openReflection('on-demand');
+  }, [inviteDue, entrySource, openReflection]);
 
   // docs/plans/2026-09-04-002-feat-saved-checkin-confirmation-card-plan.md,
   // U3: accepting a suggestion on the confirmation card (SavedCheckInSummary)
@@ -1325,6 +1339,10 @@ export default function App() {
           // sheet reports against, so its top edge is already in stage px.
           skyOccluderTop={sideBySide ? null : sheetTop}
         />
+        {/* A sibling of the field, not inside it, so a press on it never
+            plants a pin; inside this wrapper so it sits at the field's own
+            foot (above the mobile peek) and recedes with it. */}
+        <LookBackPrompt state={lookBack} onReflect={handleLookBack} />
       </div>
 
       {/* Field-only chrome: welcome + hint + drawer + history button */}
@@ -1440,6 +1458,7 @@ export default function App() {
                 onRecognizeSaved={handleRecognizeSaved}
                 onSetAtTimeNote={handleSetAtTimeNote}
                 invite={drawerInvite}
+                fieldLooksBack={lookBack === 'due'}
                 onDepart={handleDepart}
                 onDepartureDrag={handleDepartureDrag}
                 onLandingSave={handleLandingSave}

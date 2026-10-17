@@ -1,12 +1,13 @@
 import type { CSSProperties } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { FIELD_FONT } from '../EmotionField/EmotionWord';
 
 // The weekly reflection's invitation (docs/plans/2026-10-09-001-feat-weekly-
 // reflection-journal-plan.md, U5, KTD12). Quiet by design: the check-in stays
-// the primary action on every surface it shares. 'card' sits at the top of
-// the web rail/sheet with all three choices; 'link' is the single line beside
-// the new-tab sliders, whose Later / Skip this week live on the walk's
-// opening card instead (KTD17).
+// the primary action on every surface it shares. The card sits at the top of
+// the web rail/sheet with all three choices; the field's Look back line is on
+// every surface, and on new-tab it is the only one, with Later / Skip this
+// week on the walk's opening card instead (KTD17).
 
 export interface InviteActions {
   onReflect: () => void;
@@ -54,20 +55,43 @@ export function ReflectionInviteCard({ onReflect, onLater, onSkipWeek }: InviteA
   );
 }
 
-export function ReflectionInviteLink({ onReflect }: { onReflect: () => void }) {
+// The always-visible way into the walk: one line at the foot of the field,
+// above "Negative", on every surface (lookBackPrompt decides when). Sentence
+// case, a dotted underline and a clear gap from the axis label, so the two
+// never read as one item; gold and warmer while the invitation is due, beside
+// the louder surfaces that carry Later / Skip this week. The foot of the
+// sky is also where the lake's descent will start.
+export function LookBackPrompt({ state, onReflect }: { state: 'hidden' | 'quiet' | 'due'; onReflect: () => void }) {
+  const reduce = useReducedMotion();
+  const due = state === 'due';
   return (
-    <button
-      type="button"
-      onClick={onReflect}
-      style={{
-        ...TEXT_BUTTON,
-        alignSelf: 'center',
-        color: 'var(--ui-text-3)',
-        textDecoration: 'underline dotted',
-        textUnderlineOffset: 3,
-      }}
-    >
-      Look back on your week
-    </button>
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 58, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 15 }}>
+      <AnimatePresence>
+        {state !== 'hidden' && (
+          <motion.button
+            key="look-back"
+            type="button"
+            onClick={onReflect}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.4, ease: 'easeOut' }}
+            style={{
+              ...TEXT_BUTTON,
+              fontWeight: 400,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'auto',
+              color: due ? 'var(--ui-gold)' : 'var(--ui-text-2)',
+              textDecoration: 'underline dotted',
+              textUnderlineOffset: 3,
+              textShadow: '0 1px 10px rgb(var(--ui-bg-rgb) / 0.95)',
+              transition: reduce ? 'none' : 'color 0.6s ease',
+            }}
+          >
+            {due ? 'Your week is ready — look back' : 'Look back on your week'}
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
